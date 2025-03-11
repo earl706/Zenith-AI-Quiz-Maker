@@ -1,7 +1,17 @@
 import React, { useContext, useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faBookOpenReader } from "@fortawesome/free-solid-svg-icons";
+import {
+  faAdd,
+  faBookOpenReader,
+  faBox,
+  faBullseye,
+  faGear,
+  faPen,
+  faQuestion,
+  faTrophy,
+} from "@fortawesome/free-solid-svg-icons";
+import zenithLogoLight from "/src/assets/ZENITH - LOGO LIGHT.png";
 
 export default function Navbar({ children }) {
   const [activeItemHover, setActiveItemHover] = useState("");
@@ -9,25 +19,22 @@ export default function Navbar({ children }) {
   const location = window.location.pathname;
 
   const navigationItems = [
-    { navItem: "Dashboard", link: "/" },
-    { navItem: "Quizzes", link: "/quizzes" },
-    { navItem: "Create Quiz", link: "/create-quiz" },
-    { navItem: "Attempts", link: "/attempts" },
-    { navItem: "Accuracy", link: "/accuracy" },
-    { navItem: "Achievements", link: "/achievements" },
+    { navItem: "Dashboard", link: "/", icon: faBox },
+    { navItem: "Quizzes", link: "/quizzes", icon: faQuestion },
+    { navItem: "Create Quiz", link: "/create-quiz", icon: faAdd },
+    { navItem: "Attempts", link: "/attempts", icon: faPen },
+    { navItem: "Accuracy", link: "/accuracy", icon: faBullseye },
+    { navItem: "Achievements", link: "/achievements", icon: faTrophy },
   ];
 
   useEffect(() => {}, [location]);
 
   return (
     <div className="flex min-h-screen bg-[#3C6B9F]">
-      <aside className="w-[23%] h-[calc(100vh-2rem)] flex sticky flex-col text-blue-900">
+      <aside className="w-[23%] h-[calc(100vh-2rem)] flex fixed flex-col text-blue-900 pr-[40px]">
         <div className="flex justify-start items-center mb-[75px] text-white mt-[35px] ml-[33px]">
-          <div className="flex justify-center items-center w-[60px] h-[60px] mr-[15px] bg-white">
-            {/* <FontAwesomeIcon
-              icon={faBookOpenReader}
-              //   className="w-full h-full"
-            /> */}
+          <div className="flex justify-center items-center w-[60px] h-[60px] mr-[30px]">
+            <img src={zenithLogoLight} alt="" />
           </div>
           <span className="text-[30px] text-left font-bold">Zenith</span>
         </div>
@@ -43,8 +50,8 @@ export default function Navbar({ children }) {
                   to={navItem.link}
                   className={({ isActive }) =>
                     isActive
-                      ? "flex items-center mb-[35px] font-bold text-[18px] transition-all"
-                      : "flex items-center mb-[35px] font-thin text-[18px] hover:font-bold transition-all"
+                      ? "flex items-center mb-[35px] font-bold text-[14px] transition-all"
+                      : "flex items-center mb-[35px] font-thin text-[14px] hover:font-bold transition-all"
                   }
                 >
                   <div
@@ -55,7 +62,19 @@ export default function Navbar({ children }) {
                         : "bg-transparent"
                     } w-[10px] h-[40px] rounded-tr-[10px] rounded-br-[10px] mr-[33px] transition-all`}
                   ></div>
-                  <div className="flex items-center justify-center h-[30px] w-[30px] mr-[27px] bg-white"></div>
+                  <div
+                    className={`flex items-center justify-center h-[30px] w-[30px] mr-[27px] ${
+                      navItem.link == location ||
+                      activeItemHover == navItem.link
+                        ? "text-white"
+                        : "text-gray-300"
+                    } transition-all`}
+                  >
+                    <FontAwesomeIcon
+                      icon={navItem.icon}
+                      className="w-full h-full"
+                    />
+                  </div>
                   {navItem.navItem}
                 </NavLink>
               </li>
@@ -77,13 +96,19 @@ export default function Navbar({ children }) {
                 activeItemHover == "settings" ? "bg-white" : "bg-transparent"
               } w-[10px] h-[40px] rounded-tr-[10px] rounded-br-[10px] mr-[33px] transition-all`}
             ></div>
-            <div className="flex items-center justify-center h-[30px] w-[30px] mr-[27px] bg-white"></div>
+            <div
+              className={`flex items-center justify-center h-[30px] w-[30px] mr-[27px] ${
+                activeItemHover == "settings" ? "text-white" : "text-gray-300"
+              } `}
+            >
+              <FontAwesomeIcon icon={faGear} className="w-full h-full" />
+            </div>
             <span>Settings</span>
           </NavLink>
         </div>
       </aside>
-      <main className="flex-grow mt-[15px] mr-[15px] w-[77%] bg-white rounded-t-[20px]">
-        <div className="">{children}</div>
+      <main className="flex-grow mt-[15px] mr-[15px] w-[77%] bg-white rounded-t-[20px] ml-[300px] transition-all">
+        <div className="transition-all">{children}</div>
       </main>
     </div>
   );

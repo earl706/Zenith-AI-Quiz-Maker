@@ -1,4 +1,10 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faAnglesRight,
+  faUpDownLeftRight,
+  faXmark,
+} from "@fortawesome/free-solid-svg-icons";
 
 const quizList = [0, 1, 2, 3, 4, 5, 6, 7, 8].map(() => ({
   quiz_title: "Quiz Title",
@@ -26,38 +32,41 @@ const achievements = [
 }));
 
 export default function Dashboard() {
-  useEffect(() => {
-    console.log(quizList);
-  }, []);
+  const [userName, setUsername] = useState("Earl Benedict C. Dumaraog");
+  const [userID, setUserID] = useState("2021309235");
+
+  useEffect(() => {}, []);
 
   return (
-    <div className="px-[30px] pt-[18px] pb-[30px]">
+    <div className="px-[30px] pt-[18px] pb-[30px] transition-all">
       <div className="flex justify-between items-center mb-[40px]">
-        <div className="flex flex-col gap-0">
-          <div className="text-[13px]">
-            <span className="text-[#A0A0A0]">Pages / </span>
-            <span>Dashboard</span>
+        <div className="flex justify-between items-center w-[67%]">
+          <div className="flex flex-col gap-0">
+            <div className="text-[13px]">
+              <span className="text-[#A0A0A0]">Pages / </span>
+              <span>Dashboard</span>
+            </div>
+            <span className="text-[#3C6B9F] text-[40px] font-extrabold">
+              Dashboard
+            </span>
           </div>
-          <span className="text-[#3C6B9F] text-[40px] font-extrabold">
-            Dashboard
-          </span>
-        </div>
-        <div className="flex justify-end gap-[20px]">
-          <div className="h-[35px] w-[35px] bg-gray-300 rounded-full"></div>
-          <div className="h-[35px] w-[35px] bg-gray-300 rounded-full"></div>
+          <div className="flex justify-end gap-[20px]">
+            <div className="h-[35px] w-[35px] bg-gray-300 rounded-full"></div>
+            <div className="h-[35px] w-[35px] bg-gray-300 rounded-full"></div>
+          </div>
         </div>
         <div className="flex justify-end gap-[12px]">
           <div className="flex flex-col justify-start items-end">
-            <span className="text-[13px]">Earl Benedict C. Dumaraog</span>
-            <span className="text-[10px] text-[#A1A1A1]">2021309235</span>
+            <span className="text-[13px]">{userName}</span>
+            <span className="text-[10px] text-[#A1A1A1]">{userID}</span>
           </div>
           <div className="h-[40px] w-[40px] bg-gray-300 rounded-full"></div>
         </div>
       </div>
 
-      <div className="flex items-center mb-[40px]">
+      <div className="flex items-center justify-between mb-[40px] w-[67%]">
         <span className="text-[15px] font-semibold mr-[40px]">Filter by:</span>
-        <div className="flex gap-[40px]">
+        <div className="flex justify-between gap-[20px] w-[84%]">
           <button className="flex items-center justify-center px-[15px] py-[10px] bg-[#EFF7FF] rounded-full cursor-pointer">
             <span className="font-semibold text-[12px] mr-[5px] text-[#364656]">
               Time
@@ -114,15 +123,28 @@ export default function Dashboard() {
                   <div className="flex flex-col font-semibold gap-[5px]">
                     <span>{quiz.date_created}</span>
                     <span>{quiz.questions}</span>
-                    <span>{quiz.questions}</span>
+                    <span>{quiz.attempts}</span>
                   </div>
                 </div>
               </div>
             </div>
-            <div className="flex flex-col items-end justify-between h-full w-[16%]">
-              <div className="h-[25px] w-[25px] bg-[#FF605C] rounded-full"></div>
-              <div className="h-[25px] w-[25px] bg-[#FFBD44] rounded-full"></div>
-              <div className="h-[25px] w-[25px] bg-[#00CA4E] rounded-full"></div>
+            <div className="flex flex-col items-end justify-center gap-[10px] h-full w-[16%] text-gray-700">
+              <button className="flex items-center justify-center cursor-pointer h-[15px] w-[15px] bg-[#FF605C] rounded-full font-bold">
+                <FontAwesomeIcon icon={faXmark} className="h-[7px] w-[7px]" />
+              </button>
+
+              <button className="flex items-center justify-center cursor-pointer h-[15px] w-[15px] bg-[#FFBD44] rounded-full font-bold">
+                <FontAwesomeIcon
+                  icon={faUpDownLeftRight}
+                  className="h-[7px] w-[7px]"
+                />
+              </button>
+              <button className="flex items-center justify-center cursor-pointer h-[15px] w-[15px] bg-[#00CA4E] rounded-full font-bold">
+                <FontAwesomeIcon
+                  icon={faAnglesRight}
+                  className="h-[7px] w-[7px]"
+                />
+              </button>
             </div>
           </div>
         ))}
