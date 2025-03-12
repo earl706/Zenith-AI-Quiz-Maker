@@ -17,9 +17,10 @@ import AccuracyPage from "./pages/AccuracyPage";
 import AchievementsPage from "./pages/AchievementsPage";
 import QuizPage from "./pages/QuizPage";
 import QuizAttempt from "./pages/QuizAttempt";
+import LoginPage from "./pages/LoginPage";
 
 function App() {
-  const [authenticated, setAuthenticated] = useState(true);
+  const [authenticated, setAuthenticated] = useState(false);
 
   const pathLocation = window.location.pathname;
 
@@ -34,6 +35,10 @@ function App() {
     { component: <QuizAttempt />, route: "/quizzes/attempt/:id" },
   ];
 
+  const performLogin = () => {
+    setAuthenticated(true);
+  };
+
   useEffect(() => {
     localStorage.setItem("lastPath", pathLocation);
   }, [pathLocation]);
@@ -43,12 +48,12 @@ function App() {
       <AuthProvider>
         <Router>
           <Routes>
-            {/* <Route
-            index
-            exact
-            path="/login"
-            element={<LoginPage performLogin={performLogin} />}
-          /> */}
+            <Route
+              index
+              exact
+              path="/login"
+              element={<LoginPage performLogin={performLogin} />}
+            />
             {routes.map((route, index) => (
               <Route
                 key={index}

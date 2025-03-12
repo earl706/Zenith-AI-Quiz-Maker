@@ -8,35 +8,31 @@ import {
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import zenithLogoDark from "/src/assets/ZENITH - LOGO DARK.png";
 import Header from "../components/Header";
-import React, { useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
+import { AuthContext } from "../context/AuthContext";
 
 export default function QuizzesPage() {
-  const [userName, setUsername] = useState("Earl Benedict C. Dumaraog");
-  const [userID, setUserID] = useState("2021309235");
+  const { getQuizList } = useContext(AuthContext);
+  const [quizList, setQuizList] = useState([]);
+  const [newest, setNewest] = useState([]);
+  const [mostAttempted, setMostAttempted] = useState([]);
 
-  const newest = [0, 1, 2].map(() => ({
-    quiz_title: "Quiz Title",
-    date_created: "2/8/24",
-    questions: 25,
-    attempts: 21,
-  }));
+  const initializeQuizzes = async () => {
+    try {
+      const quizList_response = await getQuizList();
+      console.log(quizList_response.data);
+      setQuizList(Array.from(quizList_response.data.data));
+      setNewest(Array.from(quizList_response.data.newest));
+      setMostAttempted(Array.from(quizList_response.data.most_attempted));
+      return quizzes;
+    } catch (err) {
+      return err;
+    }
+  };
 
-  const most_attempted = [0, 1, 2].map(() => ({
-    quiz_title: "Quiz Title",
-    date_created: "2/8/24",
-    questions: 25,
-    attempts: 21,
-  }));
-
-  const quizList = [0, 1, 2].map(() => ({
-    tag_color: "#00CA4E",
-    quiz_title: "Quiz Title",
-    date_created: "December 28, 1928",
-    flashcard: true,
-    public: false,
-    random_question_order: false,
-    attempts: 23,
-  }));
+  useEffect(() => {
+    initializeQuizzes();
+  }, []);
 
   return (
     <div className="px-[30px] pt-[18px] pb-[30px] transition-all">
@@ -125,7 +121,14 @@ export default function QuizzesPage() {
                       </span>
                       <div className="flex items-center w-[170px] text-left">
                         <span className="text-[14px] font-semibold">
-                          {quiz.date_created}
+                          {new Date(quiz.date_created).toLocaleDateString(
+                            "en-US",
+                            {
+                              year: "numeric",
+                              month: "long",
+                              day: "numeric",
+                            }
+                          )}
                         </span>
                       </div>
                     </div>
@@ -238,9 +241,18 @@ export default function QuizzesPage() {
                       </div>
                       <div className="text-[10px]">
                         <div className="flex flex-col font-semibold gap-[5px]">
-                          <span>{quiz.date_created}</span>
-                          <span>{quiz.questions}</span>
-                          <span>{quiz.attempts}</span>
+                          <span>
+                            {new Date(quiz.date_created).toLocaleDateString(
+                              "en-US",
+                              {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                              }
+                            )}
+                          </span>
+                          <span>{quiz.questions.length}</span>
+                          <span>{quiz.attempts.length}</span>
                         </div>
                       </div>
                     </div>
@@ -275,7 +287,7 @@ export default function QuizzesPage() {
             Most Attempted
           </span>
           <div className="flex flex-col gap-[20px] w-full">
-            {most_attempted.map((quiz, index) => (
+            {mostAttempted.map((quiz, index) => (
               <div
                 className="flex items-center justify-between bg-[#EFF7FF] rounded-[20px] p-[9px] drop-shadow-lg"
                 key={index}
@@ -298,9 +310,18 @@ export default function QuizzesPage() {
                       </div>
                       <div className="text-[10px]">
                         <div className="flex flex-col font-semibold gap-[5px]">
-                          <span>{quiz.date_created}</span>
-                          <span>{quiz.questions}</span>
-                          <span>{quiz.attempts}</span>
+                          <span>
+                            {new Date(quiz.date_created).toLocaleDateString(
+                              "en-US",
+                              {
+                                year: "numeric",
+                                month: "long",
+                                day: "numeric",
+                              }
+                            )}
+                          </span>
+                          <span>{quiz.questions.length}</span>
+                          <span>{quiz.attempts.length}</span>
                         </div>
                       </div>
                     </div>

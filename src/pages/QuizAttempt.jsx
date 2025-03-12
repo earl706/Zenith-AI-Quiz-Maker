@@ -3,8 +3,19 @@ import { useParams } from "react-router-dom";
 import Header from "../components/Header";
 import QuizFlashcardAttemptPage from "./QuizFlashcardAttemptPage";
 import QuestionCard from "../components/QuestionCard";
+import QuizResultsPage from "./QuizResultsPage";
+import { AuthContext } from "../context/AuthContext";
 
 export default function QuizAttempt() {
+  const {
+    attemptQuiz,
+    getQuiz,
+    deleteMode,
+    setDeleteMode,
+    quizDeleteData,
+    submitQuizAnswers,
+  } = useContext(AuthContext);
+
   const questions_data = [
     {
       "id": 15,
@@ -93,12 +104,13 @@ export default function QuizAttempt() {
     setAnswers(updatedAnswers);
   };
 
-  const initializeQuiz = () => {
+  const initializeQuiz = async () => {
     try {
-      //   const response = await getQuiz(quiz_id);
-      //   setQuizData(response.data.data);
-      setQuestions(questions_data);
-      const answersInitialization = questions_data.map((question) => ({
+      const response = await getQuiz(quiz_id);
+      setQuizData(response.data.data);
+      setQuestions(Array.from(response.data.questions));
+      console.log(response.data.questions);
+      const answersInitialization = response.data.questions.map((question) => ({
         id: question.id,
         question: question.question,
         correctAnswer: question.correct_answer,
@@ -106,7 +118,7 @@ export default function QuizAttempt() {
         userAnswer: "",
       }));
       setAnswers(answersInitialization);
-      //   return response;
+      return response;
     } catch (err) {
       return err;
     }
@@ -114,18 +126,17 @@ export default function QuizAttempt() {
 
   const submitAnswers = async () => {
     try {
-      console.log(answers);
-      //   const answers_submission_response = await submitQuizAnswers(
-      //     quiz_id,
-      //     answers,
-      //     time
-      //   );
-      //   setSubmittedAnswers(Array.from(answers_submission_response.data.answers));
-      //   setScore(answers_submission_response.data.score);
-      //   setAccuracy(answers_submission_response.data.accuracy);
-      //   setQuizResults(true);
-      //   setIsRunning(false);
-      //   return answers_submission_response;
+      const answers_submission_response = await submitQuizAnswers(
+        quiz_id,
+        answers,
+        time
+      );
+      setSubmittedAnswers(Array.from(answers_submission_response.data.answers));
+      setScore(answers_submission_response.data.score);
+      setAccuracy(answers_submission_response.data.accuracy);
+      setQuizResults(true);
+      setIsRunning(false);
+      return answers_submission_response;
     } catch (err) {
       return err;
     }
@@ -150,6 +161,21 @@ export default function QuizAttempt() {
   }, []);
 
   useEffect(() => {
+    const controller = new AbortController();
+
+    const initializeQuizAttempt = async () => {
+      try {
+        const response = await attemptQuiz(quiz_id);
+        return response;
+      } catch (err) {}
+    };
+
+    initializeQuizAttempt();
+
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
     console.log(answers);
   }, [answers]);
 
@@ -171,7 +197,27 @@ export default function QuizAttempt() {
         <Header page={"Attempt"} />
         <div className="flex gap-[40px]">
           {quizResults ? (
-            <></>
+            <>
+              {questions.map((question, index) => {
+                const answer = answers.find((a) => a.id === question.id);
+                const correct =
+                  submittedAnswers[index].correctAnswer ===
+                  submittedAnswers[index].userAnswer;
+                return (
+                  <QuizResultsPage
+                    question={question}
+                    answer={answer}
+                    correct={correct}
+                    handleIdentificationAnswerChange={
+                      handleIdentificationAnswerChange
+                    }
+                    submittedAnswers={submittedAnswers}
+                    index={index}
+                    key={index}
+                  />
+                );
+              })}
+            </>
           ) : quizData.flashcard_quiz ? (
             <div className="flex flex-col w-[67%]">
               <QuizFlashcardAttemptPage

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faAngleDown,
@@ -12,6 +12,8 @@ import {
 import zenithLogoDark from "/src/assets/ZENITH - LOGO DARK.png";
 import AttemptAccuracyDoughnutGraph from "../components/AttemptAccuracyDoughnutGraph";
 import Header from "../components/Header";
+import { AuthContext } from "../context/AuthContext";
+import { NavLink } from "react-router-dom";
 
 const quizList = [0, 1, 2, 3, 4, 5, 6, 7, 8].map(() => ({
   quiz_title: "Quiz Title",
@@ -39,6 +41,69 @@ const achievements = [
 }));
 
 export default function Dashboard() {
+  const { getQuizList, getUserData } = useContext(AuthContext);
+  const [scoresHistory, setScoresHistory] = useState([]);
+  const [attempts, setAttempts] = useState([]);
+  const [userData, setUserData] = useState({
+    attempts: [],
+    birthday: null,
+    date_joined: "",
+    email: "",
+    full_name: "",
+    gender: null,
+    groups: [],
+    id: 0,
+    is_active: false,
+    is_staff: false,
+    is_superuser: false,
+    is_verified: false,
+    last_login: "",
+    password: "",
+    phone_number: "",
+    user_permissions: [],
+  });
+
+  const [quizList, setQuizList] = useState([]);
+
+  const initialQuizList = async () => {
+    try {
+      const quizlist_response = await getQuizList();
+      setQuizList(Array.from(quizlist_response.data.data));
+      return quizlist_response;
+    } catch (err) {
+      return err;
+    }
+  };
+
+  const formatTimeInSeconds = (time) => {
+    const hrs = Math.floor(time / 3600);
+    const mins = Math.floor((time % 3600) / 60);
+    const secs = time % 60;
+    return {
+      hrs: hrs,
+      mins: mins,
+      secs: secs,
+    };
+  };
+
+  const initializeUserData = async () => {
+    try {
+      const user_data_response = await getUserData();
+      setAttempts(Array.from(user_data_response.data.attempts));
+      console.log(user_data_response.data.attempts);
+      setScoresHistory(Array.from(user_data_response.data.scores_history));
+      setUserData(user_data_response.data.user);
+      return user_data_response;
+    } catch (err) {
+      return err;
+    }
+  };
+
+  useEffect(() => {
+    initialQuizList();
+    initializeUserData();
+  }, []);
+
   useEffect(() => {}, []);
 
   return (
@@ -110,14 +175,20 @@ export default function Dashboard() {
                 </div>
                 <div className="text-[10px]">
                   <div className="flex flex-col font-semibold gap-[5px]">
-                    <span>{quiz.date_created}</span>
-                    <span>{quiz.questions}</span>
-                    <span>{quiz.attempts}</span>
+                    <span>
+                      {new Date(quiz.date_created).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                    </span>
+                    <span>{quiz.questions.length}</span>
+                    <span>{quiz.attempts.length}</span>
                   </div>
                 </div>
               </div>
             </div>
-            <div className="flex flex-col items-end justify-center gap-[10px] h-full w-[16%] text-gray-700">
+            <div className="flex flex-col items-end justify-center gap-[10px] h-full w-[25%] text-gray-700">
               <button className="flex items-center justify-center cursor-pointer h-[15px] w-[15px] bg-[#FF605C] rounded-full font-bold">
                 <FontAwesomeIcon icon={faXmark} className="h-[7px] w-[7px]" />
               </button>
@@ -139,19 +210,24 @@ export default function Dashboard() {
         ))}
       </div>
       <div className="w-full text-center text-[13px] mb-[50px]">
-        <span className="cursor-pointer hover:underline transition-all">
-          View All Quizzes
-        </span>
+        <NavLink to="/quizzes">
+          <span className="cursor-pointer hover:underline transition-all">
+            View All Quizzes
+          </span>
+        </NavLink>
       </div>
       <div className="grid grid-cols-3 gap-[20px] mb-[30px]">
-        {attempts.map((attempt) => (
-          <div className="flex items-center bg-[#EFF7FF] rounded-[20px] p-[20px] drop-shadow-lg">
+        {attempts.map((attempt, index) => (
+          <div
+            className="flex items-center bg-[#EFF7FF] rounded-[20px] p-[20px] drop-shadow-lg"
+            key={index}
+          >
             <div className="flex flex-col gap-[10px] w-1/2">
               <div className="text-[13px]">
-                <span className="font-bold">{attempt.quiz_title}</span>
+                <span className="font-bold">{attempt.quiz.quiz_title}</span>
                 <span className="text-[#A0A0A0] font-extralight">
                   {" "}
-                  | {attempt.date_created}
+                  | {new Date(attempt.attempt_datetime).toLocaleDateString()}
                 </span>
               </div>
               <div className="flex items-center justify-start">
@@ -172,7 +248,11 @@ export default function Dashboard() {
                     className="h-[7px] w-[7px]"
                   />
                 </div>
-                <span className="font-bold text-[12px]">{attempt.ratio}</span>
+                <span className="font-bold text-[12px]">
+                  {attempt.score.accuracy
+                    ? attempt.score.accuracy
+                    : "Unfinished"}
+                </span>
               </div>
               <div className="flex items-center justify-start">
                 <div className="flex items-center justify-center w-[15px] h-[15px] rounded-full mr-[5px]">
@@ -182,22 +262,26 @@ export default function Dashboard() {
                   />
                 </div>
                 <span className="font-bold text-[12px]">
-                  {attempt.accuracy}
+                  {attempt.score_accuracy
+                    ? attempt.score_accuracy
+                    : "Unfinished"}
                 </span>
               </div>
             </div>
             <div className="flex items-center justify-end w-1/2">
               <div className="w-[100px] h-[100px] rounded-full">
-                <AttemptAccuracyDoughnutGraph />
+                <AttemptAccuracyDoughnutGraph data_points={[83, 17]} />
               </div>
             </div>
           </div>
         ))}
       </div>
       <div className="w-full text-center text-[13px] mb-[30px]">
-        <span className="cursor-pointer hover:underline transition-all">
-          View All Attempts
-        </span>
+        <NavLink to="/attempts">
+          <span className="cursor-pointer hover:underline transition-all">
+            View All Attempts
+          </span>
+        </NavLink>
       </div>
     </div>
   );

@@ -76,6 +76,15 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const getAttemptsList = async () => {
+    try {
+      const attempts_data_response = await API_QUIZZES.get("quiz/attempts/");
+      return attempts_data_response;
+    } catch (err) {
+      return err;
+    }
+  };
+
   const updateUserData = async (userEditData) => {
     try {
       const user_update_response = await API.put(
@@ -210,6 +219,7 @@ export const AuthProvider = ({ children }) => {
         getQuiz,
         getQuizSummary,
         attemptQuiz,
+        getAttemptsList,
         deleteMode,
         submitQuizAnswers,
         deleteQuiz,

@@ -32,8 +32,7 @@ const colors = [
 export default function CreateQuizPage() {
   const { createQuiz, setQuizzes, quizzes, generateQuiz } =
     useContext(AuthContext);
-  const [userName, setUsername] = useState("Earl Benedict C. Dumaraog");
-  const [userID, setUserID] = useState("2021309235");
+  const navigate = useNavigate();
   const [topic, setTopic] = useState("");
   const [questionNumber, setQuestionNumber] = useState(5);
   const [loading, setLoading] = useState(false);
@@ -107,6 +106,40 @@ export default function CreateQuizPage() {
     event.preventDefault();
     setQuizTitle(quizTitleInput);
     setEditQuizTitle(false);
+  };
+
+  const handleCreateQuiz = async (e) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      const quiz = {
+        tag_color: selectedColor,
+        quiz_title: quizTitle,
+        public: false,
+        questions: questions,
+        randomQuestions: randomQuestionOrder,
+        quizType: quizType,
+      };
+
+      const createquiz_response = await createQuiz(quiz, questions);
+      console.log(createquiz_response);
+      if (
+        createquiz_response.status == 200 ||
+        createquiz_response.statusText == "OK"
+      ) {
+        console.log("sad1");
+        navigate(`/quizzes/${createquiz_response.data.quiz.quiz_id}`);
+        console.log("sad2");
+        setQuizzes([...quizzes, createquiz_response.data.quiz]);
+        console.log("sad3");
+      }
+      setLoading(false);
+      return createquiz_response;
+    } catch (err) {
+      setLoading(false);
+      console.log(err);
+      return err;
+    }
   };
 
   const handleChoicesChange = (id, index, value) => {
@@ -197,6 +230,10 @@ export default function CreateQuizPage() {
               </div>
               <input
                 type="text"
+                value={question.title}
+                onChange={(e) =>
+                  handleInputChange(question.id, "title", e.target.value)
+                }
                 className="text-[12px] text-[#919191] bg-white rounded-full w-full py-[12px] px-[20px] mb-[20px]"
                 placeholder="Question"
               />
@@ -425,7 +462,10 @@ export default function CreateQuizPage() {
               </span>
             )}
           </button>
-          <button className="flex cursor-pointer w-full h-[40px] justify-center items-center text-white font-bold rounded-full bg-[#00CA4E] hover:bg-[#00AA1E] transition-all mb-[30px]">
+          <button
+            onClick={handleCreateQuiz}
+            className="flex cursor-pointer w-full h-[40px] justify-center items-center text-white font-bold rounded-full bg-[#00CA4E] hover:bg-[#00AA1E] transition-all mb-[30px]"
+          >
             <span className="text-[14px]">Create Quiz</span>
           </button>
           <span className="text-[16px] font-bold mb-[10px]">

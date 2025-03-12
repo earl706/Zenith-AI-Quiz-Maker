@@ -1,40 +1,51 @@
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import Header from "../components/Header";
-import { useParams } from "react-router-dom";
+import { AuthContext } from "../context/AuthContext";
+import { useParams, useNavigate } from "react-router-dom";
 import AttemptAccuracyDoughnutGraph from "../components/AttemptAccuracyDoughnutGraph";
 
 export default function QuizPage() {
+  const { getQuiz, deleteMode, setDeleteMode, quizDeleteData, getQuizSummary } =
+    useContext(AuthContext);
   const url_params = useParams();
-
+  const [attempts, setAttempts] = useState([]);
+  const [questions, setQuestions] = useState([]);
   const [quizData, setQuizData] = useState({
-    quiz_title: "Quiz Title",
-    tag_color: "#007AFF",
-    flashcard: true,
-    public: true,
-    date_created: "December 28, 1928",
-    random_question_order: true,
-    questions: 27,
+    quiz_id: null,
+    owner: null,
+    tag_color: "",
+    quiz_title: "",
+    questions: [],
+    date_created: null,
+    public: false,
+    random_question_order: false,
+    flashcard_quiz: false,
+    attempts: [],
   });
 
-  const questions = [0, 1, 2, 3, 4].map((question) => ({
-    question: `Question ${question + 1}`,
-    choices:
-      question % 2 == 1
-        ? ["Answer"]
-        : ["Choice 1", "Choice 2", "Choice 3", "Choice 4"],
-    mathematical: question % 2 == 0,
-    identification: question % 2 == 1,
-  }));
+  const navigate = useNavigate();
+  const quiz_id = useParams().id;
 
-  const attempts = [0, 1, 2, 3, 4, 5, 6].map((attempt) => ({
-    date: "2/8/25",
-    ratio: "30/50",
-    percentage: "60%",
-  }));
+  const initializeQuizData = async () => {
+    try {
+      const quizdata_response = await getQuiz(quiz_id);
+      setQuizData(quizdata_response.data.data);
+      setQuestions(Array.from(quizdata_response.data.questions));
+      console.log(quizdata_response.data.attempts);
+      setAttempts(Array.from(quizdata_response.data.attempts));
+      return quizdata_response;
+    } catch (err) {
+      return err;
+    }
+  };
+
+  const closeDeleteConfirmationModal = () => {
+    setDeleteMode(false);
+  };
 
   useEffect(() => {
-    console.log(url_params.id);
-  }, []);
+    initializeQuizData();
+  }, [quiz_id]);
 
   return (
     <>
@@ -65,7 +76,7 @@ export default function QuizPage() {
                   Type
                 </span>
                 <span className="font-bold text-[16px] text-[#646464]">
-                  {quizData.flashcard ? "Flashcard" : "List"}
+                  {quizData.flashcard_quiz ? "Flashcard" : "List"}
                 </span>
               </div>
               <div className="w-full bg-white rounded-full flex items-center p-[10px]">
@@ -83,7 +94,7 @@ export default function QuizPage() {
                   Created
                 </span>
                 <span className="font-bold text-[16px] text-[#646464]">
-                  {quizData.date_created}
+                  {new Date(quizData.date_created).toLocaleDateString()}
                 </span>
               </div>
               <div className="w-full bg-white rounded-full flex items-center p-[10px]">
@@ -101,7 +112,7 @@ export default function QuizPage() {
                   Questions
                 </span>
                 <span className="font-bold text-[16px] text-[#646464]">
-                  {quizData.questions}
+                  {quizData.questions.length}
                 </span>
               </div>
             </div>

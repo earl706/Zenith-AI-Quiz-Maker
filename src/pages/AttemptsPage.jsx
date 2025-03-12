@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import AttemptAccuracyDoughnutGraph from "../components/AttemptAccuracyDoughnutGraph";
 import zenithLogoDark from "/src/assets/ZENITH - LOGO DARK.png";
 import Header from "../components/Header";
+import { AuthContext } from "../context/AuthContext";
 
 const attempts = [0, 1, 2].map(() => ({
   quiz_title: "Quiz Title",
@@ -55,6 +56,22 @@ const most_accurate_attempts = [
 ];
 
 export default function AttemptsPage() {
+  const { getAttemptsList } = useContext(AuthContext);
+
+  const initializeAttempts = async () => {
+    try {
+      const response = await getAttemptsList();
+      console.log(response);
+      return response;
+    } catch (err) {
+      return response;
+    }
+  };
+
+  useEffect(() => {
+    initializeAttempts();
+  }, []);
+
   return (
     <>
       <div className="px-[30px] pt-[18px] pb-[30px] transition-all">

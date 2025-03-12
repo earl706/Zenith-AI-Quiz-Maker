@@ -9,6 +9,7 @@ import {
   faGear,
   faPen,
   faQuestion,
+  faRightFromBracket,
   faTrophy,
 } from "@fortawesome/free-solid-svg-icons";
 import zenithLogoLight from "/src/assets/ZENITH - LOGO LIGHT.png";
@@ -101,9 +102,12 @@ export default function Navbar({ children }) {
                 activeItemHover == "settings" ? "text-white" : "text-gray-300"
               } `}
             >
-              <FontAwesomeIcon icon={faGear} className="w-full h-full" />
+              <FontAwesomeIcon
+                icon={faRightFromBracket}
+                className="w-full h-full"
+              />
             </div>
-            <span>Settings</span>
+            <span>Logout</span>
           </NavLink>
         </div>
       </aside>
