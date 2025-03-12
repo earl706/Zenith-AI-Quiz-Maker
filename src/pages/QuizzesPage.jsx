@@ -7,6 +7,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import zenithLogoDark from "/src/assets/ZENITH - LOGO DARK.png";
+import Header from "../components/Header";
 import React, { useState } from "react";
 
 export default function QuizzesPage() {
@@ -39,31 +40,7 @@ export default function QuizzesPage() {
 
   return (
     <div className="px-[30px] pt-[18px] pb-[30px] transition-all">
-      <div className="flex justify-between items-center mb-[40px]">
-        <div className="flex justify-between items-center w-[67%]">
-          <div className="flex flex-col gap-0">
-            <div className="text-[13px]">
-              <span className="text-[#6F8055]">Pages / </span>
-              <span className="font-semibold">Quizzes</span>
-            </div>
-            <span className="text-[#6F8055] text-[40px] font-extrabold">
-              Quizzes
-            </span>
-          </div>
-          <div className="flex justify-end gap-[20px]">
-            <div className="h-[35px] w-[35px] bg-gray-300 rounded-full"></div>
-            <div className="h-[35px] w-[35px] bg-gray-300 rounded-full"></div>
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-[12px]">
-          <div className="flex flex-col justify-start items-end">
-            <span className="text-[13px]">{userName}</span>
-            <span className="text-[10px] text-[#A1A1A1]">{userID}</span>
-          </div>
-          <div className="h-[40px] w-[40px] bg-gray-300 rounded-full"></div>
-        </div>
-      </div>
+      <Header page={"Quizzes"} />
 
       <div className="flex gap-[40px]">
         <div className="flex flex-col w-[67%]">

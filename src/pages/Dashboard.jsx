@@ -11,6 +11,7 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import zenithLogoDark from "/src/assets/ZENITH - LOGO DARK.png";
 import AttemptAccuracyDoughnutGraph from "../components/AttemptAccuracyDoughnutGraph";
+import Header from "../components/Header";
 
 const quizList = [0, 1, 2, 3, 4, 5, 6, 7, 8].map(() => ({
   quiz_title: "Quiz Title",
@@ -38,37 +39,11 @@ const achievements = [
 }));
 
 export default function Dashboard() {
-  const [userName, setUsername] = useState("Earl Benedict C. Dumaraog");
-  const [userID, setUserID] = useState("2021309235");
-
   useEffect(() => {}, []);
 
   return (
     <div className="px-[30px] pt-[18px] pb-[30px] transition-all">
-      <div className="flex justify-between items-center mb-[40px]">
-        <div className="flex justify-between items-center w-[67%]">
-          <div className="flex flex-col gap-0">
-            <div className="text-[13px]">
-              <span className="text-[#6F8055]">Pages / </span>
-              <span className="font-semibold">Dashboard</span>
-            </div>
-            <span className="text-[#6F8055] text-[40px] font-extrabold">
-              Dashboard
-            </span>
-          </div>
-          <div className="flex justify-end gap-[20px]">
-            <div className="h-[35px] w-[35px] bg-gray-300 rounded-full"></div>
-            <div className="h-[35px] w-[35px] bg-gray-300 rounded-full"></div>
-          </div>
-        </div>
-        <div className="flex justify-end gap-[12px]">
-          <div className="flex flex-col justify-start items-end">
-            <span className="text-[13px]">{userName}</span>
-            <span className="text-[10px] text-[#A1A1A1]">{userID}</span>
-          </div>
-          <div className="h-[40px] w-[40px] bg-gray-300 rounded-full"></div>
-        </div>
-      </div>
+      <Header page={"Dashboard"} />
 
       <div className="flex items-center justify-between mb-[40px] w-[67%]">
         <span className="text-[15px] font-semibold mr-[40px]">Filter by:</span>
