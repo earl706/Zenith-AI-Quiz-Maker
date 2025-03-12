@@ -15,6 +15,8 @@ import CreateQuizPage from "./pages/CreateQuizPage";
 import AttemptsPage from "./pages/AttemptsPage";
 import AccuracyPage from "./pages/AccuracyPage";
 import AchievementsPage from "./pages/AchievementsPage";
+import QuizPage from "./pages/QuizPage";
+import QuizAttempt from "./pages/QuizAttempt";
 
 function App() {
   const [authenticated, setAuthenticated] = useState(true);
@@ -28,6 +30,8 @@ function App() {
     { component: <AttemptsPage />, route: "/attempts" },
     { component: <AccuracyPage />, route: "/accuracy" },
     { component: <AchievementsPage />, route: "/achievements" },
+    { component: <QuizPage />, route: "/quizzes/:id" },
+    { component: <QuizAttempt />, route: "/quizzes/attempt/:id" },
   ];
 
   useEffect(() => {

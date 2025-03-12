@@ -55,9 +55,6 @@ const most_accurate_attempts = [
 ];
 
 export default function AttemptsPage() {
-  const [userName, setUsername] = useState("Earl Benedict C. Dumaraog");
-  const [userID, setUserID] = useState("2021309235");
-
   return (
     <>
       <div className="px-[30px] pt-[18px] pb-[30px] transition-all">
@@ -107,7 +104,7 @@ export default function AttemptsPage() {
                   </div>
                   <div className="flex items-center justify-center w-1/2">
                     <div className="w-[250px] h-[250px]">
-                      <AttemptAccuracyDoughnutGraph />
+                      <AttemptAccuracyDoughnutGraph data_points={[83, 17]} />
                     </div>
                   </div>
                 </div>
@@ -151,7 +148,7 @@ export default function AttemptsPage() {
 
                   <div className="flex items-center justify-center h-full w-[20%] text-gray-700 mr-[9px]">
                     <div className="w-[50px] h-[50px]">
-                      <AttemptAccuracyDoughnutGraph />
+                      <AttemptAccuracyDoughnutGraph data_points={[83, 17]} />
                     </div>
                   </div>
                 </div>
@@ -196,7 +193,7 @@ export default function AttemptsPage() {
 
                   <div className="flex items-center justify-center h-full w-[20%] text-gray-700 mr-[9px]">
                     <div className="w-[50px] h-[50px]">
-                      <AttemptAccuracyDoughnutGraph />
+                      <AttemptAccuracyDoughnutGraph data_points={[83, 17]} />
                     </div>
                   </div>
                 </div>
