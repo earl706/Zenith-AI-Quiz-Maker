@@ -235,9 +235,13 @@ export default function CreateQuizPage() {
                   <span>Identification</span>
                 </button>
                 <button
-                  className={`transition-all cursor-pointer flex items-center font-bold text-[10px] px-[3px] text-white rounded-full h-[21px] w-full ${
-                    question.randomChoices ? "bg-[#00CA4E]" : "bg-[#FF605C]"
-                  } ${question.identification ? "hidden" : ""}`}
+                  className={`transition-all flex items-center font-bold text-[10px] px-[3px] text-white rounded-full h-[21px] w-full ${
+                    question.identification
+                      ? "bg-gray-300"
+                      : question.randomChoices
+                      ? "bg-[#00CA4E] cursor-pointer"
+                      : "bg-[#FF605C] cursor-pointer"
+                  }`}
                   onClick={() =>
                     handleInputChange(
                       question.id,
@@ -245,6 +249,7 @@ export default function CreateQuizPage() {
                       !question.randomChoices
                     )
                   }
+                  disabled={question.identification}
                 >
                   <div className="h-[15px] w-[15px] bg-white rounded-full mr-[5px]"></div>
                   <span>Random Choices</span>
