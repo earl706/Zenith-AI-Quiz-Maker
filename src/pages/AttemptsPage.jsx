@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import AttemptAccuracyDoughnutGraph from "../components/AttemptAccuracyDoughnutGraph";
+import zenithLogoDark from "/src/assets/ZENITH - LOGO DARK.png";
 
 const attempts = [0, 1, 2].map(() => ({
   quiz_title: "Quiz Title",
@@ -145,7 +146,9 @@ export default function AttemptsPage() {
                   key={index}
                 >
                   <div className="flex items-center w-[80%]">
-                    <div className="w-[80px] h-[80px] bg-gray-300 mr-[13px] rounded-[20px]"></div>
+                    <div className="w-[80px] h-[80px] mr-[13px] rounded-[20px]">
+                      <img src={zenithLogoDark} alt="" />
+                    </div>
                     <div className="flex flex-col w-[1/2]">
                       <div className="text-[15px] font-semibold mb-[5px]">
                         <span>{attempt.quiz_title}</span>
@@ -188,7 +191,9 @@ export default function AttemptsPage() {
                   key={index}
                 >
                   <div className="flex items-center w-[80%]">
-                    <div className="w-[80px] h-[80px] bg-gray-300 mr-[13px] rounded-[20px]"></div>
+                    <div className="w-[80px] h-[80px] mr-[13px] rounded-[20px]">
+                      <img src={zenithLogoDark} alt="" />
+                    </div>
                     <div className="flex flex-col w-[1/2]">
                       <div className="text-[15px] font-semibold mb-[5px]">
                         <span>{attempt.quiz_title}</span>
