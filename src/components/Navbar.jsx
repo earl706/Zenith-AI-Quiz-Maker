@@ -23,14 +23,14 @@ export default function Navbar({ children }) {
     { navItem: "Quizzes", link: "/quizzes", icon: faQuestion },
     { navItem: "Create Quiz", link: "/create-quiz", icon: faAdd },
     { navItem: "Attempts", link: "/attempts", icon: faPen },
-    { navItem: "Accuracy", link: "/accuracy", icon: faBullseye },
-    { navItem: "Achievements", link: "/achievements", icon: faTrophy },
+    // { navItem: "Accuracy", link: "/accuracy", icon: faBullseye },
+    // { navItem: "Achievements", link: "/achievements", icon: faTrophy },
   ];
 
   useEffect(() => {}, [location]);
 
   return (
-    <div className="flex min-h-screen bg-[#3C6B9F]">
+    <div className="flex min-h-screen bg-[#6F8055]">
       <aside className="w-[23%] h-[calc(100vh-2rem)] flex fixed flex-col text-blue-900 pr-[40px]">
         <div className="flex justify-start items-center mb-[75px] text-white mt-[35px] ml-[33px]">
           <div className="flex justify-center items-center w-[60px] h-[60px] mr-[30px]">
@@ -63,11 +63,11 @@ export default function Navbar({ children }) {
                     } w-[10px] h-[40px] rounded-tr-[10px] rounded-br-[10px] mr-[33px] transition-all`}
                   ></div>
                   <div
-                    className={`flex items-center justify-center h-[30px] w-[30px] mr-[27px] ${
+                    className={`flex items-center justify-center mr-[27px] ${
                       navItem.link == location ||
                       activeItemHover == navItem.link
-                        ? "text-white"
-                        : "text-gray-300"
+                        ? "text-white h-[40px] w-[40px]"
+                        : "text-gray-300 h-[30px] w-[30px]"
                     } transition-all`}
                   >
                     <FontAwesomeIcon

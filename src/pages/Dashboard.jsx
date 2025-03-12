@@ -1,10 +1,16 @@
 import React, { useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
+  faAngleDown,
   faAnglesRight,
+  faBullseye,
+  faChartPie,
+  faHourglass,
   faUpDownLeftRight,
   faXmark,
 } from "@fortawesome/free-solid-svg-icons";
+import zenithLogoDark from "/src/assets/ZENITH - LOGO DARK.png";
+import AttemptAccuracyDoughnutGraph from "../components/AttemptAccuracyDoughnutGraph";
 
 const quizList = [0, 1, 2, 3, 4, 5, 6, 7, 8].map(() => ({
   quiz_title: "Quiz Title",
@@ -43,10 +49,10 @@ export default function Dashboard() {
         <div className="flex justify-between items-center w-[67%]">
           <div className="flex flex-col gap-0">
             <div className="text-[13px]">
-              <span className="text-[#A0A0A0]">Pages / </span>
-              <span>Dashboard</span>
+              <span className="text-[#6F8055]">Pages / </span>
+              <span className="font-semibold">Dashboard</span>
             </div>
-            <span className="text-[#3C6B9F] text-[40px] font-extrabold">
+            <span className="text-[#6F8055] text-[40px] font-extrabold">
               Dashboard
             </span>
           </div>
@@ -67,35 +73,41 @@ export default function Dashboard() {
       <div className="flex items-center justify-between mb-[40px] w-[67%]">
         <span className="text-[15px] font-semibold mr-[40px]">Filter by:</span>
         <div className="flex justify-between gap-[20px] w-[84%]">
-          <button className="flex items-center justify-center px-[15px] py-[10px] bg-[#EFF7FF] rounded-full cursor-pointer">
-            <span className="font-semibold text-[12px] mr-[5px] text-[#364656]">
-              Time
-            </span>
-            <div className="h-[13px] w-[13px] bg-white"></div>
+          <button className="flex items-center justify-center text-[#6F8055] px-[15px] py-[10px] bg-[#EFF7FF] rounded-full cursor-pointer">
+            <span className="font-semibold text-[12px] mr-[5px]">Time</span>
+            <div className="flex items-center justify-center h-[13px] w-[13px]">
+              <FontAwesomeIcon icon={faAngleDown} className="h-[7px] w-[7px]" />
+            </div>
           </button>
-          <button className="flex items-center justify-center px-[15px] py-[10px] bg-[#EFF7FF] rounded-full cursor-pointer">
-            <span className="font-semibold text-[12px] mr-[5px] text-[#364656]">
+          <button className="flex items-center justify-center text-[#6F8055] px-[15px] py-[10px] bg-[#EFF7FF] rounded-full cursor-pointer">
+            <span className="font-semibold text-[12px] mr-[5px]">
               Questions
             </span>
-            <div className="h-[13px] w-[13px] bg-white"></div>
+            <div className="flex items-center justify-center h-[13px] w-[13px]">
+              <FontAwesomeIcon icon={faAngleDown} className="h-[7px] w-[7px]" />
+            </div>
           </button>
-          <button className="flex items-center justify-center px-[15px] py-[10px] bg-[#EFF7FF] rounded-full cursor-pointer">
-            <span className="font-semibold text-[12px] mr-[5px] text-[#364656]">
-              Attempts
-            </span>
-            <div className="h-[13px] w-[13px] bg-white"></div>
+          <button className="flex items-center justify-center text-[#6F8055] px-[15px] py-[10px] bg-[#EFF7FF] rounded-full cursor-pointer">
+            <span className="font-semibold text-[12px] mr-[5px]">Attempts</span>
+            <div className="flex items-center justify-center h-[13px] w-[13px]">
+              <FontAwesomeIcon icon={faAngleDown} className="h-[7px] w-[7px]" />
+            </div>
           </button>
-          <button className="flex items-center justify-center px-[15px] py-[10px] bg-[#EFF7FF] rounded-full cursor-pointer">
-            <span className="font-semibold text-[12px] mr-[5px] text-[#364656]">
+          <button className="flex items-center justify-center text-[#6F8055] px-[15px] py-[10px] bg-[#EFF7FF] rounded-full cursor-pointer">
+            <span className="font-semibold text-[12px] mr-[5px]">
               Mathematical
             </span>
-            <div className="h-[13px] w-[13px] bg-white"></div>
+            <div className="flex items-center justify-center h-[13px] w-[13px]">
+              <FontAwesomeIcon icon={faAngleDown} className="h-[7px] w-[7px]" />
+            </div>
           </button>
-          <button className="flex items-center justify-center px-[15px] py-[10px] bg-[#EFF7FF] rounded-full cursor-pointer">
-            <span className="font-semibold text-[12px] mr-[5px] text-[#364656]">
+          <button className="flex items-center justify-center text-[#6F8055] px-[15px] py-[10px] bg-[#EFF7FF] rounded-full cursor-pointer">
+            <span className="font-semibold text-[12px] mr-[5px]">
               Identification
             </span>
-            <div className="h-[13px] w-[13px] bg-white"></div>
+            <div className="flex items-center justify-center h-[13px] w-[13px]">
+              <FontAwesomeIcon icon={faAngleDown} className="h-[7px] w-[7px]" />
+            </div>
           </button>
         </div>
       </div>
@@ -106,7 +118,9 @@ export default function Dashboard() {
             className="flex items-center  bg-[#EFF7FF] rounded-[20px] p-[10px] drop-shadow-lg"
             key={index}
           >
-            <div className="w-[80px] h-[80px] bg-gray-300 mr-[15px] rounded-[20px]"></div>
+            <div className="w-[80px] h-[80px] mr-[15px] rounded-[20px]">
+              <img src={zenithLogoDark} alt="" />
+            </div>
             <div className="flex flex-col w-[1/2]">
               <div className="text-[15px] font-semibold mb-[5px]">
                 <span>{quiz.quiz_title}</span>
@@ -154,7 +168,7 @@ export default function Dashboard() {
           View All Quizzes
         </span>
       </div>
-      <div className="grid grid-cols-3 gap-[20px]">
+      <div className="grid grid-cols-3 gap-[20px] mb-[30px]">
         {attempts.map((attempt) => (
           <div className="flex items-center bg-[#EFF7FF] rounded-[20px] p-[20px] drop-shadow-lg">
             <div className="flex flex-col gap-[10px] w-1/2">
@@ -166,27 +180,49 @@ export default function Dashboard() {
                 </span>
               </div>
               <div className="flex items-center justify-start">
-                <div className="w-[15px] h-[15px] rounded-full bg-gray-300 mr-[5px]"></div>
+                <div className="flex items-center justify-center w-[15px] h-[15px] rounded-full mr-[5px]">
+                  <FontAwesomeIcon
+                    icon={faHourglass}
+                    className="h-[7px] w-[7px]"
+                  />
+                </div>
                 <span className="font-bold text-[12px]">
                   {attempt.duration}
                 </span>
               </div>
               <div className="flex items-center justify-start">
-                <div className="w-[15px] h-[15px] rounded-full bg-gray-300 mr-[5px]"></div>
+                <div className="flex items-center justify-center w-[15px] h-[15px] rounded-full mr-[5px]">
+                  <FontAwesomeIcon
+                    icon={faBullseye}
+                    className="h-[7px] w-[7px]"
+                  />
+                </div>
                 <span className="font-bold text-[12px]">{attempt.ratio}</span>
               </div>
               <div className="flex items-center justify-start">
-                <div className="w-[15px] h-[15px] rounded-full bg-gray-300 mr-[5px]"></div>
+                <div className="flex items-center justify-center w-[15px] h-[15px] rounded-full mr-[5px]">
+                  <FontAwesomeIcon
+                    icon={faChartPie}
+                    className="h-[7px] w-[7px]"
+                  />
+                </div>
                 <span className="font-bold text-[12px]">
                   {attempt.accuracy}
                 </span>
               </div>
             </div>
             <div className="flex items-center justify-end w-1/2">
-              <div className="w-[100px] h-[100px] bg-gray-300 rounded-full"></div>
+              <div className="w-[100px] h-[100px] rounded-full">
+                <AttemptAccuracyDoughnutGraph />
+              </div>
             </div>
           </div>
         ))}
+      </div>
+      <div className="w-full text-center text-[13px] mb-[30px]">
+        <span className="cursor-pointer hover:underline transition-all">
+          View All Attempts
+        </span>
       </div>
     </div>
   );

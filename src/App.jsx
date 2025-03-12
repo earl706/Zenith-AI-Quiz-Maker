@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faBookOpenReader } from "@fortawesome/free-solid-svg-icons";
+import { AuthProvider } from "./context/AuthContext";
 import {
   BrowserRouter as Router,
   Routes,
@@ -35,29 +36,31 @@ function App() {
 
   return (
     <>
-      <Router>
-        <Routes>
-          {/* <Route
+      <AuthProvider>
+        <Router>
+          <Routes>
+            {/* <Route
             index
             exact
             path="/login"
             element={<LoginPage performLogin={performLogin} />}
           /> */}
-          {routes.map((route, index) => (
-            <Route
-              key={index}
-              path={route.route}
-              element={
-                authenticated ? (
-                  <Navbar>{route.component}</Navbar>
-                ) : (
-                  <Navigate to="/login" />
-                )
-              }
-            />
-          ))}
-        </Routes>
-      </Router>
+            {routes.map((route, index) => (
+              <Route
+                key={index}
+                path={route.route}
+                element={
+                  authenticated ? (
+                    <Navbar>{route.component}</Navbar>
+                  ) : (
+                    <Navigate to="/login" />
+                  )
+                }
+              />
+            ))}
+          </Routes>
+        </Router>
+      </AuthProvider>
     </>
   );
 }

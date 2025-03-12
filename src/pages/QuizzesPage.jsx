@@ -1,9 +1,12 @@
 import {
+  faAngleDown,
+  faAngleRight,
   faAnglesRight,
   faUpDownLeftRight,
   faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import zenithLogoDark from "/src/assets/ZENITH - LOGO DARK.png";
 import React, { useState } from "react";
 
 export default function QuizzesPage() {
@@ -40,10 +43,10 @@ export default function QuizzesPage() {
         <div className="flex justify-between items-center w-[67%]">
           <div className="flex flex-col gap-0">
             <div className="text-[13px]">
-              <span className="text-[#A0A0A0]">Pages / </span>
-              <span>Quizzes</span>
+              <span className="text-[#6F8055]">Pages / </span>
+              <span className="font-semibold">Quizzes</span>
             </div>
-            <span className="text-[#3C6B9F] text-[40px] font-extrabold">
+            <span className="text-[#6F8055] text-[40px] font-extrabold">
               Quizzes
             </span>
           </div>
@@ -69,29 +72,45 @@ export default function QuizzesPage() {
               Filter by:
             </span>
             <div className="flex justify-between gap-[20px] w-[84%]">
-              <button className="flex items-center justify-center px-[15px] py-[10px] bg-[#EFF7FF] rounded-full cursor-pointer">
-                <span className="font-semibold text-[12px] mr-[5px] text-[#364656]">
-                  Time
-                </span>
-                <div className="h-[13px] w-[13px] bg-white"></div>
+              <button className="flex items-center justify-center px-[15px] py-[10px] bg-[#EFF7FF] text-[#6F8055] rounded-full cursor-pointer">
+                <span className="font-semibold text-[12px] mr-[5px]">Time</span>
+                <div className="flex items-center justify-center h-[13px] w-[13px]">
+                  <FontAwesomeIcon
+                    icon={faAngleDown}
+                    className="h-[7px] w-[7px]"
+                  />
+                </div>
               </button>
-              <button className="flex items-center justify-center px-[15px] py-[10px] bg-[#EFF7FF] rounded-full cursor-pointer">
-                <span className="font-semibold text-[12px] mr-[5px] text-[#364656]">
+              <button className="flex items-center justify-center px-[15px] py-[10px] bg-[#EFF7FF] text-[#6F8055] rounded-full cursor-pointer">
+                <span className="font-semibold text-[12px] mr-[5px]">
                   Questions
                 </span>
-                <div className="h-[13px] w-[13px] bg-white"></div>
+                <div className="flex items-center justify-center h-[13px] w-[13px]">
+                  <FontAwesomeIcon
+                    icon={faAngleDown}
+                    className="h-[7px] w-[7px]"
+                  />
+                </div>
               </button>
-              <button className="flex items-center justify-center px-[15px] py-[10px] bg-[#EFF7FF] rounded-full cursor-pointer">
-                <span className="font-semibold text-[12px] mr-[5px] text-[#364656]">
-                  Type
-                </span>
-                <div className="h-[13px] w-[13px] bg-white"></div>
+              <button className="flex items-center justify-center px-[15px] py-[10px] bg-[#EFF7FF] text-[#6F8055] rounded-full cursor-pointer">
+                <span className="font-semibold text-[12px] mr-[5px]">Type</span>
+                <div className="flex items-center justify-center h-[13px] w-[13px]">
+                  <FontAwesomeIcon
+                    icon={faAngleDown}
+                    className="h-[7px] w-[7px]"
+                  />
+                </div>
               </button>
-              <button className="flex items-center justify-center px-[15px] py-[10px] bg-[#EFF7FF] rounded-full cursor-pointer">
-                <span className="font-semibold text-[12px] mr-[5px] text-[#364656]">
+              <button className="flex items-center justify-center px-[15px] py-[10px] bg-[#EFF7FF] text-[#6F8055] rounded-full cursor-pointer">
+                <span className="font-semibold text-[12px] mr-[5px]">
                   Mathematical
                 </span>
-                <div className="h-[13px] w-[13px] bg-white"></div>
+                <div className="flex items-center justify-center h-[13px] w-[13px]">
+                  <FontAwesomeIcon
+                    icon={faAngleDown}
+                    className="h-[7px] w-[7px]"
+                  />
+                </div>
               </button>
             </div>
           </div>
@@ -101,7 +120,9 @@ export default function QuizzesPage() {
                 className="flex items-center justify-between bg-[#EFF7FF] rounded-[20px] p-[20px] drop-shadow-lg"
                 key={index}
               >
-                <div className="w-[210px] h-[210px] bg-gray-300 mr-[20px] rounded-[20px]"></div>
+                <div className="w-[210px] h-[210px] mr-[20px] rounded-[20px]">
+                  <img src={zenithLogoDark} alt="" />
+                </div>
                 <div className="flex flex-col w-[47%]">
                   <div className="text-[20px] font-bold mb-[9px]">
                     <span>{quiz.quiz_title}</span>
@@ -197,10 +218,16 @@ export default function QuizzesPage() {
                       />
                     </button>
                   </div>
-                  <button className="cursor-pointer flex items-center w-full px-[10px] py-[3px] rounded-full bg-[#00CA4E] hover:bg-[#00CA4E]">
-                    <span className="font-bold text-[12px] text-white text-center">
+                  <button className="cursor-pointer flex items-center justify-evenly w-full px-[10px] py-[3px] rounded-full bg-[#00CA4E] hover:bg-[#00CA4E]">
+                    <span className="font-bold text-[12px] text-white text-center mr-[5px]">
                       Attempt
                     </span>
+                    <div className="flex items-center justify-center w-[5px] h-[5px] text-white">
+                      <FontAwesomeIcon
+                        icon={faAngleRight}
+                        className="w-[7px] h-[7px]"
+                      />
+                    </div>
                   </button>
                 </div>
               </div>
@@ -217,7 +244,9 @@ export default function QuizzesPage() {
                 key={index}
               >
                 <div className="flex items-center w-[80%]">
-                  <div className="w-[80px] h-[80px] bg-gray-300 mr-[13px] rounded-[20px]"></div>
+                  <div className="w-[80px] h-[80px]  mr-[13px] rounded-[20px]">
+                    <img src={zenithLogoDark} alt="" />
+                  </div>
                   <div className="flex flex-col w-[1/2]">
                     <div className="text-[15px] font-semibold mb-[5px]">
                       <span>{quiz.quiz_title}</span>
@@ -275,7 +304,9 @@ export default function QuizzesPage() {
                 key={index}
               >
                 <div className="flex items-center w-[80%]">
-                  <div className="w-[80px] h-[80px] bg-gray-300 mr-[13px] rounded-[20px]"></div>
+                  <div className="w-[80px] h-[80px] mr-[13px] rounded-[20px]">
+                    <img src={zenithLogoDark} alt="" />
+                  </div>
                   <div className="flex flex-col w-[1/2]">
                     <div className="text-[15px] font-semibold mb-[5px]">
                       <span>{quiz.quiz_title}</span>
