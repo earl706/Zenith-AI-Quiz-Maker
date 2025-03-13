@@ -31,7 +31,6 @@ export default function QuizPage() {
       const quizdata_response = await getQuiz(quiz_id);
       setQuizData(quizdata_response.data.data);
       setQuestions(Array.from(quizdata_response.data.questions));
-      console.log(quizdata_response.data.attempts);
       setAttempts(Array.from(quizdata_response.data.attempts));
       return quizdata_response;
     } catch (err) {
@@ -117,7 +116,9 @@ export default function QuizPage() {
               </div>
             </div>
             <button
-              onClick={() => {}}
+              onClick={() => {
+                navigate(`/quizzes/attempt/${quizData.quiz_id}`);
+              }}
               className="bg-[#00CA4E] mb-[40px] w-full text-center font-extrabold text-[19px] text-white rounded-full p-[10px] cursor-pointer hover:bg-[#00AA1E] transition-all"
             >
               Attempt

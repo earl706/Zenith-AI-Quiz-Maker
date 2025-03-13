@@ -10,6 +10,7 @@ import {
   faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import Header from "../components/Header";
+import LoadingComponent from "../components/LoadingComponent";
 
 const colors = [
   { name: "Red", hex: "#EF4444" },
@@ -122,22 +123,17 @@ export default function CreateQuizPage() {
       };
 
       const createquiz_response = await createQuiz(quiz, questions);
-      console.log(createquiz_response);
       if (
         createquiz_response.status == 200 ||
         createquiz_response.statusText == "OK"
       ) {
-        console.log("sad1");
         navigate(`/quizzes/${createquiz_response.data.quiz.quiz_id}`);
-        console.log("sad2");
         setQuizzes([...quizzes, createquiz_response.data.quiz]);
-        console.log("sad3");
       }
       setLoading(false);
       return createquiz_response;
     } catch (err) {
       setLoading(false);
-      console.log(err);
       return err;
     }
   };
@@ -466,7 +462,13 @@ export default function CreateQuizPage() {
             onClick={handleCreateQuiz}
             className="flex cursor-pointer w-full h-[40px] justify-center items-center text-white font-bold rounded-full bg-[#00CA4E] hover:bg-[#00AA1E] transition-all mb-[30px]"
           >
-            <span className="text-[14px]">Create Quiz</span>
+            {loading ? (
+              <div className="flex justify-center items-center w-full">
+                <LoadingComponent size={12} light={false} />
+              </div>
+            ) : (
+              <span className="text-[14px]">Create Quiz</span>
+            )}
           </button>
           <span className="text-[16px] font-bold mb-[10px]">
             AI-Quiz Generate
