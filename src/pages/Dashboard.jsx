@@ -139,7 +139,7 @@ export default function Dashboard() {
         {loading ? (
           <div className="col-span-3">
             <div className="flex justify-center items-center w-full">
-              <LoadingComponent size={12} light={true} />
+              <LoadingComponent size={30} light={true} />
             </div>
           </div>
         ) : (
@@ -215,7 +215,7 @@ export default function Dashboard() {
         {loading ? (
           <div className="col-span-3">
             <div className="flex justify-center items-center w-full">
-              <LoadingComponent size={12} light={true} />
+              <LoadingComponent size={30} light={true} />
             </div>
           </div>
         ) : (

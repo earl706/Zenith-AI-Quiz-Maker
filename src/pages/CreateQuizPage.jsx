@@ -197,6 +197,21 @@ export default function CreateQuizPage() {
     setQuestions(updatedQuestions);
   };
 
+  const generateAIQuiz = async () => {
+    try {
+      setLoading(true);
+      const response = await generateQuiz(topic, questionNumber);
+      if (response.status == 200 || response.statusText == "OK") {
+        setQuestions(response.data.quiz_data.questions);
+      }
+      setLoading(false);
+      return response;
+    } catch (error) {
+      setLoading(false);
+      return error;
+    }
+  };
+
   useEffect(() => {}, [questions, selectedColor]);
 
   useEffect(() => {}, [quizTitle]);
@@ -475,7 +490,9 @@ export default function CreateQuizPage() {
           </span>
           <input
             type="text"
+            value={topic}
             placeholder="Topic"
+            onChange={(e) => setTopic(e.target.value)}
             className="w-full h-[40x] py-[12px] px-[17px] rounded-full bg-[#EFF7FF] text-[#919191] text-[12px] mb-[10px] font-bold"
           />
           <input
@@ -483,9 +500,14 @@ export default function CreateQuizPage() {
             name=""
             id=""
             placeholder="Number of Questions"
+            onChange={(e) => setQuestionNumber(e.target.value)}
+            max={15}
             className="w-full h-[40x] py-[12px] px-[17px] rounded-full bg-[#EFF7FF] text-[#919191] text-[12px] mb-[10px] font-bold"
           />
-          <button className="flex cursor-pointer w-full h-[30px] justify-center items-center text-white font-bold rounded-full bg-[#00CA4E] hover:bg-[#00AA1E] transition-all mb-[30px]">
+          <button
+            onClick={() => generateAIQuiz()}
+            className="flex cursor-pointer w-full h-[30px] justify-center items-center text-white font-bold rounded-full bg-[#00CA4E] hover:bg-[#00AA1E] transition-all mb-[30px]"
+          >
             <span className="text-[14px]">Generate</span>
           </button>
 

@@ -198,25 +198,27 @@ export default function QuizAttempt() {
         <div className="flex gap-[40px]">
           {quizResults ? (
             <>
-              {questions.map((question, index) => {
-                const answer = answers.find((a) => a.id === question.id);
-                const correct =
-                  submittedAnswers[index].correctAnswer ===
-                  submittedAnswers[index].userAnswer;
-                return (
-                  <QuizResultsPage
-                    question={question}
-                    answer={answer}
-                    correct={correct}
-                    handleIdentificationAnswerChange={
-                      handleIdentificationAnswerChange
-                    }
-                    submittedAnswers={submittedAnswers}
-                    index={index}
-                    key={index}
-                  />
-                );
-              })}
+              <div className="flex flex-col w-full gap-[10px]">
+                {questions.map((question, index) => {
+                  const answer = answers.find((a) => a.id === question.id);
+                  const correct =
+                    submittedAnswers[index].correctAnswer ===
+                    submittedAnswers[index].userAnswer;
+                  return (
+                    <QuizResultsPage
+                      question={question}
+                      answer={answer}
+                      correct={correct}
+                      handleIdentificationAnswerChange={
+                        handleIdentificationAnswerChange
+                      }
+                      submittedAnswers={submittedAnswers}
+                      index={index}
+                      key={index}
+                    />
+                  );
+                })}
+              </div>
             </>
           ) : quizData.flashcard_quiz ? (
             <div className="flex flex-col w-[67%]">

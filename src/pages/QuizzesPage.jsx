@@ -9,6 +9,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import zenithLogoDark from "/src/assets/ZENITH - LOGO DARK.png";
 import Header from "../components/Header";
 import React, { useContext, useEffect, useState } from "react";
+import { NavLink, useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import LoadingComponent from "../components/LoadingComponent";
 
@@ -18,6 +19,8 @@ export default function QuizzesPage() {
   const [quizList, setQuizList] = useState([]);
   const [newest, setNewest] = useState([]);
   const [mostAttempted, setMostAttempted] = useState([]);
+
+  const navigate = useNavigate();
 
   const initializeQuizzes = async () => {
     try {
@@ -207,7 +210,10 @@ export default function QuizzesPage() {
                         />
                       </button>
                     </div>
-                    <button className="cursor-pointer flex items-center justify-evenly w-full px-[10px] py-[3px] rounded-full bg-[#00CA4E] hover:bg-[#00CA4E]">
+                    <NavLink
+                      to={`/quizzes/attempt/${quiz.quiz_id}`}
+                      className="cursor-pointer flex items-center justify-evenly w-full px-[10px] py-[3px] rounded-full bg-[#00CA4E] hover:bg-[#00CA4E]"
+                    >
                       <span className="font-bold text-[12px] text-white text-center mr-[5px]">
                         Attempt
                       </span>
@@ -217,7 +223,7 @@ export default function QuizzesPage() {
                           className="w-[7px] h-[7px]"
                         />
                       </div>
-                    </button>
+                    </NavLink>
                   </div>
                 </div>
               ))
