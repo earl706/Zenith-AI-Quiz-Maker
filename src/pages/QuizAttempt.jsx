@@ -18,38 +18,11 @@ export default function QuizAttempt() {
 
   const questions_data = [
     {
-      "id": 15,
+      "id": 0,
       "question": "Question 1",
-      "question_type": "MUL-COM",
-      "choices": ["f(x)=x", "f(x)=x^2", "f(x)=x^1", "f(x)=x^3"],
-      "correct_answer": "f(x)=x",
-      "random_choices": true,
-      "correct_answer_index": 0,
-    },
-    {
-      "id": 14,
-      "question": "Question 2",
       "question_type": "MUL",
-      "choices": ["asdasd", "asdasdasd", "asds", "correct"],
-      "correct_answer": "correct",
-      "random_choices": true,
-      "correct_answer_index": 0,
-    },
-    {
-      "id": 16,
-      "question": "Question 3",
-      "question_type": "IDE-COM",
-      "choices": ["", "f(x)=x", "", ""],
-      "correct_answer": "f(x)=x",
-      "random_choices": true,
-      "correct_answer_index": 0,
-    },
-    {
-      "id": 13,
-      "question": "Question 4",
-      "question_type": "IDE",
-      "choices": ["", "", "", "correct"],
-      "correct_answer": "correct",
+      "choices": ["", "", "", ""],
+      "correct_answer": "",
       "random_choices": true,
       "correct_answer_index": 0,
     },
@@ -262,11 +235,19 @@ export default function QuizAttempt() {
             <span className="text-center text-[16px] font-bold w-full mb-[20px]">
               Time
             </span>
-            <div className="flex flex-col items-center justify-center p-4 bg-[#3C6B9F] text-white rounded-full drop-shadow-lg w-full">
+            <div className="flex flex-col items-center justify-center p-4 bg-[#3C6B9F] text-white rounded-full drop-shadow-lg w-full  mb-[20px]">
               <p className="text-3xl font-mono text-white">
                 {formatTime(time)}
               </p>
             </div>
+            {quizResults ? (
+              <div className="flex flex-col w-full rounded-full text-center bg-[#3C6B9F] text-white font-bold py-[20px]">
+                <span className="">Score: {score}</span>
+                <span className="">Accuracy: {accuracy}</span>
+              </div>
+            ) : (
+              ""
+            )}
           </div>
         </div>
       </div>

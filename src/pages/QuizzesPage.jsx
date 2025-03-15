@@ -100,7 +100,7 @@ export default function QuizzesPage() {
                 <LoadingComponent size={12} light={true} />
               </div>
             ) : (
-              quizList.map((quiz, index) => (
+              quizList.slice(0, 9).map((quiz, index) => (
                 <div
                   className="flex items-center justify-between bg-[#EFF7FF] rounded-[20px] p-[20px] drop-shadow-lg"
                   key={index}
@@ -171,7 +171,7 @@ export default function QuizzesPage() {
                         </span>
                         <div className="flex items-center w-[170px] text-left">
                           <span className="text-[14px] font-semibold">
-                            {quiz.attempts}
+                            {quiz.attempts.length}
                           </span>
                         </div>
                       </div>

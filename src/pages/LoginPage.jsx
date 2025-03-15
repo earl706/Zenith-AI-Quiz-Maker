@@ -40,8 +40,9 @@ export default function LoginPage({ performLogin }) {
         );
         performLogin();
         const lastPathArray = lastPath.split("/");
-        if (lastPathArray[1] == "attempt") {
-          navigate(`/quizzes/${lastPathArray[2]}/`);
+        console.log(lastPathArray);
+        if (lastPathArray[2] == "attempt") {
+          navigate(`/quizzes/${lastPathArray[3]}`);
         } else {
           navigate(`${lastPath}`);
         }
