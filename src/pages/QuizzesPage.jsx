@@ -1,3 +1,4 @@
+import React, { useContext, useEffect, useState } from "react";
 import {
   faAngleDown,
   faAngleRight,
@@ -6,11 +7,10 @@ import {
   faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import zenithLogoDark from "/src/assets/ZENITH - LOGO DARK.png";
-import Header from "../components/Header";
-import React, { useContext, useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
+import zenithLogoDark from "/src/assets/ZENITH - LOGO DARK.png";
+import Header from "../components/Header";
 import LoadingComponent from "../components/LoadingComponent";
 
 export default function QuizzesPage() {
@@ -38,6 +38,7 @@ export default function QuizzesPage() {
       return err;
     }
   };
+
   const handleDeleteQuiz = async () => {
     try {
       setLoading(true);
@@ -412,7 +413,11 @@ export default function QuizzesPage() {
                         <img src={zenithLogoDark} alt="" />
                       </div>
                       <div className="flex flex-col w-[1/2]">
-                        <div className="text-[15px] font-semibold mb-[5px]">
+                        <div className="flex items-center gap-[5px] text-[15px] font-semibold mb-[5px]">
+                          <div
+                            className="h-[15px] w-[15px] rounded-full"
+                            style={{ backgroundColor: `${quiz.tag_color}` }}
+                          ></div>
                           <span>{quiz.quiz_title}</span>
                         </div>
                         <div className="flex">

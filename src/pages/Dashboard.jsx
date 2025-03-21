@@ -232,7 +232,11 @@ export default function Dashboard() {
                   <img src={zenithLogoDark} alt="" />
                 </div>
                 <div className="flex flex-col w-[60%]">
-                  <div className="text-[15px] font-semibold mb-[5px]">
+                  <div className="flex items-center gap-[5px] text-[15px] font-semibold mb-[5px]">
+                    <div
+                      className="h-[10px] w-[10px] rounded-full"
+                      style={{ backgroundColor: quiz.tag_color }}
+                    ></div>
                     <span>{quiz.quiz_title}</span>
                   </div>
                   <div className="flex">

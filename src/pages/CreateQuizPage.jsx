@@ -562,7 +562,7 @@ export default function CreateQuizPage() {
               </span>
             </button>
           </div>
-          <span className="text-[16px] font-bold mb-[10px]">Quiz Type</span>
+          <span className="text-[16px] font-bold mb-[10px]">Tag Color</span>
           <div className="grid grid-cols-5 gap-[10px] mb-[20px]">
             {colors.map((color) => (
               <label key={color.hex} className="relative cursor-pointer">

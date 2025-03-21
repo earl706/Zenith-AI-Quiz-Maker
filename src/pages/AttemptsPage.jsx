@@ -58,10 +58,13 @@ const most_accurate_attempts = [
 export default function AttemptsPage() {
   const { getAttemptsList } = useContext(AuthContext);
 
+  const [attempts, setAttempts] = useState([]);
+
   const initializeAttempts = async () => {
     try {
       const response = await getAttemptsList();
-      console.log(response);
+      console.log(response.data);
+      setAttempts(Array.from(response.data.data));
       return response;
     } catch (err) {
       return response;
@@ -94,34 +97,48 @@ export default function AttemptsPage() {
                     </div>
                     <div className="flex gap-[30px] items-center text-[16px]">
                       <div className="w-1/2 text-[#646464]">Ratio</div>
-                      <div className="w-1/2 font-bold">{attempt.ratio}</div>
+                      <div className="w-1/2 font-bold">
+                        {attempt.score_accuracy_data.score} /{" "}
+                        {attempt.quiz_data.questions.length}
+                      </div>
                     </div>
                     <div className="flex gap-[30px] items-center text-[16px]">
                       <div className="w-1/2 text-[#646464]">Percentage</div>
-                      <div className="w-1/2 font-bold">{attempt.accuracy}</div>
+                      <div className="w-1/2 font-bold">
+                        {attempt.score_accuracy_data.accuracy} %
+                      </div>
                     </div>
                     <div className="flex gap-[30px] items-center text-[16px]">
                       <div className="w-1/2 text-[#646464]">Mathematical</div>
                       <div className="w-1/2 font-bold">
-                        {attempt.mathematical}
+                        {attempt.mathematical_questions}
                       </div>
                     </div>
                     <div className="flex gap-[30px] items-center text-[16px]">
                       <div className="w-1/2 text-[#646464]">Identification</div>
                       <div className="w-1/2 font-bold">
-                        {attempt.identification}
+                        {attempt.identification_questions}
                       </div>
                     </div>
                     <div className="flex gap-[30px] items-center text-[16px]">
                       <div className="w-1/2 text-[#646464]">Date</div>
-                      <div className="w-1/2 font-bold">
-                        {attempt.date_created}
+                      <div className="w-1/2 font-bold text-[10px]">
+                        {new Date(attempt.attempt_datetime).toDateString()}{" "}
+                        {new Date(
+                          attempt.attempt_datetime
+                        ).toLocaleTimeString()}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center justify-center w-1/2">
                     <div className="w-[250px] h-[250px]">
-                      <AttemptAccuracyDoughnutGraph data_points={[83, 17]} />
+                      <AttemptAccuracyDoughnutGraph
+                        data_points={[
+                          attempt.score_accuracy_data.score,
+                          attempt.quiz_data.questions.length -
+                            attempt.score_accuracy_data.score,
+                        ]}
+                      />
                     </div>
                   </div>
                 </div>
