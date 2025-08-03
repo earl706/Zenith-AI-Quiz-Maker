@@ -3,7 +3,7 @@ import Header from '../components/Header';
 import { AuthContext } from '../context/AuthContext';
 import { useParams, useNavigate } from 'react-router-dom';
 import AttemptAccuracyDoughnutGraph from '../components/AttemptAccuracyDoughnutGraph';
-import MathExpressionEncoder from '../components/MathExpressionEncoder';
+import MathRenderer from '../components/MathRenderer';
 
 export default function QuizPage() {
 	const { getQuiz, deleteMode, setDeleteMode, quizDeleteData, getQuizSummary } =
@@ -16,6 +16,7 @@ export default function QuizPage() {
 		owner: null,
 		tag_color: '',
 		quiz_title: '',
+		quiz_image: null,
 		questions: [],
 		date_created: null,
 		public: false,
@@ -30,9 +31,12 @@ export default function QuizPage() {
 	const initializeQuizData = async () => {
 		try {
 			const quizdata_response = await getQuiz(quiz_id);
+
+			console.log(quizdata_response.data);
+			console.log(quizdata_response.data.data);
+			console.log(quizdata_response.data.questions);
 			setQuizData(quizdata_response.data.data);
 			setQuestions(Array.from(quizdata_response.data.questions));
-			console.log(quizdata_response.data.questions);
 			setAttempts(Array.from(quizdata_response.data.attempts));
 			return quizdata_response;
 		} catch (err) {
@@ -57,6 +61,17 @@ export default function QuizPage() {
 						<span className="mb-[20px] w-full text-center text-[30px] font-extrabold">
 							{quizData.quiz_title}
 						</span>
+
+						{/* Quiz Image Display */}
+						{quizData.quiz_image && (
+							<div className="mb-[20px] flex justify-center">
+								<img
+									src={quizData.quiz_image}
+									alt="Quiz"
+									className="max-h-[200px] rounded-[15px] object-cover"
+								/>
+							</div>
+						)}
 						<div className="mb-[20px] flex w-full flex-col gap-[10px] rounded-[20px] bg-[#EFF7FF] p-[20px] drop-shadow-lg">
 							<div className="flex w-full items-center rounded-full bg-white p-[10px]">
 								<div className="mr-[10px] h-[19px] w-[19px] rounded-full bg-[#34C759]"></div>
@@ -125,25 +140,59 @@ export default function QuizPage() {
 									<div className="mb-[10px] w-full text-center text-[16px] font-extrabold">
 										{question.question}
 									</div>
+
+									{/* Question Image Display */}
+									{question.question_image && (
+										<div className="mb-[15px] flex justify-center">
+											<img
+												src={question.question_image}
+												alt="Question"
+												className="max-h-[150px] rounded-[10px] object-cover"
+											/>
+										</div>
+									)}
+
 									<div className="flex w-full flex-col items-center justify-center gap-[10px]">
-										{question.choices.map((choice, choice_index) =>
-											choice == '' ? (
-												''
-											) : question.question_type == 'COM' ||
-											  question.question_type == 'IDE-COM' ||
-											  question.question_type == 'MUL-COM' ? (
-												<div className="flex items-center justify-center">
-													<MathExpressionEncoder choice={choice} />
-												</div>
-											) : (
+										{question.choices.map((choice, choice_index) => {
+											// Handle new choice structure with id, text, and image
+											const choiceText = choice.text || choice;
+											const choiceImage = choice.image;
+
+											if (choiceText === '') {
+												return null;
+											}
+
+											return (
 												<div
-													className="rounded-full bg-white px-[30px] py-[10px] text-center text-[14px] font-extrabold text-[#646464]"
+													className="flex w-full flex-col items-center gap-[10px] rounded-[15px] bg-white p-[15px]"
 													key={choice_index}
 												>
-													{choice}
+													{/* Choice Image Display */}
+													{choiceImage && (
+														<div className="flex justify-center">
+															<img
+																src={choiceImage}
+																alt={`Choice ${choice_index + 1}`}
+																className="max-h-[100px] rounded-[8px] object-cover"
+															/>
+														</div>
+													)}
+
+													{/* Choice Text Display */}
+													{question.question_type == 'COM' ||
+													question.question_type == 'IDE-COM' ||
+													question.question_type == 'MUL-COM' ? (
+														<div className="flex items-center justify-center">
+															<MathRenderer expression={choiceText} displayMode={false} />
+														</div>
+													) : (
+														<div className="text-center text-[14px] font-extrabold text-[#646464]">
+															{choiceText}
+														</div>
+													)}
 												</div>
-											)
-										)}
+											);
+										})}
 									</div>
 								</div>
 							))}

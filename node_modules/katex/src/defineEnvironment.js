@@ -42,7 +42,7 @@ type EnvProps = {
 };
 
 /**
- * Final enviornment spec for use at parse time.
+ * Final environment spec for use at parse time.
  * This is almost identical to `EnvDefSpec`, except it
  * 1. includes the function handler
  * 2. requires all arguments except argType
@@ -52,7 +52,6 @@ export type EnvSpec<NODETYPE: NodeType> = {|
     type: NODETYPE, // Need to use the type to avoid error. See NOTES below.
     numArgs: number,
     argTypes?: ArgType[],
-    greediness: number,
     allowedInText: boolean,
     numOptionalArgs: number,
     handler: EnvHandler,
@@ -99,7 +98,6 @@ export default function defineEnvironment<NODETYPE: NodeType>({
     const data = {
         type,
         numArgs: props.numArgs || 0,
-        greediness: 1,
         allowedInText: false,
         numOptionalArgs: 0,
         handler,
@@ -108,7 +106,6 @@ export default function defineEnvironment<NODETYPE: NodeType>({
         // TODO: The value type of _environments should be a type union of all
         // possible `EnvSpec<>` possibilities instead of `EnvSpec<*>`, which is
         // an existential type.
-        // $FlowFixMe
         _environments[names[i]] = data;
     }
     if (htmlBuilder) {
