@@ -120,14 +120,24 @@ export default function QuizPage() {
 								</span>
 							</div>
 						</div>
-						<button
-							onClick={() => {
-								navigate(`/quizzes/attempt/${quizData.quiz_id}`);
-							}}
-							className="mb-[40px] w-full cursor-pointer rounded-full bg-[#00CA4E] p-[10px] text-center text-[19px] font-extrabold text-white transition-all hover:bg-[#00AA1E]"
-						>
-							Attempt
-						</button>
+						<div className="mb-[40px] flex gap-[10px]">
+							<button
+								onClick={() => {
+									navigate(`/quizzes/attempt/${quizData.quiz_id}`);
+								}}
+								className="flex-1 cursor-pointer rounded-full bg-[#00CA4E] p-[10px] text-center text-[19px] font-extrabold text-white transition-all hover:bg-[#00AA1E]"
+							>
+								Attempt
+							</button>
+							<button
+								onClick={() => {
+									navigate(`/quizzes/edit/${quizData.quiz_id}`);
+								}}
+								className="flex-1 cursor-pointer rounded-full bg-[#007AFF] p-[10px] text-center text-[19px] font-extrabold text-white transition-all hover:bg-[#0056CC]"
+							>
+								Edit
+							</button>
+						</div>
 						<span className="mb-[20px] w-full text-center text-[20px] font-extrabold">
 							Questions
 						</span>

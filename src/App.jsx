@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faBookOpenReader } from '@fortawesome/free-solid-svg-icons';
 import { AuthProvider } from './context/AuthContext';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Dashboard from './pages/Dashboard';
 import QuizzesPage from './pages/QuizzesPage';
 import CreateQuizPage from './pages/CreateQuizPage';
+import EditQuizPage from './pages/EditQuizPage';
 import AttemptsPage from './pages/AttemptsPage';
 import AccuracyPage from './pages/AccuracyPage';
 import AchievementsPage from './pages/AchievementsPage';
@@ -27,6 +26,7 @@ function App() {
 		{ component: <Dashboard />, route: '/' },
 		{ component: <QuizzesPage />, route: '/quizzes' },
 		{ component: <CreateQuizPage />, route: '/create-quiz' },
+		{ component: <EditQuizPage />, route: '/quizzes/edit/:id' },
 		{ component: <AttemptsPage />, route: '/attempts' },
 		{ component: <AccuracyPage />, route: '/accuracy' },
 		{ component: <AchievementsPage />, route: '/achievements' },

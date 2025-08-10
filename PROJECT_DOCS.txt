@@ -1,0 +1,766 @@
+# Project Documentation
+
+## Project Structure
+
+App.jsx
+    Imports:
+        - react: useState, useEffect
+        - ./context/AuthContext: AuthProvider
+        - react-router-dom: BrowserRouter, Routes, Route, Navigate
+        - ./components/Navbar: Navbar
+        - ./pages/Dashboard: Dashboard
+        - ./pages/QuizzesPage: QuizzesPage
+        - ./pages/CreateQuizPage: CreateQuizPage
+        - ./pages/EditQuizPage: EditQuizPage
+        - ./pages/AttemptsPage: AttemptsPage
+        - ./pages/AccuracyPage: AccuracyPage
+        - ./pages/AchievementsPage: AchievementsPage
+        - ./pages/QuizPage: QuizPage
+        - ./pages/QuizAttempt: QuizAttempt
+        - ./pages/LoginPage: LoginPage
+        - ./pages/RegistrationPage: RegistrationPage
+        - ./pages/VerificationPage: VerificationPage
+        - ./pages/ResendVerification: ResendVerification
+        - ./pages/VerificationSuccessPage: VerificationSuccessPage
+    Function: `App()` — returns: JSXFragment
+    Variable: `pathLocation`
+    Variable: `routes`
+    Function: `performLogin()` — returns: void
+assets/**
+components/**
+    AttemptAccuracyDoughnutGraph.jsx
+        Imports:
+            - react: React
+            - chart.js: Chart, ArcElement, Tooltip, Legend
+            - react-chartjs-2: Doughnut
+        Variable: `options`
+        Function: `AttemptAccuracyDoughnutGraph(unknown)` — returns: JSXElement
+        Variable: `data`
+    Header.jsx
+        Imports:
+            - react: React, useContext
+            - react-router-dom: NavLink, useNavigate
+            - ../context/AuthContext: AuthContext
+        Function: `Header()` — returns: JSXElement
+        Variable: `navigate`
+        Function: `handleLogout()` — returns: void
+        Function: `checkTokenStatus()` — returns: void
+        Variable: `token`
+        Variable: `expired`
+    IdentificationAnswerInput.jsx
+        Imports:
+            - react: React, useState, useEffect
+            - ./MathRenderer: MathRenderer
+        Function: `IdentificationAnswerInput(unknown)` — returns: JSXFragment
+        Function: `handleMathInputChange(id, e)` — returns: void
+        Variable: `rawInput`
+        Variable: `formattedExpression`
+    LoadingComponent.jsx
+        Imports:
+            - react: React, useEffect, useState
+        Function: `LoadingComponent(unknown)` — returns: ConditionalExpression
+    MathExpressionEncoder.jsx
+        Imports:
+            - react: React, useState, useEffect
+            - react-latex: Latex
+        Function: `MathExpressionEncoder(unknown)` — returns: JSXFragment
+        Function: `initializeMathExpression()` — returns: void
+        Variable: `formattedExpression`
+    MathInput.jsx
+        Imports:
+            - react: React, useState
+            - ./MathRenderer: MathRenderer
+        Function: `MathInput(unknown)` — returns: JSXFragment
+        Function: `handleMathInputChange(id, index, e)` — returns: void
+        Variable: `rawInput`
+    MathRenderer.jsx
+        Imports:
+            - react: React, useMemo
+            - katex/dist/katex.min.css: 
+            - react-katex: InlineMath, BlockMath
+        Function: `MathRenderer(unknown)` — returns: , CallExpression, JSXElement, ConditionalExpression, errorFallback, JSXElement
+        Variable: `formattedExpression`
+    Navbar.jsx
+        Imports:
+            - react: React, useContext, useEffect, useState
+            - react-router-dom: NavLink
+            - @fortawesome/react-fontawesome: FontAwesomeIcon
+            - @fortawesome/free-solid-svg-icons: faAdd, faBookOpenReader, faBox, faBullseye, faGear, faPen, faQuestion, faRightFromBracket, faTrophy
+            - /src/assets/ZENITH - LOGO LIGHT.png: zenithLogoLight
+        Function: `Navbar(unknown)` — returns: JSXElement
+        Variable: `location`
+        Variable: `navigationItems`
+    QuestionCard.jsx
+        Imports:
+            - react: React, useEffect
+            - ./IdentificationAnswerInput: IdentificationAnswerInput
+            - ./MathRenderer: MathRenderer
+        Function: `QuestionCard(unknown)` — returns: JSXFragment, JSXElement
+        Variable: `answer`
+        Variable: `choiceText`
+        Variable: `choiceImage`
+        Variable: `choiceId`
+context/**
+    AuthContext.jsx
+        Imports:
+            - react: React, createContext, useState, useEffect
+            - ../services/api: API
+            - ../services/apiQuizzes: API_QUIZZES
+        Variable: `AuthContext`
+        Function: `AuthProvider(unknown)` — returns: CallExpression, CallExpression, true, BinaryExpression, true, err, login_response, err, refresh_token_response, err, register_response, error, user_data_response, err, attempts_data_response, err, user_update_response, err, createquiz_response, err, quiz_update_response, err, getquizlist_response, err, getquiz_response, err, quiz_summary_response, err, quiz_attempt_response, err, quiz_answers_submission_response, err, deletequiz_response, err, response, err, JSXElement
+        Function: `getAccessToken()` — returns: CallExpression
+        Function: `getRefreshToken()` — returns: CallExpression
+        Function: `setTokens(access, refresh)` — returns: void
+        Function: `clearTokens()` — returns: void
+        Function: `isTokenExpired(token)` — returns: true, BinaryExpression, true
+        Variable: `payload`
+        Function: `checkAuthStatus()` — returns: void
+        Variable: `accessToken`
+        Variable: `refreshToken`
+        Variable: `userData`
+        Variable: `response`
+        Variable: `userData`
+        Function: `logout()` — returns: void
+        Function: `resendVerification(email)` — returns: err
+        Variable: `resend_verification_response`
+        Function: `login(username, password)` — returns: login_response, err
+        Variable: `login_response`
+        Function: `refreshToken(refresh_token)` — returns: refresh_token_response, err
+        Variable: `refresh_token_response`
+        Function: `register(data)` — returns: register_response, error
+        Variable: `register_response`
+        Function: `getUserData()` — returns: user_data_response, err
+        Variable: `user_data_response`
+        Function: `getAttemptsList()` — returns: attempts_data_response, err
+        Variable: `attempts_data_response`
+        Function: `updateUserData(userEditData)` — returns: user_update_response, err
+        Variable: `user_update_response`
+        Function: `createQuiz(quizData)` — returns: createquiz_response, err
+        Variable: `createquiz_response`
+        Function: `updateQuiz(id, quizEditData)` — returns: quiz_update_response, err
+        Variable: `quiz_update_response`
+        Function: `getQuizList()` — returns: getquizlist_response, err
+        Variable: `getquizlist_response`
+        Function: `getQuiz(id, unknown)` — returns: getquiz_response, err
+        Variable: `getquiz_response`
+        Function: `getQuizSummary(id)` — returns: quiz_summary_response, err
+        Variable: `quiz_summary_response`
+        Function: `attemptQuiz(id)` — returns: quiz_attempt_response, err
+        Variable: `quiz_attempt_response`
+        Function: `submitQuizAnswers(id, answers, time)` — returns: quiz_answers_submission_response, err
+        Variable: `quiz_answers_submission_response`
+        Function: `deleteQuiz(id)` — returns: deletequiz_response, err
+        Variable: `deletequiz_response`
+        Function: `generateQuiz(topic, questionNumber)` — returns: response, err
+        Variable: `response`
+main.jsx
+    Imports:
+        - react: StrictMode
+        - react-dom/client: createRoot
+        - ./index.css: 
+        - ./App.jsx: App
+pages/**
+    AccuracyPage.jsx
+        Imports:
+            - react: React
+        Function: `AccuracyPage()` — returns: JSXElement
+    AchievementsPage.jsx
+        Imports:
+            - react: React
+        Function: `AchievementsPage()` — returns: JSXElement
+    AttemptsPage.jsx
+        Imports:
+            - react: React, useContext, useEffect, useState
+            - ../components/AttemptAccuracyDoughnutGraph: AttemptAccuracyDoughnutGraph
+            - /src/assets/ZENITH - LOGO DARK.png: zenithLogoDark
+            - ../components/Header: Header
+            - ../context/AuthContext: AuthContext
+        Variable: `attempts`
+        Variable: `recent_attempts`
+        Variable: `most_accurate_attempts`
+        Function: `AttemptsPage()` — returns: response, response, JSXFragment
+        Function: `initializeAttempts()` — returns: response, response
+        Variable: `response`
+    CreateQuizPage.jsx
+        Imports:
+            - react: React, useState, useEffect, useContext
+            - react-router-dom: useNavigate
+            - ../context/AuthContext: AuthContext
+            - ../components/MathInput: MathInput
+            - @fortawesome/react-fontawesome: FontAwesomeIcon
+            - @fortawesome/free-solid-svg-icons: faCheck, faEdit, faPlus, faXmark
+            - ../components/Header: Header
+            - ../components/LoadingComponent: LoadingComponent
+        Variable: `colors`
+        Function: `CreateQuizPage()` — returns: createquiz_response, err, response, error, JSXElement
+        Variable: `navigate`
+        Function: `handleQuizTitleChange(event)` — returns: void
+        Variable: `newTitle`
+        Function: `handleInputChange(id, field, value)` — returns: void
+        Variable: `updatedQuestions`
+        Function: `removeQuestion(questionID)` — returns: void
+        Variable: `updatedQuestions`
+        Function: `removeChoice(id, index)` — returns: void
+        Variable: `updatedQuestions`
+        Function: `addChoice(id)` — returns: void
+        Variable: `updatedQuestions`
+        Function: `updateQuizTitle(event)` — returns: void
+        Function: `handleQuizImageUpload(event)` — returns: void
+        Variable: `file`
+        Variable: `reader`
+        Function: `handleQuestionImageUpload(questionId, event)` — returns: void
+        Variable: `file`
+        Variable: `reader`
+        Variable: `updatedQuestions`
+        Function: `removeQuizImage()` — returns: void
+        Function: `removeQuestionImage(questionId)` — returns: void
+        Variable: `updatedQuestions`
+        Function: `handleChoiceImageUpload(questionId, choiceIndex, event)` — returns: void
+        Variable: `file`
+        Variable: `reader`
+        Variable: `updatedQuestions`
+        Function: `removeChoiceImage(questionId, choiceIndex)` — returns: void
+        Variable: `updatedQuestions`
+        Function: `handleCreateQuiz(e)` — returns: createquiz_response, err
+        Variable: `formData`
+        Variable: `createquiz_response`
+        Function: `handleChoicesChange(id, index, value)` — returns: void
+        Variable: `updatedQuestions`
+        Function: `addQuestion()` — returns: void
+        Variable: `updatedQuestions`
+        Function: `randomizeQuestionChoices(randomize)` — returns: void
+        Variable: `updatedQuestions`
+        Function: `generateAIQuiz()` — returns: response, error
+        Variable: `response`
+    Dashboard.jsx
+        Imports:
+            - react: React, useContext, useEffect, useState
+            - @fortawesome/react-fontawesome: FontAwesomeIcon
+            - @fortawesome/free-solid-svg-icons: faAngleDown, faAnglesRight, faBullseye, faChartPie, faHourglass, faUpDownLeftRight, faXmark
+            - /src/assets/ZENITH - LOGO DARK.png: zenithLogoDark
+            - ../components/AttemptAccuracyDoughnutGraph: AttemptAccuracyDoughnutGraph
+            - ../components/Header: Header
+            - ../context/AuthContext: AuthContext
+            - react-router-dom: NavLink, useNavigate
+            - ../components/LoadingComponent: LoadingComponent
+        Function: `Dashboard()` — returns: quizlist_response, err, response, err, ObjectExpression, user_data_response, err, JSXFragment
+        Variable: `navigate`
+        Function: `initialQuizList()` — returns: quizlist_response, err
+        Variable: `quizlist_response`
+        Function: `handleDeleteQuiz()` — returns: response, err
+        Variable: `response`
+        Function: `formatTimeInSeconds(time)` — returns: ObjectExpression
+        Variable: `hrs`
+        Variable: `mins`
+        Variable: `secs`
+        Function: `initializeUserData()` — returns: user_data_response, err
+        Variable: `user_data_response`
+    EditQuizPage.jsx
+        Imports:
+            - react: React, useState, useEffect, useContext
+            - react-router-dom: useNavigate, useParams
+            - ../context/AuthContext: AuthContext
+            - ../components/MathInput: MathInput
+            - @fortawesome/react-fontawesome: FontAwesomeIcon
+            - @fortawesome/free-solid-svg-icons: faCheck, faEdit, faPlus, faXmark, faSave, faArrowLeft
+            - ../components/Header: Header
+            - ../components/LoadingComponent: LoadingComponent
+        Variable: `colors`
+        Function: `EditQuizPage()` — returns: LogicalExpression, choice, ObjectExpression, NewExpression, questionData, update_response, err, JSXElement, JSXElement
+        Variable: `navigate`
+        Function: `loadQuizData()` — returns: LogicalExpression, choice, ObjectExpression
+        Variable: `response`
+        Variable: `quizData`
+        Variable: `questionsData`
+        Variable: `transformedQuestions`
+        Variable: `questionType`
+        Variable: `transformedChoices`
+        Variable: `correctAnswerIndex`
+        Function: `handleQuizTitleChange(event)` — returns: void
+        Variable: `newTitle`
+        Function: `handleInputChange(id, field, value)` — returns: void
+        Variable: `updatedQuestions`
+        Function: `removeQuestion(questionID)` — returns: void
+        Variable: `updatedQuestions`
+        Function: `removeChoice(id, index)` — returns: void
+        Variable: `updatedQuestions`
+        Function: `addChoice(id)` — returns: void
+        Variable: `updatedQuestions`
+        Function: `updateQuizTitle(event)` — returns: void
+        Function: `handleQuizImageUpload(event)` — returns: void
+        Variable: `file`
+        Variable: `reader`
+        Function: `handleQuestionImageUpload(questionId, event)` — returns: void
+        Variable: `file`
+        Variable: `reader`
+        Variable: `updatedQuestions`
+        Function: `removeQuizImage()` — returns: void
+        Function: `removeQuestionImage(questionId)` — returns: void
+        Variable: `updatedQuestions`
+        Function: `handleChoiceImageUpload(questionId, choiceIndex, event)` — returns: void
+        Variable: `file`
+        Variable: `reader`
+        Variable: `updatedQuestions`
+        Function: `removeChoiceImage(questionId, choiceIndex)` — returns: void
+        Variable: `updatedQuestions`
+        Function: `fileToBase64(file)` — returns: NewExpression
+        Variable: `reader`
+        Function: `handleUpdateQuiz(e)` — returns: questionData, update_response, err
+        Variable: `quizData`
+        Variable: `questionsData`
+        Variable: `questionData`
+        Variable: `choiceImages`
+        Variable: `i`
+        Variable: `update_response`
+        Variable: `updatedQuizzes`
+        Function: `handleChoicesChange(id, index, value)` — returns: void
+        Variable: `updatedQuestions`
+        Function: `addQuestion()` — returns: void
+        Variable: `updatedQuestions`
+        Function: `randomizeQuestionChoices(randomize)` — returns: void
+        Variable: `updatedQuestions`
+        Variable: `updatedQuestions`
+    LoginPage.jsx
+        Imports:
+            - react: React, useContext, useEffect, useState
+            - ../context/AuthContext: AuthContext
+            - react-router-dom: useLocation, useNavigate
+        Function: `LoginPage(unknown)` — returns: login_response, err, login_response, err, JSXElement
+        Variable: `navigate`
+        Variable: `location`
+        Function: `handleLogin(event)` — returns: login_response, err
+        Variable: `login_response`
+        Function: `handleSavedLogin(refresh_token)` — returns: login_response, err
+        Variable: `login_response`
+        Variable: `lastPath`
+        Variable: `lastPathArray`
+    QuizAttempt.jsx
+        Imports:
+            - react: React, useContext, useEffect, useState
+            - react-router-dom: useParams
+            - ../components/Header: Header
+            - ./QuizFlashcardAttemptPage: QuizFlashcardAttemptPage
+            - ../components/QuestionCard: QuestionCard
+            - ./QuizResultsPage: QuizResultsPage
+            - ../context/AuthContext: AuthContext
+        Function: `QuizAttempt()` — returns: response, err, answers_submission_response, err, , response, ArrowFunctionExpression, ArrowFunctionExpression, JSXFragment, JSXElement, JSXFragment
+        Variable: `questions_data`
+        Variable: `answers_data`
+        Variable: `quiz_id`
+        Function: `handleAnswerChange(id, field, index)` — returns: void
+        Variable: `updatedAnswers`
+        Function: `handleMathematicalAnswerChange(id, index, value)` — returns: void
+        Variable: `updatedAnswers`
+        Function: `handleIdentificationAnswerChange(id, value)` — returns: void
+        Variable: `updatedAnswers`
+        Function: `initializeQuiz()` — returns: response, err
+        Variable: `response`
+        Variable: `answersInitialization`
+        Function: `submitAnswers()` — returns: answers_submission_response, err
+        Variable: `answers_submission_response`
+        Function: `closeDeleteConfirmationModal()` — returns: void
+        Function: `formatTime(milliseconds)` — returns: 
+        Variable: `mins`
+        Variable: `secs`
+        Variable: `ms`
+        Variable: `controller`
+        Function: `initializeQuizAttempt()` — returns: response
+        Variable: `response`
+        Variable: `interval`
+        Variable: `answer`
+        Variable: `correct`
+    QuizFlashcardAttemptPage.jsx
+        Imports:
+            - react: React, useEffect, useState
+            - ../components/IdentificationAnswerInput: IdentificationAnswerInput
+            - ../components/MathRenderer: MathRenderer
+        Function: `QuizFlashcardAttemptPage(unknown)` — returns: ObjectExpression, ObjectExpression, JSXElement, JSXFragment, JSXElement
+        Function: `getChoiceData(choice)` — returns: ObjectExpression, ObjectExpression
+        Function: `handleNext()` — returns: void
+        Function: `handlePrev()` — returns: void
+        Variable: `answer`
+        Variable: `choiceData`
+        Variable: `isMathematical`
+    QuizPage.jsx
+        Imports:
+            - react: React, useContext, useEffect, useState
+            - ../components/Header: Header
+            - ../context/AuthContext: AuthContext
+            - react-router-dom: useParams, useNavigate
+            - ../components/AttemptAccuracyDoughnutGraph: AttemptAccuracyDoughnutGraph
+            - ../components/MathRenderer: MathRenderer
+        Function: `QuizPage()` — returns: quizdata_response, err, JSXFragment, , JSXElement
+        Variable: `url_params`
+        Variable: `navigate`
+        Variable: `quiz_id`
+        Function: `initializeQuizData()` — returns: quizdata_response, err
+        Variable: `quizdata_response`
+        Function: `closeDeleteConfirmationModal()` — returns: void
+        Variable: `choiceText`
+        Variable: `choiceImage`
+    QuizResultsPage.jsx
+        Imports:
+            - react: React
+            - ../components/MathRenderer: MathRenderer
+        Function: `QuizResultsPage(unknown)` — returns: ObjectExpression, ObjectExpression, "w-full py-[10px] px-[30px] rounded-full text-white font-extrabold transition bg-[#00CA4E]", "w-full py-[10px] px-[30px] rounded-full text-white font-extrabold transition bg-[#00CA4E]", "w-full py-[10px] px-[30px] rounded-full text-white font-extrabold transition bg-[#FF605C]", "w-full py-[10px] px-[30px] rounded-full text-[#646464] font-extrabold transition bg-white", JSXElement, JSXElement, JSXElement, JSXElement
+        Function: `getChoiceData(choice)` — returns: ObjectExpression, ObjectExpression
+        Function: `getChoiceStyle(choiceText, isCorrect, isUserAnswer)` — returns: "w-full py-[10px] px-[30px] rounded-full text-white font-extrabold transition bg-[#00CA4E]", "w-full py-[10px] px-[30px] rounded-full text-white font-extrabold transition bg-[#00CA4E]", "w-full py-[10px] px-[30px] rounded-full text-white font-extrabold transition bg-[#FF605C]", "w-full py-[10px] px-[30px] rounded-full text-[#646464] font-extrabold transition bg-white"
+        Function: `renderIdentificationResult()` — returns: JSXElement
+        Variable: `isMathematical`
+        Function: `renderMultipleChoiceResult()` — returns: JSXElement, JSXElement
+        Variable: `choiceData`
+        Variable: `isMathematical`
+    QuizzesPage.jsx
+        Imports:
+            - react: React, useContext, useEffect, useState
+            - @fortawesome/free-solid-svg-icons: faAngleDown, faAngleRight, faAnglesRight, faUpDownLeftRight, faXmark, faEdit
+            - @fortawesome/react-fontawesome: FontAwesomeIcon
+            - react-router-dom: NavLink, useNavigate
+            - ../context/AuthContext: AuthContext
+            - /src/assets/ZENITH - LOGO DARK.png: zenithLogoDark
+            - ../components/Header: Header
+            - ../components/LoadingComponent: LoadingComponent
+        Function: `QuizzesPage()` — returns: quizzes, err, response, err, JSXFragment
+        Variable: `navigate`
+        Function: `initializeQuizzes()` — returns: quizzes, err
+        Variable: `quizList_response`
+        Function: `handleDeleteQuiz()` — returns: response, err
+        Variable: `response`
+    RegistrationPage.jsx
+        Imports:
+            - react: React, useContext, useEffect, useState
+            - react-phone-number-input/input: PhoneInput
+            - ../context/AuthContext: AuthContext
+            - react-router-dom: useLocation, useNavigate
+        Function: `RegistrationPage()` — returns: err, JSXElement
+        Variable: `navigate`
+        Variable: `location`
+        Function: `handleRegistration(event)` — returns: err
+        Variable: `register_response`
+    ResendVerification.jsx
+        Imports:
+            - react: React, useState
+            - react-router-dom: useNavigate
+        Function: `ResendVerification()` — returns: JSXElement
+        Variable: `navigate`
+        Function: `handleSubmit(e)` — returns: void
+        Variable: `response`
+        Variable: `data`
+    VerificationPage.jsx
+        Imports:
+            - react: React
+            - react-router-dom: useLocation, useNavigate
+        Function: `VerificationPage()` — returns: JSXElement
+        Variable: `location`
+        Variable: `navigate`
+        Variable: `email`
+        Function: `handleResend()` — returns: void
+    VerificationSuccessPage.jsx
+        Imports:
+            - react: React, useEffect, useState
+            - react-router-dom: useSearchParams, useNavigate
+        Function: `VerificationSuccessPage()` — returns: JSXElement, JSXElement, JSXElement
+        Variable: `navigate`
+        Variable: `statusParam`
+        Variable: `message`
+        Variable: `alreadyVerified`
+        Function: `handleLogin()` — returns: void
+        Function: `handleResend()` — returns: void
+services/**
+    api.jsx
+        Imports:
+            - axios: axios
+        Variable: `inProduction`
+        Variable: `productionAPIURL`
+        Variable: `developmentAPIURL`
+        Variable: `APIURL`
+        Variable: `API`
+        Function: `isTokenExpired(token)` — returns: true, BinaryExpression, true
+        Variable: `payload`
+        Function: `refreshAccessToken()` — returns: MemberExpression
+        Variable: `refreshToken`
+        Variable: `response`
+        Variable: `token`
+        Variable: `originalRequest`
+        Variable: `newToken`
+    apiQuizzes.jsx
+        Imports:
+            - axios: axios
+        Variable: `inProduction`
+        Variable: `productionAPIURL`
+        Variable: `developmentAPIURL`
+        Variable: `APIURL`
+        Variable: `API_QUIZZES`
+        Function: `isTokenExpired(token)` — returns: true, BinaryExpression, true
+        Variable: `payload`
+        Function: `refreshAccessToken()` — returns: MemberExpression
+        Variable: `refreshToken`
+        Variable: `response`
+        Variable: `token`
+        Variable: `originalRequest`
+        Variable: `newToken`
+tests/**
+    AuthContext.test.jsx
+        Imports:
+            - react: React
+            - @testing-library/react: render, screen, fireEvent, waitFor
+            - ../context/AuthContext: AuthProvider, AuthContext
+            - ../services/api: API
+            - ../services/apiQuizzes: API_QUIZZES
+        Variable: `mockAPI`
+        Variable: `mockAPIQuizzes`
+        Function: `TestComponent(unknown)` — returns: JSXElement
+        Function: `useAuth()` — returns: context
+        Variable: `context`
+        Variable: `mockLoginResponse`
+        Function: `TestLogin()` — returns: JSXElement
+        Function: `handleLogin()` — returns: void
+        Function: `TestLogout()` — returns: JSXElement
+        Function: `TestTokenCheck()` — returns: JSXElement
+        Variable: `expiredToken`
+        Variable: `mockLoginResponse`
+        Function: `TestLogin()` — returns: JSXElement
+        Function: `handleLogin()` — returns: void
+        Variable: `mockCreateResponse`
+        Function: `TestCreateQuiz()` — returns: JSXElement
+        Function: `handleCreate()` — returns: void
+        Variable: `quizData`
+        Variable: `mockUpdateResponse`
+        Function: `TestUpdateQuiz()` — returns: JSXElement
+        Function: `handleUpdate()` — returns: void
+        Variable: `quizData`
+        Variable: `mockError`
+        Function: `TestLoginError()` — returns: JSXElement
+        Function: `handleLogin()` — returns: void
+        Variable: `mockError`
+        Function: `TestCreateError()` — returns: JSXElement
+        Function: `handleCreate()` — returns: void
+    CreateQuizPage.test.jsx
+        Imports:
+            - react: React
+            - @testing-library/react: render, screen, fireEvent, waitFor
+            - react-router-dom: BrowserRouter
+            - ../context/AuthContext: AuthProvider
+            - ../pages/CreateQuizPage: CreateQuizPage
+        Variable: `mockNavigate`
+        Function: `TestWrapper(unknown)` — returns: JSXElement
+        Variable: `titleInput`
+        Variable: `flashcardButton`
+        Variable: `publicButton`
+        Variable: `randomButton`
+        Variable: `colorButton`
+        Variable: `addQuestionButton`
+        Variable: `addQuestionButton`
+        Variable: `removeButtons`
+        Variable: `questionInput`
+        Variable: `identificationButton`
+        Variable: `mathematicalButton`
+        Variable: `addChoiceButtons`
+        Variable: `choiceInputs`
+        Variable: `removeChoiceButtons`
+        Variable: `choiceRemoveButtons`
+        Variable: `choiceInputs`
+        Variable: `choiceInputs`
+        Variable: `choiceInputs`
+        Variable: `correctAnswerButtons`
+        Variable: `quizImageInput`
+        Variable: `file`
+        Variable: `questionImageInput`
+        Variable: `file`
+        Variable: `choiceImageInputs`
+        Variable: `file`
+        Variable: `mockCreateQuiz`
+        Variable: `titleInput`
+        Variable: `questionInput`
+        Variable: `choiceInputs`
+        Variable: `correctAnswerButton`
+        Variable: `createButton`
+        Variable: `mockCreateQuiz`
+        Variable: `titleInput`
+        Variable: `questionInput`
+        Variable: `choiceInputs`
+        Variable: `correctAnswerButton`
+        Variable: `createButton`
+        Variable: `createButton`
+        Variable: `titleInput`
+        Variable: `createButton`
+        Variable: `titleInput`
+        Variable: `questionInput`
+        Variable: `createButton`
+    EditQuizPage.test.jsx
+        Imports:
+            - react: React
+            - @testing-library/react: render, screen, fireEvent, waitFor
+            - react-router-dom: BrowserRouter
+            - ../context/AuthContext: AuthProvider
+            - ../pages/EditQuizPage: EditQuizPage
+            - ../services/apiQuizzes: API_QUIZZES
+        Variable: `mockQuizData`
+        Function: `TestWrapper(unknown)` — returns: JSXElement
+        Variable: `consoleSpy`
+        Variable: `editButton`
+        Variable: `titleInput`
+        Variable: `saveButton`
+        Variable: `editButton`
+        Variable: `titleInput`
+        Variable: `cancelButton`
+        Variable: `flashcardButton`
+        Variable: `publicButton`
+        Variable: `randomButton`
+        Variable: `addQuestionButton`
+        Variable: `removeButtons`
+        Variable: `questionInputs`
+        Variable: `identificationButton`
+        Variable: `addChoiceButtons`
+        Variable: `choiceInputs`
+        Variable: `removeChoiceButtons`
+        Variable: `choiceRemoveButtons`
+        Variable: `choiceInputs`
+        Variable: `choiceInputs`
+        Variable: `mockUpdateResponse`
+        Variable: `saveButton`
+        Variable: `consoleSpy`
+        Variable: `saveButton`
+    LoginPage.test.jsx
+        Imports:
+            - react: React
+            - @testing-library/react: render, screen, fireEvent, waitFor
+            - react-router-dom: BrowserRouter
+            - ../context/AuthContext: AuthProvider
+            - ../pages/LoginPage: LoginPage
+        Variable: `mockLogin`
+        Variable: `mockNavigate`
+        Function: `TestWrapper(unknown)` — returns: JSXElement
+        Variable: `usernameInput`
+        Variable: `passwordInput`
+        Variable: `passwordInput`
+        Variable: `toggleButton`
+        Variable: `loginButton`
+        Variable: `usernameInput`
+        Variable: `loginButton`
+        Variable: `usernameInput`
+        Variable: `passwordInput`
+        Variable: `loginButton`
+        Variable: `loginButton`
+        Variable: `usernameInput`
+        Variable: `usernameInput`
+        Variable: `passwordInput`
+        Variable: `loginButton`
+        Variable: `usernameInput`
+        Variable: `passwordInput`
+        Variable: `loginButton`
+        Variable: `usernameInput`
+        Variable: `passwordInput`
+        Variable: `loginButton`
+        Variable: `errorMessage`
+        Variable: `usernameInput`
+        Variable: `passwordInput`
+        Variable: `loginButton`
+        Variable: `networkError`
+        Variable: `usernameInput`
+        Variable: `passwordInput`
+        Variable: `loginButton`
+        Variable: `registerLink`
+        Variable: `forgotPasswordLink`
+        Variable: `loginButton`
+        Variable: `usernameInput`
+        Variable: `passwordInput`
+        Variable: `usernameInput`
+        Variable: `passwordInput`
+        Variable: `loginButton`
+    QuizComponents.test.jsx
+        Imports:
+            - react: React
+            - @testing-library/react: render, screen, fireEvent
+            - ../components/QuestionCard: QuestionCard
+            - ../components/MathRenderer: MathRenderer
+            - ../pages/QuizResultsPage: QuizResultsPage
+        Variable: `mockQuestion`
+        Variable: `mockAnswers`
+        Variable: `mockHandlers`
+        Variable: `mathQuestion`
+        Variable: `identificationQuestion`
+        Variable: `questionWithImages`
+        Variable: `images`
+        Variable: `mockQuestion`
+        Variable: `mockSubmittedAnswers`
+        Variable: `correctChoice`
+        Variable: `incorrectSubmittedAnswers`
+        Variable: `incorrectChoice`
+        Variable: `identificationQuestion`
+        Variable: `mathQuestion`
+        Variable: `questionWithImage`
+        Variable: `questionImage`
+        Variable: `questionWithChoiceImages`
+        Variable: `choiceImages`
+    QuizFlashcardAttemptPage.test.jsx
+        Imports:
+            - react: React
+            - @testing-library/react: render, screen, fireEvent, waitFor
+            - ../pages/QuizFlashcardAttemptPage: QuizFlashcardAttemptPage
+        Variable: `mockQuestions`
+        Variable: `mockAnswers`
+        Variable: `mockHandlers`
+        Variable: `questionsWithImages`
+        Variable: `questionImage`
+        Variable: `questionsWithChoiceImages`
+        Variable: `choiceImages`
+        Variable: `answersWithSelection`
+        Variable: `selectedChoice`
+        Variable: `mathChoice`
+    __mocks__/**
+        fileMock.js
+            - _(no significant items found)_
+    setup.js
+        Imports:
+            - @testing-library/jest-dom: 
+            - util: TextEncoder, TextDecoder
+        Variable: `localStorageMock`
+        Variable: `sessionStorageMock`
+    setupEnv.js
+        - _(no significant items found)_
+    utils.test.js
+        Variable: `expiredToken`
+        Function: `isTokenExpired(token)` — returns: true, BinaryExpression, true
+        Variable: `payload`
+        Variable: `futureTime`
+        Variable: `payload`
+        Variable: `validToken`
+        Function: `isTokenExpired(token)` — returns: true, BinaryExpression, true
+        Variable: `payload`
+        Variable: `invalidToken`
+        Function: `isTokenExpired(token)` — returns: true, BinaryExpression, true
+        Variable: `payload`
+        Function: `getChoiceData(choice)` — returns: ObjectExpression, ObjectExpression
+        Function: `fileToBase64(file)` — returns: NewExpression
+        Variable: `reader`
+        Variable: `mockFile`
+        Variable: `result`
+        Function: `isMathematical(questionType)` — returns: LogicalExpression
+        Function: `isIdentification(questionType)` — returns: LogicalExpression
+        Function: `validateQuizTitle(title)` — returns: LogicalExpression
+        Function: `validateQuestion(question)` — returns: LogicalExpression
+        Variable: `validQuestion`
+        Variable: `invalidQuestion`
+        Function: `formatTime(milliseconds)` — returns: 
+        Variable: `mins`
+        Variable: `secs`
+        Variable: `ms`
+        Function: `formatTimeInSeconds(time)` — returns: ObjectExpression
+        Variable: `hrs`
+        Variable: `mins`
+        Variable: `secs`
+        Variable: `quizzes`
+        Function: `filterByType(quizzes, type)` — returns: CallExpression
+        Variable: `flashcardQuizzes`
+        Variable: `regularQuizzes`
+        Variable: `quizzes`
+        Function: `sortByDate(quizzes, unknown)` — returns: CallExpression, ConditionalExpression
+        Variable: `dateA`
+        Variable: `dateB`
+        Variable: `ascending`
+        Variable: `descending`
+        Function: `calculateAccuracy(correct, total)` — returns: 0, CallExpression
+        Function: `calculateScore(correct, total, unknown)` — returns: 0, CallExpression
+        Function: `truncate(str, maxLength)` — returns: str, BinaryExpression
+        Function: `formatQuestionNumber(index, total)` — returns: 
