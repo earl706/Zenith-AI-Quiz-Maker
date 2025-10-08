@@ -59,75 +59,73 @@ export default function LoginPage({ performLogin }) {
 		}
 	}, []);
 	return (
-		<div
-			className={
-				loading
-					? 'flex h-screen w-full items-center justify-center bg-[#6F8055] blur-3xl transition-all'
-					: 'flex h-screen w-full items-center justify-center bg-[#6F8055] transition-all'
-			}
-		>
-			<div className="w-full max-w-md space-y-4 rounded-[20px] bg-[#EFF7FF] p-8 drop-shadow-lg">
-				<h2 className="text-center text-2xl font-bold">Login</h2>
-				<form onSubmit={handleLogin}>
-					<div>
-						<label
-							className={
-								username != ''
-									? 'mb-1 block text-sm font-bold text-gray-700 transition'
-									: 'mb-1 block text-sm font-bold text-transparent transition'
-							}
-						>
-							Username
-						</label>
-						<input
-							type="text"
-							value={username}
-							onChange={(e) => {
-								setUsername(e.target.value);
-							}}
-							placeholder="Username"
-							className="w-full border-b border-gray-300 p-2 text-[14px] transition outline-none focus:border-black"
-							required
+		<div className="relative flex h-screen w-full items-center justify-center bg-white">
+			<div className="relative z-10 w-full max-w-md">
+				<div className="px-8 py-10">
+					<div className="mb-8 flex flex-col items-center">
+						<img
+							src="/src/assets/ZENITH - LOGO LIGHT.png"
+							alt="Zenith Logo"
+							className="mb-2 h-16 w-16"
 						/>
+						<h2 className="mb-1 text-3xl font-bold tracking-tight text-gray-800">Welcome</h2>
+						<p className="text-sm font-medium text-gray-500">Sign in to your Zenith account</p>
 					</div>
-
-					<div className="mb-[20px]">
-						<label
-							className={
-								password != ''
-									? 'mt-5 mb-2 block text-sm font-bold text-gray-700 transition'
-									: 'mt-5 mb-2 block text-sm font-bold text-transparent transition'
-							}
+					<form onSubmit={handleLogin} className="space-y-6">
+						<div className="mb-6 flex w-full flex-col gap-2">
+							<label htmlFor="username" className="mb-1 text-sm font-medium text-gray-700">
+								Username
+							</label>
+							<input
+								id="username"
+								type="text"
+								value={username}
+								onChange={(e) => setUsername(e.target.value)}
+								placeholder="Enter your username"
+								className="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-3 text-base text-gray-800 transition focus:border-gray-500 focus:bg-white focus:ring-2 focus:ring-gray-200 focus:outline-none"
+								autoComplete="username"
+								required
+							/>
+						</div>
+						<div className="mb-6 flex w-full flex-col gap-2">
+							<label htmlFor="password" className="mb-1 text-sm font-medium text-gray-700">
+								Password
+							</label>
+							<input
+								id="password"
+								type="password"
+								value={password}
+								onChange={(e) => setPassword(e.target.value)}
+								placeholder="Enter your password"
+								className="w-full rounded-lg border border-gray-300 bg-gray-50 px-4 py-3 text-base text-gray-800 transition focus:border-gray-500 focus:bg-white focus:ring-2 focus:ring-gray-200 focus:outline-none"
+								autoComplete="current-password"
+								required
+							/>
+						</div>
+						<button
+							type="submit"
+							className="w-full cursor-pointer rounded-full bg-gray-800 px-6 py-3 text-lg font-bold text-white shadow transition-all duration-200 hover:bg-gray-700 focus:ring-2 focus:ring-gray-300 focus:outline-none"
+							disabled={loading}
 						>
-							Password
-						</label>
-						<input
-							type="password"
-							value={password}
-							onChange={(e) => {
-								setPassword(e.target.value);
-							}}
-							placeholder="Password"
-							className="w-full border-b border-gray-300 p-2 text-[14px] transition outline-none focus:border-black"
-							required
-						/>
+							{loading ? (
+								<span className="flex items-center justify-center gap-2">
+									<span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
+									<span>Logging in...</span>
+								</span>
+							) : (
+								'Login'
+							)}
+						</button>
+					</form>
+					<div className="mt-8 flex flex-col items-center">
+						<span className="mb-2 text-sm text-gray-400">Don't have an account?</span>
+						<button
+							className="cursor-pointer rounded-full bg-gray-100 px-6 py-2 font-semibold text-gray-800 shadow transition-all duration-200 hover:bg-gray-200"
+							onClick={() => navigate('/registration')}
+						>
+							Register here
+						</button>
 					</div>
-					<button
-						type="submit"
-						className="mt-5 w-full cursor-pointer rounded-full bg-[#3C6B9F] px-4 py-2 font-bold text-white transition hover:bg-[#1C4B7F]"
-					>
-						Login
-					</button>
-				</form>
-				<div className="flex justify-center">
-					<button
-						className="cursor-pointer text-sm text-gray-500 transition-all duration-500 hover:underline"
-						onClick={() => {
-							navigate('/registration');
-						}}
-					>
-						Don't have an account? Register here
-					</button>
 				</div>
 			</div>
 		</div>

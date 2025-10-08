@@ -77,153 +77,137 @@ export default function AttemptsPage() {
 
 	return (
 		<>
-			<div className="px-[30px] pt-[18px] pb-[30px] transition-all">
-				<Header page={'Attempts'} />
-				<div className="flex gap-[40px]">
-					<div className="flex w-[67%] flex-col gap-[20px]">
-						{attempts.map((attempt, index) => (
-							<div
-								className="flex w-full flex-col rounded-[20px] bg-[#EFF7FF] px-[30px] py-[20px] drop-shadow-lg"
-								key={index}
-							>
-								<span className="mb-[10px] w-full text-center text-[20px] font-bold">
-									{attempt.quiz_title}
-								</span>
-								<div className="flex w-full items-center">
-									<div className="flex w-1/2 flex-col gap-[13px]">
-										<div className="flex items-center gap-[30px] text-[16px]">
-											<div className="w-1/2 text-[#646464]">Duration</div>
-											<div className="w-1/2 font-bold">{attempt.duration}</div>
-										</div>
-										<div className="flex items-center gap-[30px] text-[16px]">
-											<div className="w-1/2 text-[#646464]">Ratio</div>
-											<div className="w-1/2 font-bold">
-												{attempt.score_accuracy_data.score} / {attempt.quiz_data.questions.length}
-											</div>
-										</div>
-										<div className="flex items-center gap-[30px] text-[16px]">
-											<div className="w-1/2 text-[#646464]">Percentage</div>
-											<div className="w-1/2 font-bold">
-												{attempt.score_accuracy_data.accuracy} %
-											</div>
-										</div>
-										<div className="flex items-center gap-[30px] text-[16px]">
-											<div className="w-1/2 text-[#646464]">Mathematical</div>
-											<div className="w-1/2 font-bold">{attempt.mathematical_questions}</div>
-										</div>
-										<div className="flex items-center gap-[30px] text-[16px]">
-											<div className="w-1/2 text-[#646464]">Identification</div>
-											<div className="w-1/2 font-bold">{attempt.identification_questions}</div>
-										</div>
-										<div className="flex items-center gap-[30px] text-[16px]">
-											<div className="w-1/2 text-[#646464]">Date</div>
-											<div className="w-1/2 text-[10px] font-bold">
-												{new Date(attempt.attempt_datetime).toDateString()}{' '}
-												{new Date(attempt.attempt_datetime).toLocaleTimeString()}
-											</div>
-										</div>
-									</div>
-									<div className="flex w-1/2 items-center justify-center">
-										<div className="h-[250px] w-[250px]">
-											<AttemptAccuracyDoughnutGraph
-												data_points={[
-													attempt.score_accuracy_data.score,
-													attempt.quiz_data.questions.length - attempt.score_accuracy_data.score
-												]}
-											/>
-										</div>
-									</div>
-								</div>
+			<div className="min-h-screen px-4 py-6 transition-all sm:px-6 md:px-10">
+				<Header page="Attempts" />
+				<div className="mx-auto flex max-w-7xl flex-col gap-8 lg:flex-row lg:gap-8">
+					{/* Main Attempts List */}
+					<section className="flex flex-1 flex-col gap-4">
+						{attempts.length === 0 ? (
+							<div className="flex h-40 items-center justify-center text-lg font-semibold text-gray-400">
+								No attempts yet.
 							</div>
-						))}
-					</div>
-					<div className="flex w-[29%] flex-col">
-						<span className="mb-[20px] text-[16px] font-bold">Most Recent</span>
-						<div className="mb-[20px] flex w-full flex-col gap-[20px]">
-							{recent_attempts.map((attempt, index) => (
-								<div
-									className="flex h-full items-center justify-between rounded-[20px] bg-[#EFF7FF] p-[9px] drop-shadow-lg"
-									key={index}
-								>
-									<div className="flex w-[80%] items-center">
-										<div className="mr-[13px] h-[80px] w-[80px] rounded-[20px]">
-											<img src={zenithLogoDark} alt="" />
+						) : (
+							<div className="grid grid-cols-1 gap-6">
+								{attempts.map((attempt, index) => (
+									<div
+										key={index}
+										className="flex flex-col rounded-xl bg-white p-6 shadow-md transition hover:shadow-lg"
+									>
+										<div className="mb-4 flex items-center justify-between">
+											<span className="truncate text-lg font-bold text-gray-800">
+												{attempt.quiz_title}
+											</span>
+											<span className="text-xs text-gray-400">
+												{new Date(attempt.attempt_datetime).toLocaleDateString()}{' '}
+												{new Date(attempt.attempt_datetime).toLocaleTimeString([], {
+													hour: '2-digit',
+													minute: '2-digit'
+												})}
+											</span>
 										</div>
-										<div className="flex w-[1/2] flex-col">
-											<div className="mb-[5px] text-[15px] font-semibold">
-												<span>{attempt.quiz_title}</span>
-											</div>
-											<div className="flex">
-												<div className="mr-[20px] text-[10px]">
-													<div className="flex flex-col gap-[5px] font-light">
-														<span>Date</span>
-														<span>Ratio</span>
-														<span>Questions</span>
-													</div>
+										<div className="flex flex-col items-center gap-4 sm:flex-row">
+											<div className="grid flex-1 grid-cols-2 gap-x-4 gap-y-2 text-sm">
+												<div className="text-gray-500">Duration</div>
+												<div className="font-medium text-gray-700">{attempt.duration}</div>
+												<div className="text-gray-500">Score</div>
+												<div className="font-medium text-gray-700">
+													{attempt.score_accuracy_data.score} / {attempt.quiz_data.questions.length}
 												</div>
-												<div className="text-[10px]">
-													<div className="flex flex-col gap-[5px] font-semibold">
-														<span>{attempt.date}</span>
-														<span>{attempt.ratio}</span>
-														<span>{attempt.questions}</span>
-													</div>
+												<div className="text-gray-500">Accuracy</div>
+												<div className="font-medium text-gray-700">
+													{attempt.score_accuracy_data.accuracy}%
+												</div>
+												<div className="text-gray-500">Mathematical</div>
+												<div className="font-medium text-gray-700">
+													{attempt.mathematical_questions}
+												</div>
+												<div className="text-gray-500">Identification</div>
+												<div className="font-medium text-gray-700">
+													{attempt.identification_questions}
+												</div>
+											</div>
+											<div className="flex flex-shrink-0 items-center justify-center">
+												<div className="h-24 w-24 sm:h-32 sm:w-32">
+													<AttemptAccuracyDoughnutGraph
+														data_points={[
+															attempt.score_accuracy_data.score,
+															attempt.quiz_data.questions.length - attempt.score_accuracy_data.score
+														]}
+													/>
 												</div>
 											</div>
 										</div>
 									</div>
+								))}
+							</div>
+						)}
+					</section>
 
-									<div className="mr-[9px] flex h-full w-[20%] items-center justify-center text-gray-700">
-										<div className="h-[50px] w-[50px]">
-											<AttemptAccuracyDoughnutGraph data_points={[83, 17]} />
+					{/* Sidebar: Most Recent & Most Accurate */}
+					<aside className="mt-8 flex w-full flex-col gap-8 lg:mt-0 lg:w-80">
+						<div>
+							<span className="mb-3 block text-base font-semibold text-gray-700">Most Recent</span>
+							<div className="flex flex-col gap-4">
+								{recent_attempts.map((attempt, index) => (
+									<div
+										key={index}
+										className="flex items-center gap-3 rounded-xl bg-white p-3 shadow"
+									>
+										<div className="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-100">
+											<img src={zenithLogoDark} alt="" className="h-8 w-8 object-contain" />
+										</div>
+										<div className="min-w-0 flex-1">
+											<div className="truncate text-sm font-semibold text-gray-800">
+												{attempt.quiz_title}
+											</div>
+											<div className="mt-1 flex gap-2 text-xs text-gray-500">
+												<span>{attempt.date}</span>
+												<span>• {attempt.ratio}</span>
+												<span>• {attempt.questions}</span>
+											</div>
+										</div>
+										<div className="flex-shrink-0">
+											<div className="h-10 w-10">
+												<AttemptAccuracyDoughnutGraph data_points={[83, 17]} />
+											</div>
 										</div>
 									</div>
-								</div>
-							))}
+								))}
+							</div>
 						</div>
-
-						<span className="mb-[20px] text-[16px] font-bold">Most Accurate</span>
-						<div className="mb-[20px] flex w-full flex-col gap-[20px]">
-							{recent_attempts.map((attempt, index) => (
-								<div
-									className="flex h-full items-center justify-between rounded-[20px] bg-[#EFF7FF] p-[9px] drop-shadow-lg"
-									key={index}
-								>
-									<div className="flex w-[80%] items-center">
-										<div className="mr-[13px] h-[80px] w-[80px] rounded-[20px]">
-											<img src={zenithLogoDark} alt="" />
+						<div>
+							<span className="mb-3 block text-base font-semibold text-gray-700">
+								Most Accurate
+							</span>
+							<div className="flex flex-col gap-4">
+								{most_accurate_attempts.map((attempt, index) => (
+									<div
+										key={index}
+										className="flex items-center gap-3 rounded-xl bg-white p-3 shadow"
+									>
+										<div className="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-100">
+											<img src={zenithLogoDark} alt="" className="h-8 w-8 object-contain" />
 										</div>
-										<div className="flex w-[1/2] flex-col">
-											<div className="mb-[5px] text-[15px] font-semibold">
-												<span>{attempt.quiz_title}</span>
+										<div className="min-w-0 flex-1">
+											<div className="truncate text-sm font-semibold text-gray-800">
+												{attempt.quiz_title}
 											</div>
-											<div className="flex">
-												<div className="mr-[20px] text-[10px]">
-													<div className="flex flex-col gap-[5px] font-light">
-														<span>Date</span>
-														<span>Ratio</span>
-														<span>Questions</span>
-													</div>
-												</div>
-												<div className="text-[10px]">
-													<div className="flex flex-col gap-[5px] font-semibold">
-														<span>{attempt.date}</span>
-														<span>{attempt.ratio}</span>
-														<span>{attempt.questions}</span>
-													</div>
-												</div>
+											<div className="mt-1 flex gap-2 text-xs text-gray-500">
+												<span>{attempt.date}</span>
+												<span>• {attempt.ratio}</span>
+												<span>• {attempt.questions}</span>
+											</div>
+										</div>
+										<div className="flex-shrink-0">
+											<div className="h-10 w-10">
+												<AttemptAccuracyDoughnutGraph data_points={[83, 17]} />
 											</div>
 										</div>
 									</div>
-
-									<div className="mr-[9px] flex h-full w-[20%] items-center justify-center text-gray-700">
-										<div className="h-[50px] w-[50px]">
-											<AttemptAccuracyDoughnutGraph data_points={[83, 17]} />
-										</div>
-									</div>
-								</div>
-							))}
+								))}
+							</div>
 						</div>
-					</div>
+					</aside>
 				</div>
 			</div>
 		</>

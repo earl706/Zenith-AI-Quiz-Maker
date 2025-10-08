@@ -364,112 +364,125 @@ export default function CreateQuizPage() {
 	useEffect(() => {}, [quizTitle]);
 
 	return (
-		<div className="px-[30px] pt-[18px] pb-[30px] transition-all">
+		<div className="mx-auto max-w-7xl px-4 pt-6 pb-10 transition-all sm:px-6 md:px-10">
 			<Header page={'Create Quiz'} />
 
-			<div className="flex gap-[40px]">
-				<div className="flex w-[67%] flex-col">
+			<div className="mt-4 flex flex-col gap-8 lg:flex-row lg:gap-12">
+				{/* Main Content: Questions */}
+				<div className="flex flex-1 flex-col">
 					{questions.map((question, index) => (
 						<div
-							className="mb-[20px] w-full rounded-[20px] bg-[#EFF7FF] p-[20px] drop-shadow-lg"
+							className="mb-6 w-full rounded-xl border border-gray-100 bg-white/80 p-4 shadow-md md:p-6"
 							key={index}
 						>
-							<div className="mb-[20px] flex w-full items-center justify-between">
-								<span className="text-[16px] font-bold">{`Question ${question.id}`}</span>
+							<div className="mb-4 flex w-full items-center justify-between">
+								<span className="text-base font-semibold text-gray-800 md:text-lg">{`Question ${question.id}`}</span>
 								<button
-									className="flex h-[20px] w-[20px] cursor-pointer items-center justify-center rounded-full bg-[#FF605C]"
+									className="flex h-7 w-7 items-center justify-center rounded-full bg-red-100 transition hover:bg-red-200"
 									onClick={() => removeQuestion(question.id)}
+									aria-label="Remove question"
 								>
-									<FontAwesomeIcon icon={faXmark} className="h-[8px] w-[8px] text-black" />
+									<FontAwesomeIcon icon={faXmark} className="h-4 w-4 text-red-500" />
 								</button>
 							</div>
 							<input
 								type="text"
 								value={question.title}
 								onChange={(e) => handleInputChange(question.id, 'title', e.target.value)}
-								className="mb-[20px] w-full rounded-full bg-white px-[20px] py-[12px] text-[12px] text-[#919191]"
-								placeholder="Question"
+								className="mb-4 w-full rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700 focus:ring-2 focus:ring-blue-200 focus:outline-none"
+								placeholder="Enter your question"
 							/>
 
 							{/* Question Image Upload */}
-							<div className="mb-[20px]">
-								<span className="mb-[10px] block text-[14px] font-bold">Question Image</span>
+							<div className="mb-4">
+								<span className="mb-2 block text-sm font-medium text-gray-700">Question Image</span>
 								{question.question_image_preview ? (
-									<div className="relative mb-[10px]">
+									<div className="relative mb-2">
 										<img
 											src={question.question_image_preview}
 											alt="Question preview"
-											className="h-[150px] w-full rounded-[10px] object-cover"
+											className="h-36 w-full rounded-md object-cover"
 										/>
 										<button
 											onClick={() => removeQuestionImage(question.id)}
-											className="absolute top-2 right-2 flex h-[20px] w-[20px] cursor-pointer items-center justify-center rounded-full bg-[#FF605C]"
+											className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-500 transition hover:bg-red-600"
+											aria-label="Remove image"
 										>
-											<FontAwesomeIcon icon={faXmark} className="h-[8px] w-[8px] text-white" />
+											<FontAwesomeIcon icon={faXmark} className="h-3 w-3 text-white" />
 										</button>
 									</div>
 								) : (
-									<label className="flex h-[100px] w-full cursor-pointer items-center justify-center rounded-[10px] border-2 border-dashed border-gray-300 transition-all hover:border-[#3C6B9F]">
+									<label className="flex h-24 w-full cursor-pointer items-center justify-center rounded-md border-2 border-dashed border-gray-300 bg-gray-50 transition hover:border-blue-400">
 										<input
 											type="file"
 											accept="image/*"
 											onChange={(e) => handleQuestionImageUpload(question.id, e)}
 											className="hidden"
 										/>
-										<div className="text-center">
-											<FontAwesomeIcon
-												icon={faPlus}
-												className="mb-[5px] h-[20px] w-[20px] text-gray-400"
-											/>
-											<p className="text-[12px] text-gray-500">Add Image</p>
+										<div className="flex flex-col items-center">
+											<FontAwesomeIcon icon={faPlus} className="mb-1 h-5 w-5 text-gray-400" />
+											<p className="text-xs text-gray-400">Add Image</p>
 										</div>
 									</label>
 								)}
 							</div>
-							<div className="mb-[20px]">
-								<span className="text-[16px] font-bold">Choices</span>
+							<div className="mb-2">
+								<span className="text-base font-semibold text-gray-800">Choices</span>
 							</div>
-							<div className="mb-[30px] flex justify-between gap-[20px]">
+							<div className="mb-4 flex flex-wrap gap-2">
 								<button
-									className={`flex h-[21px] w-full cursor-pointer items-center rounded-full px-[3px] text-[10px] font-bold text-white transition-all ${
-										question.mathematical ? 'bg-[#00CA4E]' : 'bg-[#FF605C]'
+									className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+										question.mathematical
+											? 'bg-green-500 text-white'
+											: 'bg-gray-200 text-gray-700 hover:bg-green-100'
 									}`}
 									onClick={() =>
 										handleInputChange(question.id, 'mathematical', !question.mathematical)
 									}
 								>
-									<div className="mr-[5px] h-[15px] w-[15px] rounded-full bg-white"></div>
-									<span>Mathematical</span>
+									<FontAwesomeIcon
+										icon={faCheck}
+										className={`h-3 w-3 ${question.mathematical ? '' : 'opacity-0'}`}
+									/>
+									Mathematical
 								</button>
 								<button
-									className={`flex h-[21px] w-full cursor-pointer items-center rounded-full px-[3px] text-[10px] font-bold text-white transition-all ${
-										question.identification ? 'bg-[#00CA4E]' : 'bg-[#FF605C]'
+									className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition ${
+										question.identification
+											? 'bg-green-500 text-white'
+											: 'bg-gray-200 text-gray-700 hover:bg-green-100'
 									}`}
 									onClick={() =>
 										handleInputChange(question.id, 'identification', !question.identification)
 									}
 								>
-									<div className="mr-[5px] h-[15px] w-[15px] rounded-full bg-white"></div>
-									<span>Identification</span>
+									<FontAwesomeIcon
+										icon={faCheck}
+										className={`h-3 w-3 ${question.identification ? '' : 'opacity-0'}`}
+									/>
+									Identification
 								</button>
 								<button
-									className={`flex h-[21px] w-full items-center rounded-full px-[3px] text-[10px] font-bold text-white transition-all ${
+									className={`flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium transition ${
 										question.identification
-											? 'bg-gray-300'
+											? 'cursor-not-allowed bg-gray-100 text-gray-400'
 											: question.randomChoices
-												? 'cursor-pointer bg-[#00CA4E]'
-												: 'cursor-pointer bg-[#FF605C]'
+												? 'bg-green-500 text-white'
+												: 'bg-gray-200 text-gray-700 hover:bg-green-100'
 									}`}
 									onClick={() =>
 										handleInputChange(question.id, 'randomChoices', !question.randomChoices)
 									}
 									disabled={question.identification}
 								>
-									<div className="mr-[5px] h-[15px] w-[15px] rounded-full bg-white"></div>
-									<span>Random Choices</span>
+									<FontAwesomeIcon
+										icon={faCheck}
+										className={`h-3 w-3 ${question.randomChoices && !question.identification ? '' : 'opacity-0'}`}
+									/>
+									Random Choices
 								</button>
 							</div>
-							<div className="mb-[20px] flex flex-col gap-[10px]">
+							<div className="mb-4 flex flex-col gap-3">
 								{question.mathematical ? (
 									<MathInput
 										handleChoicesChange={handleChoicesChange}
@@ -478,86 +491,79 @@ export default function CreateQuizPage() {
 										removeChoice={removeChoice}
 									/>
 								) : question.identification ? (
-									<div className="flex items-center">
-										<div className="mr-[20px] flex w-[3%] items-center">
-											<button
-												className={`h-[20px] w-[20px] rounded-full bg-[#007AFF] transition-all ${
-													question.correctAnswerIndex == 0
-														? 'ring-2 ring-[#007AFF] ring-offset-3'
-														: ''
-												}`}
-												onClick={() => handleInputChange(question.id, 'correctAnswerIndex', 0)}
-											></button>
-										</div>
+									<div className="flex items-center gap-3">
+										<button
+											className={`flex h-5 w-5 items-center justify-center rounded-full border-2 border-blue-400 transition ${
+												question.correctAnswerIndex == 0 ? 'bg-blue-500' : 'bg-white'
+											}`}
+											onClick={() => handleInputChange(question.id, 'correctAnswerIndex', 0)}
+											aria-label="Mark as correct"
+										>
+											{question.correctAnswerIndex == 0 && (
+												<FontAwesomeIcon icon={faCheck} className="h-3 w-3 text-white" />
+											)}
+										</button>
 										<input
 											type="text"
 											value={question.choices[0]}
 											onChange={(e) => handleChoicesChange(question.id, 0, e.target.value)}
 											placeholder={`Answer`}
-											className="mr-[20px] w-full rounded-full bg-white px-[20px] py-[12px] text-[12px] text-[#919191]"
+											className="flex-1 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 focus:ring-2 focus:ring-blue-200 focus:outline-none"
 											required
 										/>
 									</div>
 								) : (
 									question.choices.map((choice, choice_index) => (
-										<div className="mb-[15px] flex flex-col" key={choice_index}>
-											<div className="flex items-center">
-												<div className="mr-[20px] flex w-[3%] items-center">
-													<button
-														className={`h-[20px] w-[20px] cursor-pointer rounded-full bg-[#007AFF] transition-all ${
-															question.correctAnswerIndex == choice_index
-																? 'ring-2 ring-[#007AFF] ring-offset-3'
-																: ''
-														}`}
-														onClick={() =>
-															handleInputChange(question.id, 'correctAnswerIndex', choice_index)
-														}
-													></button>
-												</div>
-												<input
-													type="text"
-													value={question.choices[choice_index]}
-													onChange={(e) =>
-														handleChoicesChange(question.id, choice_index, e.target.value)
-													}
-													placeholder={`Choice ${choice_index + 1}`}
-													className="mr-[20px] w-full rounded-full bg-white px-[20px] py-[12px] text-[12px] text-[#919191]"
-													required
-												/>
-												<div className="flex w-[3%] items-center">
-													<button
-														className="flex h-[20px] w-[20px] cursor-pointer items-center justify-center rounded-full bg-[#FF605C]"
-														onClick={() => removeChoice(question.id, choice_index)}
-													>
-														<FontAwesomeIcon
-															icon={faXmark}
-															className="h-[8px] w-[8px] text-black"
-														/>
-													</button>
-												</div>
-											</div>
-
+										<div className="flex items-center gap-3" key={choice_index}>
+											<button
+												className={`flex h-5 w-5 items-center justify-center rounded-full border-2 border-blue-400 transition ${
+													question.correctAnswerIndex == choice_index ? 'bg-blue-500' : 'bg-white'
+												}`}
+												onClick={() =>
+													handleInputChange(question.id, 'correctAnswerIndex', choice_index)
+												}
+												aria-label="Mark as correct"
+											>
+												{question.correctAnswerIndex == choice_index && (
+													<FontAwesomeIcon icon={faCheck} className="h-3 w-3 text-white" />
+												)}
+											</button>
+											<input
+												type="text"
+												value={question.choices[choice_index]}
+												onChange={(e) =>
+													handleChoicesChange(question.id, choice_index, e.target.value)
+												}
+												placeholder={`Choice ${choice_index + 1}`}
+												className="flex-1 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 focus:ring-2 focus:ring-blue-200 focus:outline-none"
+												required
+											/>
+											<button
+												className="flex h-7 w-7 items-center justify-center rounded-full bg-red-100 transition hover:bg-red-200"
+												onClick={() => removeChoice(question.id, choice_index)}
+												aria-label="Remove choice"
+											>
+												<FontAwesomeIcon icon={faXmark} className="h-3 w-3 text-red-500" />
+											</button>
 											{/* Choice Image Upload */}
-											<div className="mt-[10px] ml-[40px]">
+											<div className="ml-2 w-24">
 												{question.choiceImagePreviews[choice_index] ? (
 													<div className="relative">
 														<img
 															src={question.choiceImagePreviews[choice_index]}
 															alt={`Choice ${choice_index + 1} preview`}
-															className="h-[80px] w-full rounded-[8px] object-cover"
+															className="h-12 w-full rounded object-cover"
 														/>
 														<button
 															onClick={() => removeChoiceImage(question.id, choice_index)}
-															className="absolute top-1 right-1 flex h-[16px] w-[16px] cursor-pointer items-center justify-center rounded-full bg-[#FF605C]"
+															className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 transition hover:bg-red-600"
+															aria-label="Remove choice image"
 														>
-															<FontAwesomeIcon
-																icon={faXmark}
-																className="h-[6px] w-[6px] text-white"
-															/>
+															<FontAwesomeIcon icon={faXmark} className="h-2 w-2 text-white" />
 														</button>
 													</div>
 												) : (
-													<label className="flex h-[60px] w-full cursor-pointer items-center justify-center rounded-[8px] border-2 border-dashed border-gray-300 transition-all hover:border-[#3C6B9F]">
+													<label className="flex h-10 w-full cursor-pointer items-center justify-center rounded border-2 border-dashed border-gray-300 bg-gray-50 transition hover:border-blue-400">
 														<input
 															type="file"
 															accept="image/*"
@@ -566,12 +572,9 @@ export default function CreateQuizPage() {
 															}
 															className="hidden"
 														/>
-														<div className="text-center">
-															<FontAwesomeIcon
-																icon={faPlus}
-																className="mb-[2px] h-[12px] w-[12px] text-gray-400"
-															/>
-															<p className="text-[10px] text-gray-500">Add Image</p>
+														<div className="flex flex-col items-center">
+															<FontAwesomeIcon icon={faPlus} className="h-3 w-3 text-gray-400" />
+															<p className="text-[10px] text-gray-400">Add</p>
 														</div>
 													</label>
 												)}
@@ -581,233 +584,251 @@ export default function CreateQuizPage() {
 								)}
 							</div>
 							<button
-								className="mb-[20px] flex h-[20px] w-full cursor-pointer items-center justify-center rounded-full bg-[#00CA4E] transition-all hover:bg-[#00AA1E]"
+								className="mb-2 flex h-8 w-full items-center justify-center rounded-lg bg-green-500 text-xs font-semibold text-white transition hover:bg-green-600"
 								onClick={() => addChoice(question.id)}
 							>
-								<FontAwesomeIcon icon={faPlus} className="h-[8px] w-[8px] text-white" />
+								<FontAwesomeIcon icon={faPlus} className="mr-1 h-4 w-4" />
+								Add Choice
 							</button>
 						</div>
 					))}
 					<button
-						className={`flex h-[30px] w-full cursor-pointer items-center justify-center rounded-full bg-[#00CA4E] transition-all hover:bg-[#00AA1E]`}
+						className="flex h-10 w-full items-center justify-center rounded-lg bg-blue-500 text-sm font-semibold text-white transition hover:bg-blue-600"
 						onClick={addQuestion}
 					>
-						<FontAwesomeIcon icon={faPlus} className="h-[10px] w-[10px] text-white" />
+						<FontAwesomeIcon icon={faPlus} className="mr-2 h-5 w-5" />
+						Add Question
 					</button>
 				</div>
-				<div className="flex w-[29%] flex-col">
-					<span className="mb-[10px] text-[16px] font-bold">Quiz Title</span>
-					<button
-						className={`mb-[10px] flex w-full items-center ${
-							editQuizTitle ? 'bg-[#00CA4E]' : 'bg-[#EFF7FF]'
-						} h-[40px] rounded-full p-[5px] transition-all`}
-					>
-						<div
-							className="mr-[10px] flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded-full bg-white"
-							onClick={() => {
-								if (!editQuizTitle) {
-									setQuizTitleInput(quizTitle);
-								} else {
-									setQuizTitleInput('');
-								}
-								setEditQuizTitle(!editQuizTitle);
-							}}
-						>
-							{editQuizTitle ? (
-								<FontAwesomeIcon
-									icon={faXmark}
-									className="h-[12px] w-[12px] text-black transition-all"
-								/>
+				{/* Sidebar: Quiz Settings */}
+				<div className="flex w-full flex-shrink-0 flex-col gap-6 lg:w-[350px]">
+					<div className="flex flex-col gap-4 rounded-xl border border-gray-100 bg-white/80 p-4 shadow-md md:p-6">
+						<div>
+							<span className="mb-2 block text-base font-semibold text-gray-800">Quiz Title</span>
+							<div className="flex items-center gap-2">
+								<button
+									type="button"
+									className={`flex h-8 w-8 items-center justify-center rounded-full border border-gray-200 bg-white transition hover:bg-gray-100`}
+									onClick={() => {
+										if (!editQuizTitle) {
+											setQuizTitleInput(quizTitle);
+										} else {
+											setQuizTitleInput('');
+										}
+										setEditQuizTitle(!editQuizTitle);
+									}}
+									aria-label={editQuizTitle ? 'Cancel edit' : 'Edit title'}
+								>
+									{editQuizTitle ? (
+										<FontAwesomeIcon icon={faXmark} className="h-4 w-4 text-gray-500" />
+									) : (
+										<FontAwesomeIcon icon={faEdit} className="h-4 w-4 text-gray-500" />
+									)}
+								</button>
+								{editQuizTitle ? (
+									<form onSubmit={updateQuizTitle} className="flex flex-1 items-center gap-2">
+										<input
+											type="text"
+											value={quizTitleInput}
+											onChange={handleQuizTitleChange}
+											className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-700 focus:ring-2 focus:ring-blue-200 focus:outline-none"
+										/>
+										<button
+											type="submit"
+											className="flex h-8 w-8 items-center justify-center rounded-full bg-green-500 transition hover:bg-green-600"
+											aria-label="Save title"
+										>
+											<FontAwesomeIcon icon={faCheck} className="h-4 w-4 text-white" />
+										</button>
+									</form>
+								) : (
+									<span className="text-sm font-semibold text-gray-700">{quizTitle}</span>
+								)}
+							</div>
+						</div>
+						{/* Quiz Image Upload */}
+						<div>
+							<span className="mb-2 block text-base font-semibold text-gray-800">Quiz Image</span>
+							{quizImagePreview ? (
+								<div className="relative mb-2">
+									<img
+										src={quizImagePreview}
+										alt="Quiz preview"
+										className="h-28 w-full rounded-md object-cover"
+									/>
+									<button
+										onClick={removeQuizImage}
+										className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-500 transition hover:bg-red-600"
+										aria-label="Remove quiz image"
+									>
+										<FontAwesomeIcon icon={faXmark} className="h-3 w-3 text-white" />
+									</button>
+								</div>
 							) : (
-								<FontAwesomeIcon
-									icon={faEdit}
-									className="h-[12px] w-[12px] text-black transition-all"
-								/>
+								<label className="flex h-20 w-full cursor-pointer items-center justify-center rounded-md border-2 border-dashed border-gray-300 bg-gray-50 transition hover:border-blue-400">
+									<input
+										type="file"
+										accept="image/*"
+										onChange={handleQuizImageUpload}
+										className="hidden"
+									/>
+									<div className="flex flex-col items-center">
+										<FontAwesomeIcon icon={faPlus} className="mb-1 h-4 w-4 text-gray-400" />
+										<p className="text-xs text-gray-400">Add Quiz Image</p>
+									</div>
+								</label>
 							)}
 						</div>
-						{editQuizTitle ? (
-							<form
-								onSubmit={updateQuizTitle}
-								className="flex w-[87%] items-center justify-between"
-							>
-								<input
-									type="text"
-									value={quizTitleInput}
-									onChange={(event) => handleQuizTitleChange(event)}
-									className={`text-[12px] font-bold ${editQuizTitle ? 'text-white' : 'text-black'}`}
-								/>
-								<button
-									type="submit"
-									className="flex h-[30px] w-[30px] cursor-pointer items-center justify-center rounded-full bg-white"
-								>
-									<FontAwesomeIcon icon={faCheck} className="h-[12px] w-[12px] text-black" />
-								</button>
-							</form>
-						) : (
-							<span
-								className={`text-[12px] font-bold ${editQuizTitle ? 'text-white' : 'text-black'}`}
-							>
-								{quizTitle}
-							</span>
-						)}
-					</button>
-
-					{/* Quiz Image Upload */}
-					<span className="mb-[10px] text-[16px] font-bold">Quiz Image</span>
-					{quizImagePreview ? (
-						<div className="relative mb-[20px]">
-							<img
-								src={quizImagePreview}
-								alt="Quiz preview"
-								className="h-[120px] w-full rounded-[10px] object-cover"
-							/>
-							<button
-								onClick={removeQuizImage}
-								className="absolute top-2 right-2 flex h-[20px] w-[20px] cursor-pointer items-center justify-center rounded-full bg-[#FF605C]"
-							>
-								<FontAwesomeIcon icon={faXmark} className="h-[8px] w-[8px] text-white" />
-							</button>
-						</div>
-					) : (
-						<label className="mb-[20px] flex h-[80px] w-full cursor-pointer items-center justify-center rounded-[10px] border-2 border-dashed border-gray-300 transition-all hover:border-[#3C6B9F]">
-							<input
-								type="file"
-								accept="image/*"
-								onChange={handleQuizImageUpload}
-								className="hidden"
-							/>
-							<div className="text-center">
-								<FontAwesomeIcon
-									icon={faPlus}
-									className="mb-[5px] h-[16px] w-[16px] text-gray-400"
-								/>
-								<p className="text-[10px] text-gray-500">Add Quiz Image</p>
-							</div>
-						</label>
-					)}
-
-					<button
-						onClick={handleCreateQuiz}
-						className="mb-[30px] flex h-[40px] w-full cursor-pointer items-center justify-center rounded-full bg-[#00CA4E] font-bold text-white transition-all hover:bg-[#00AA1E]"
-					>
-						{loading ? (
-							<div className="flex w-full items-center justify-center">
-								<LoadingComponent size={12} light={false} />
-							</div>
-						) : (
-							<span className="text-[14px]">Create Quiz</span>
-						)}
-					</button>
-					<span className="mb-[10px] text-[16px] font-bold">AI-Quiz Generate</span>
-					<input
-						type="text"
-						value={topic}
-						placeholder="Topic"
-						onChange={(e) => setTopic(e.target.value)}
-						className="mb-[10px] h-[40x] w-full rounded-full bg-[#EFF7FF] px-[17px] py-[12px] text-[12px] font-bold text-[#919191]"
-					/>
-					<input
-						type="number"
-						name=""
-						id=""
-						placeholder="Number of Questions"
-						onChange={(e) => setQuestionNumber(e.target.value)}
-						max={15}
-						className="mb-[10px] h-[40x] w-full rounded-full bg-[#EFF7FF] px-[17px] py-[12px] text-[12px] font-bold text-[#919191]"
-					/>
-					<button
-						onClick={() => generateAIQuiz()}
-						className="mb-[30px] flex h-[30px] w-full cursor-pointer items-center justify-center rounded-full bg-[#00CA4E] font-bold text-white transition-all hover:bg-[#00AA1E]"
-					>
-						<span className="text-[14px]">Generate</span>
-					</button>
-
-					<span className="mb-[10px] text-[16px] font-bold">Options</span>
-					<div className="mb-[20px] flex flex-col gap-[10px]">
 						<button
-							className={`flex w-full items-center ${
-								randomQuestionOrder ? 'bg-[#00CA4E]' : 'bg-[#FF605C]'
-							} h-[30px] cursor-pointer rounded-full p-[5px] transition-all`}
+							onClick={handleCreateQuiz}
+							className="flex h-10 w-full items-center justify-center rounded-lg bg-green-500 text-sm font-semibold text-white transition hover:bg-green-600"
+						>
+							{loading ? (
+								<div className="flex w-full items-center justify-center">
+									<LoadingComponent size={16} light={false} />
+								</div>
+							) : (
+								<span>Create Quiz</span>
+							)}
+						</button>
+					</div>
+					{/* AI Quiz Generator */}
+					<div className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-white/80 p-4 shadow-md md:p-6">
+						<span className="mb-2 text-base font-semibold text-gray-800">AI-Quiz Generate</span>
+						<input
+							type="text"
+							value={topic}
+							placeholder="Topic"
+							onChange={(e) => setTopic(e.target.value)}
+							className="mb-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:ring-2 focus:ring-blue-200 focus:outline-none"
+						/>
+						<input
+							type="number"
+							placeholder="Number of Questions"
+							onChange={(e) => setQuestionNumber(e.target.value)}
+							max={15}
+							className="mb-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 focus:ring-2 focus:ring-blue-200 focus:outline-none"
+						/>
+						<button
+							onClick={() => generateAIQuiz()}
+							className="flex h-8 w-full items-center justify-center rounded-lg bg-blue-500 text-xs font-semibold text-white transition hover:bg-blue-600"
+						>
+							<span>Generate</span>
+						</button>
+					</div>
+					{/* Options */}
+					<div className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-white/80 p-4 shadow-md md:p-6">
+						<span className="mb-2 text-base font-semibold text-gray-800">Options</span>
+						<button
+							className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition ${
+								randomQuestionOrder
+									? 'bg-green-500 text-white'
+									: 'bg-gray-200 text-gray-700 hover:bg-green-100'
+							}`}
 							onClick={() => setRandomQuestionOrder(!randomQuestionOrder)}
 						>
-							<div className="mr-[10px] h-[20px] w-[20px] rounded-full bg-white"></div>
-							<span className={'text-[12px] font-bold text-white'}>Randomize Questions</span>
+							<FontAwesomeIcon
+								icon={faCheck}
+								className={`h-3 w-3 ${randomQuestionOrder ? '' : 'opacity-0'}`}
+							/>
+							Randomize Questions
 						</button>
 						<button
-							className={`flex w-full items-center ${
-								randomQuestionChoices ? 'bg-[#00CA4E]' : 'bg-[#FF605C]'
-							} h-[30px] cursor-pointer rounded-full p-[5px]`}
+							className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition ${
+								randomQuestionChoices
+									? 'bg-green-500 text-white'
+									: 'bg-gray-200 text-gray-700 hover:bg-green-100'
+							}`}
 							onClick={() => {
 								setRandomQuestionChoices(!randomQuestionChoices);
 								randomizeQuestionChoices(!randomQuestionChoices);
 							}}
 						>
-							<div className="mr-[10px] h-[20px] w-[20px] rounded-full bg-white"></div>
-							<span className="text-[12px] font-bold text-white">Randomize Choices</span>
+							<FontAwesomeIcon
+								icon={faCheck}
+								className={`h-3 w-3 ${randomQuestionChoices ? '' : 'opacity-0'}`}
+							/>
+							Randomize Choices
 						</button>
 					</div>
-					<span className="mb-[10px] text-[16px] font-bold">Quiz Type</span>
-					<div className="mb-[20px] flex flex-col gap-[10px]">
-						<button
-							className={`flex w-full items-center ${
-								quizType == 'flashcard' ? 'bg-[#FF605C]' : 'bg-[#00CA4E]'
-							} h-[30px] cursor-pointer rounded-full p-[5px] transition-all`}
-							onClick={() => setQuizType('list')}
-						>
-							<div className="mr-[10px] h-[20px] w-[20px] rounded-full bg-white"></div>
-							<span className="text-[12px] font-bold text-white">List</span>
-						</button>
-						<button
-							className={`flex w-full items-center ${
-								quizType == 'list' ? 'bg-[#FF605C]' : 'bg-[#00CA4E]'
-							} h-[30px] cursor-pointer rounded-full p-[5px] transition-all`}
-							onClick={() => setQuizType('flashcard')}
-						>
-							<div className="mr-[10px] h-[20px] w-[20px] rounded-full bg-white"></div>
-							<span className="text-[12px] font-bold text-white">Flashcard</span>
-						</button>
+					{/* Quiz Type */}
+					<div className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-white/80 p-4 shadow-md md:p-6">
+						<span className="mb-2 text-base font-semibold text-gray-800">Quiz Type</span>
+						<div className="flex gap-2">
+							<button
+								className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition ${
+									quizType === 'list'
+										? 'bg-blue-500 text-white'
+										: 'bg-gray-200 text-gray-700 hover:bg-blue-100'
+								}`}
+								onClick={() => setQuizType('list')}
+							>
+								List
+							</button>
+							<button
+								className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition ${
+									quizType === 'flashcard'
+										? 'bg-blue-500 text-white'
+										: 'bg-gray-200 text-gray-700 hover:bg-blue-100'
+								}`}
+								onClick={() => setQuizType('flashcard')}
+							>
+								Flashcard
+							</button>
+						</div>
 					</div>
-					<span className="mb-[10px] text-[16px] font-bold">Tag Color</span>
-					<div className="mb-[20px] grid grid-cols-5 gap-[10px]">
-						{colors.map((color) => (
-							<label key={color.hex} className="relative cursor-pointer">
-								<input
-									type="radio"
-									name="color"
-									value={color.hex}
-									checked={selectedColor === color.hex}
-									onChange={() => setSelectedColor(color.hex)}
-									className="hidden"
-								/>
-								<span
-									className={`flex h-[20px] w-[20px] items-center justify-center rounded-full transition-all ${
-										selectedColor === color.hex ? 'ring-2 ring-[#6F8055] ring-offset-2' : ''
-									}`}
-									style={{ backgroundColor: color.hex }}
-								></span>
-							</label>
-						))}
+					{/* Tag Color */}
+					<div className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-white/80 p-4 shadow-md md:p-6">
+						<span className="mb-2 text-base font-semibold text-gray-800">Tag Color</span>
+						<div className="grid grid-cols-5 gap-2">
+							{colors.map((color) => (
+								<label
+									key={color.hex}
+									className="relative flex cursor-pointer items-center justify-center"
+								>
+									<input
+										type="radio"
+										name="color"
+										value={color.hex}
+										checked={selectedColor === color.hex}
+										onChange={() => setSelectedColor(color.hex)}
+										className="hidden"
+									/>
+									<span
+										className={`flex h-6 w-6 items-center justify-center rounded-full border-2 border-gray-200 transition-all ${
+											selectedColor === color.hex ? 'ring-2 ring-blue-400' : ''
+										}`}
+										style={{ backgroundColor: color.hex }}
+									></span>
+								</label>
+							))}
+						</div>
 					</div>
-					<span className="mb-[10px] text-[16px] font-bold">Layout</span>
-					<div className="mb-[20px] flex flex-col gap-[10px]">
-						<button
-							className={`flex w-full cursor-pointer items-center ${
-								view == 'grid' ? 'bg-[#FF605C]' : 'bg-[#00CA4E]'
-							} h-[30px] rounded-full p-[5px] transition-all`}
-							onClick={() => setView('list')}
-						>
-							<div className="mr-[10px] h-[20px] w-[20px] rounded-full bg-white"></div>
-							<span className="text-[12px] font-bold text-white">List</span>
-						</button>
-						<button
-							className={`flex w-full cursor-pointer items-center ${
-								view == 'list' ? 'bg-[#FF605C]' : 'bg-[#00CA4E]'
-							} h-[30px] rounded-full p-[5px] transition-all`}
-							onClick={() => setView('grid')}
-						>
-							<div className="mr-[10px] h-[20px] w-[20px] rounded-full bg-white"></div>
-							<span className="text-[12px] font-bold text-white">Grid</span>
-						</button>
+					{/* Layout */}
+					<div className="flex flex-col gap-3 rounded-xl border border-gray-100 bg-white/80 p-4 shadow-md md:p-6">
+						<span className="mb-2 text-base font-semibold text-gray-800">Layout</span>
+						<div className="flex gap-2">
+							<button
+								className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition ${
+									view === 'list'
+										? 'bg-blue-500 text-white'
+										: 'bg-gray-200 text-gray-700 hover:bg-blue-100'
+								}`}
+								onClick={() => setView('list')}
+							>
+								List
+							</button>
+							<button
+								className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition ${
+									view === 'grid'
+										? 'bg-blue-500 text-white'
+										: 'bg-gray-200 text-gray-700 hover:bg-blue-100'
+								}`}
+								onClick={() => setView('grid')}
+							>
+								Grid
+							</button>
+						</div>
 					</div>
 				</div>
 			</div>
