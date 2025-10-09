@@ -1,6 +1,24 @@
 import React, { createContext, useState, useEffect } from 'react';
-import API from '../services/api';
-import API_QUIZZES from '../services/apiQuizzes';
+
+// Lazy import API services to reduce initial bundle size
+let API = null;
+let API_QUIZZES = null;
+
+const getAPI = async () => {
+	if (!API) {
+		const module = await import('../services/api');
+		API = module.default;
+	}
+	return API;
+};
+
+const getAPIQuizzes = async () => {
+	if (!API_QUIZZES) {
+		const module = await import('../services/apiQuizzes');
+		API_QUIZZES = module.default;
+	}
+	return API_QUIZZES;
+};
 
 export const AuthContext = createContext();
 
@@ -53,25 +71,28 @@ export const AuthProvider = ({ children }) => {
 	useEffect(() => {
 		const checkAuthStatus = async () => {
 			const accessToken = getAccessToken();
-			const refreshToken = getRefreshToken();
+			const refreshTokenValue = getRefreshToken();
 
+			console.log(accessToken, refreshTokenValue);
+
+			// Quick synchronous check first for immediate UI update
 			if (accessToken && !isTokenExpired(accessToken)) {
-				setIsAuthenticated(true);
 				const userData = localStorage.getItem('userData');
 				if (userData) {
 					setUser(JSON.parse(userData));
 				}
-			} else if (refreshToken) {
-				// Try to refresh the token
+				setIsAuthenticated(true);
+			} else if (refreshTokenValue) {
+				// Try to refresh the token asynchronously
 				try {
-					const response = await refreshToken(refreshToken);
+					const response = await refreshToken(refreshTokenValue);
 					if (response.data) {
 						setTokens(response.data.access, response.data.refresh);
-						setIsAuthenticated(true);
 						const userData = localStorage.getItem('userData');
 						if (userData) {
 							setUser(JSON.parse(userData));
 						}
+						setIsAuthenticated(true);
 					}
 				} catch (error) {
 					// Refresh failed, clear tokens
@@ -79,6 +100,9 @@ export const AuthProvider = ({ children }) => {
 					setIsAuthenticated(false);
 					setUser(null);
 				}
+			} else {
+				// No tokens available
+				setIsAuthenticated(false);
 			}
 		};
 
@@ -96,7 +120,8 @@ export const AuthProvider = ({ children }) => {
 	// resent verification email
 	const resendVerification = async (email) => {
 		try {
-			const resend_verification_response = await API.post('api/users/email/resend/', {
+			const api = await getAPI();
+			const resend_verification_response = await api.post('api/users/email/resend/', {
 				email: email
 			});
 		} catch (err) {
@@ -106,7 +131,8 @@ export const AuthProvider = ({ children }) => {
 
 	const login = async (username, password) => {
 		try {
-			const login_response = await API.post('api/users/login/', {
+			const api = await getAPI();
+			const login_response = await api.post('api/users/login/', {
 				username: username,
 				password: password
 			});
@@ -129,7 +155,8 @@ export const AuthProvider = ({ children }) => {
 
 	const refreshToken = async (refresh_token) => {
 		try {
-			const refresh_token_response = await API.post('api/users/token/refresh/', {
+			const api = await getAPI();
+			const refresh_token_response = await api.post('api/users/token/refresh/', {
 				refresh: refresh_token
 			});
 
@@ -153,7 +180,8 @@ export const AuthProvider = ({ children }) => {
 
 	const register = async (data) => {
 		try {
-			const register_response = await API.post('dj-rest-auth/registration/', data);
+			const api = await getAPI();
+			const register_response = await api.post('dj-rest-auth/registration/', data);
 			return register_response;
 		} catch (error) {
 			return error;
@@ -162,7 +190,8 @@ export const AuthProvider = ({ children }) => {
 
 	const getUserData = async () => {
 		try {
-			const user_data_response = await API.get('api/users/profile/');
+			const api = await getAPI();
+			const user_data_response = await api.get('api/users/profile/');
 			return user_data_response;
 		} catch (err) {
 			return err;
@@ -171,7 +200,8 @@ export const AuthProvider = ({ children }) => {
 
 	const getAttemptsList = async () => {
 		try {
-			const attempts_data_response = await API_QUIZZES.get('quiz/attempts/');
+			const apiQuizzes = await getAPIQuizzes();
+			const attempts_data_response = await apiQuizzes.get('quiz/attempts/');
 			return attempts_data_response;
 		} catch (err) {
 			return err;
@@ -180,7 +210,8 @@ export const AuthProvider = ({ children }) => {
 
 	const updateUserData = async (userEditData) => {
 		try {
-			const user_update_response = await API.put('api/users/profile/', userEditData);
+			const api = await getAPI();
+			const user_update_response = await api.put('api/users/profile/', userEditData);
 			return user_update_response;
 		} catch (err) {
 			return err;
@@ -189,7 +220,8 @@ export const AuthProvider = ({ children }) => {
 
 	const createQuiz = async (quizData) => {
 		try {
-			const createquiz_response = await API_QUIZZES.post('quiz/', quizData);
+			const apiQuizzes = await getAPIQuizzes();
+			const createquiz_response = await apiQuizzes.post('quiz/', quizData);
 			return createquiz_response;
 		} catch (err) {
 			return err;
@@ -198,7 +230,8 @@ export const AuthProvider = ({ children }) => {
 
 	const updateQuiz = async (id, quizEditData) => {
 		try {
-			const quiz_update_response = await API_QUIZZES.put(`quiz/update/${id}/`, quizEditData);
+			const apiQuizzes = await getAPIQuizzes();
+			const quiz_update_response = await apiQuizzes.put(`quiz/update/${id}/`, quizEditData);
 			return quiz_update_response;
 		} catch (err) {
 			return err;
@@ -207,16 +240,19 @@ export const AuthProvider = ({ children }) => {
 
 	const getQuizList = async () => {
 		try {
-			const getquizlist_response = await API_QUIZZES.get('quiz/');
+			const apiQuizzes = await getAPIQuizzes();
+			const getquizlist_response = await apiQuizzes.get('quiz/');
 			return getquizlist_response;
 		} catch (err) {
+			console.log(err);
 			return err;
 		}
 	};
 
 	const getQuiz = async (id, randomize = true) => {
 		try {
-			const getquiz_response = await API_QUIZZES.get(`quiz/${id}/`, {
+			const apiQuizzes = await getAPIQuizzes();
+			const getquiz_response = await apiQuizzes.get(`quiz/${id}/`, {
 				params: {
 					randomize: randomize
 				}
@@ -229,7 +265,8 @@ export const AuthProvider = ({ children }) => {
 
 	const getQuizSummary = async (id) => {
 		try {
-			const quiz_summary_response = await API_QUIZZES.get(`quiz/summary/${id}/`);
+			const apiQuizzes = await getAPIQuizzes();
+			const quiz_summary_response = await apiQuizzes.get(`quiz/summary/${id}/`);
 			return quiz_summary_response;
 		} catch (err) {
 			return err;
@@ -238,7 +275,8 @@ export const AuthProvider = ({ children }) => {
 
 	const attemptQuiz = async (id) => {
 		try {
-			const quiz_attempt_response = await API_QUIZZES.post(`quiz/attempt/${id}/`);
+			const apiQuizzes = await getAPIQuizzes();
+			const quiz_attempt_response = await apiQuizzes.post(`quiz/attempt/${id}/`);
 			return quiz_attempt_response;
 		} catch (err) {
 			return err;
@@ -247,7 +285,8 @@ export const AuthProvider = ({ children }) => {
 
 	const submitQuizAnswers = async (id, answers, time) => {
 		try {
-			const quiz_answers_submission_response = await API_QUIZZES.post(`quiz/submit/${id}/`, {
+			const apiQuizzes = await getAPIQuizzes();
+			const quiz_answers_submission_response = await apiQuizzes.post(`quiz/submit/${id}/`, {
 				answers: answers,
 				time: time
 			});
@@ -259,7 +298,8 @@ export const AuthProvider = ({ children }) => {
 
 	const deleteQuiz = async (id) => {
 		try {
-			const deletequiz_response = await API_QUIZZES.delete(`quiz/${id}/`);
+			const apiQuizzes = await getAPIQuizzes();
+			const deletequiz_response = await apiQuizzes.delete(`quiz/${id}/`);
 			return deletequiz_response;
 		} catch (err) {
 			return err;
@@ -268,7 +308,8 @@ export const AuthProvider = ({ children }) => {
 
 	const generateQuiz = async (topic, questionNumber) => {
 		try {
-			const response = await API_QUIZZES.post('quiz/generate/', {
+			const apiQuizzes = await getAPIQuizzes();
+			const response = await apiQuizzes.post('quiz/generate/', {
 				topic: topic,
 				questionNumber: questionNumber
 			});

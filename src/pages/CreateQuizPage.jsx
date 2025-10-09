@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import MathInput from '../components/MathInput';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCheck, faEdit, faPlus, faXmark } from '@fortawesome/free-solid-svg-icons';
+import { Check, Pencil, Plus, X, Import } from 'lucide-react';
 import Header from '../components/Header';
 import LoadingComponent from '../components/LoadingComponent';
 
@@ -25,6 +24,23 @@ const colors = [
 	{ name: 'Emerald', hex: '#50C878' }
 ];
 
+function getDefaultQuestion(id, randomChoices = false) {
+	return {
+		id,
+		title: '',
+		choices: ['', '', '', ''],
+		choiceImages: [null, null, null, null],
+		choiceImagePreviews: [null, null, null, null],
+		correctAnswerIndex: 0,
+		mathematical: false,
+		identification: false,
+		randomChoices,
+		hasChoiceImages: false,
+		question_image: null,
+		question_image_preview: null
+	};
+}
+
 export default function CreateQuizPage() {
 	const { createQuiz, setQuizzes, quizzes, generateQuiz } = useContext(AuthContext);
 	const navigate = useNavigate();
@@ -41,22 +57,156 @@ export default function CreateQuizPage() {
 	const [selectedColor, setSelectedColor] = useState(colors[0].hex);
 	const [quizImage, setQuizImage] = useState(null);
 	const [quizImagePreview, setQuizImagePreview] = useState(null);
-	const [questions, setQuestions] = useState([
-		{
-			id: 1,
-			title: '',
-			choices: ['', '', '', ''],
-			choiceImages: [null, null, null, null],
-			choiceImagePreviews: [null, null, null, null],
-			correctAnswerIndex: 0,
-			mathematical: false,
-			identification: false,
-			randomChoices: false,
-			hasChoiceImages: false,
-			question_image: null,
-			question_image_preview: null
+	const [questions, setQuestions] = useState([getDefaultQuestion(1)]);
+	const [importError, setImportError] = useState('');
+	const fileInputRef = useRef(null);
+
+	// --- Import Quiz JSON functionality ---
+
+	/**
+	 * Sample JSON for importing a quiz with 4 questions:
+	 * - 1. Mathematical Identification
+	 * - 2. Mathematical Multiple Choice
+	 * - 3. Non-mathematical Identification
+	 * - 4. Non-mathematical Multiple Choice
+	 *
+	 * {
+	 *   "quiz_title": "Sample Quiz",
+	 *   "tag_color": "#3B82F6",
+	 *   "quizType": "list",
+	 *   "randomQuestions": false,
+	 *   "questions": [
+	 *     {
+	 *       "title": "What is the derivative of x^2?",
+	 *       "choices": ["2x", "x^2", "x", "2"],
+	 *       "correctAnswerIndex": 0,
+	 *       "mathematical": true,
+	 *       "identification": true,
+	 *       "randomChoices": false,
+	 *       "hasChoiceImages": false
+	 *     },
+	 *     {
+	 *       "title": "Which of the following is the integral of 2x?",
+	 *       "choices": ["x^2 + C", "2x^2 + C", "x + C", "2x + C"],
+	 *       "correctAnswerIndex": 0,
+	 *       "mathematical": true,
+	 *       "identification": false,
+	 *       "randomChoices": false,
+	 *       "hasChoiceImages": false
+	 *     },
+	 *     {
+	 *       "title": "Who wrote 'To Kill a Mockingbird'?",
+	 *       "choices": ["Harper Lee", "Mark Twain", "J.K. Rowling", "Ernest Hemingway"],
+	 *       "correctAnswerIndex": 0,
+	 *       "mathematical": false,
+	 *       "identification": true,
+	 *       "randomChoices": false,
+	 *       "hasChoiceImages": false
+	 *     },
+	 *     {
+	 *       "title": "What is the capital of France?",
+	 *       "choices": ["Paris", "London", "Berlin", "Madrid"],
+	 *       "correctAnswerIndex": 0,
+	 *       "mathematical": false,
+	 *       "identification": false,
+	 *       "randomChoices": false,
+	 *       "hasChoiceImages": false
+	 *     }
+	 *   ]
+	 * }
+	 */
+
+	const handleImportQuiz = (event) => {
+		const file = event.target.files[0];
+		setImportError('');
+		if (!file) return;
+		const reader = new FileReader();
+		reader.onload = (e) => {
+			try {
+				const data = JSON.parse(e.target.result);
+
+				// Validate structure
+				if (
+					typeof data !== 'object' ||
+					!data.quiz_title ||
+					!Array.isArray(data.questions) ||
+					data.questions.length === 0
+				) {
+					setImportError('Invalid quiz JSON structure.');
+					return;
+				}
+
+				// Set quiz-level fields
+				setQuizTitle(data.quiz_title);
+				setQuizTitleInput(data.quiz_title);
+				setSelectedColor(data.tag_color || colors[0].hex);
+				setQuizType(data.quizType || 'list');
+				setRandomQuestionOrder(!!data.randomQuestions);
+				setRandomQuestionChoices(data.questions.some((q) => q.randomChoices === true));
+
+				// Quiz image: not supported via JSON (file), so clear
+				setQuizImage(null);
+				setQuizImagePreview(null);
+
+				// Map questions, ensure all required fields, and assign unique IDs
+				const mappedQuestions = data.questions.map((q, idx) => {
+					let choices;
+					// For mathematical questions, ensure choices are always an array of strings (for input fields)
+					if (!!q.mathematical) {
+						// If choices is not an array or is empty, provide 4 empty strings for input fields
+						if (!Array.isArray(q.choices) || q.choices.length === 0) {
+							choices = ['', '', '', ''];
+						} else {
+							// If choices exist, ensure all are strings (for input fields)
+							choices = q.choices.map((c) => {
+								let val = typeof c === 'string' ? c : '';
+								// Fix: If the string contains a single backslash, replace with a single backslash.
+								// This is to ensure that JSON-encoded LaTeX like "\\frac{a}{b}" or "\frac{a}{b}" is normalized to "\frac{a}{b}"
+								// Only do this for mathematical questions
+								val = val.replace(/\\\\/g, '\\'); // Replace double backslash with single
+								// If any remaining single backslash not followed by another backslash, keep as is (for LaTeX)
+								return val;
+							});
+							// Pad to at least 4 choices for UI consistency
+							while (choices.length < 4) choices.push('');
+						}
+					} else {
+						// For non-mathematical, use choices as is or default to 4 blanks
+						choices = Array.isArray(q.choices) ? q.choices : ['', '', '', ''];
+						while (choices.length < 4) choices.push('');
+					}
+
+					const base = {
+						id: idx + 1,
+						title: q.title || '',
+						choices,
+						choiceImages: new Array(choices.length).fill(null),
+						choiceImagePreviews: new Array(choices.length).fill(null),
+						correctAnswerIndex: typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : 0,
+						mathematical: !!q.mathematical,
+						identification: !!q.identification,
+						randomChoices: !!q.randomChoices,
+						hasChoiceImages: !!q.hasChoiceImages,
+						question_image: null,
+						question_image_preview: null
+					};
+					return base;
+				});
+				setQuestions(mappedQuestions);
+			} catch (err) {
+				console.log(err);
+				setImportError('Failed to parse JSON: ' + err.message);
+			}
+		};
+		reader.readAsText(file);
+	};
+
+	const triggerImport = () => {
+		if (fileInputRef.current) {
+			fileInputRef.current.value = '';
+			fileInputRef.current.click();
 		}
-	]);
+	};
 
 	const handleQuizTitleChange = (event) => {
 		const newTitle = event.target.value;
@@ -72,7 +222,6 @@ export default function CreateQuizPage() {
 
 	const removeQuestion = (questionID) => {
 		const updatedQuestions = questions.filter((question) => question.id !== questionID);
-
 		setQuestions(updatedQuestions);
 	};
 
@@ -81,15 +230,12 @@ export default function CreateQuizPage() {
 			question.id === id
 				? {
 						...question,
-						choices: question.choices.filter((choice, indx) => indx !== index),
-						choiceImages: question.choiceImages.filter((img, indx) => indx !== index),
-						choiceImagePreviews: question.choiceImagePreviews.filter(
-							(preview, indx) => indx !== index
-						)
+						choices: question.choices.filter((_, indx) => indx !== index),
+						choiceImages: question.choiceImages.filter((_, indx) => indx !== index),
+						choiceImagePreviews: question.choiceImagePreviews.filter((_, indx) => indx !== index)
 					}
 				: question
 		);
-
 		setQuestions(updatedQuestions);
 	};
 
@@ -104,7 +250,6 @@ export default function CreateQuizPage() {
 					}
 				: question
 		);
-
 		setQuestions(updatedQuestions);
 	};
 
@@ -292,40 +437,8 @@ export default function CreateQuizPage() {
 
 	const addQuestion = () => {
 		const updatedQuestions = randomQuestionChoices
-			? [
-					...questions,
-					{
-						id: questions.length + 1,
-						title: '',
-						choices: ['', '', '', ''],
-						choiceImages: [null, null, null, null],
-						choiceImagePreviews: [null, null, null, null],
-						correctAnswerIndex: 0,
-						mathematical: false,
-						identification: false,
-						randomChoices: true,
-						hasChoiceImages: false,
-						question_image: null,
-						question_image_preview: null
-					}
-				]
-			: [
-					...questions,
-					{
-						id: questions.length + 1,
-						title: '',
-						choices: ['', '', '', ''],
-						choiceImages: [null, null, null, null],
-						choiceImagePreviews: [null, null, null, null],
-						correctAnswerIndex: 0,
-						mathematical: false,
-						identification: false,
-						randomChoices: false,
-						hasChoiceImages: false,
-						question_image: null,
-						question_image_preview: null
-					}
-				];
+			? [...questions, getDefaultQuestion(questions.length + 1, true)]
+			: [...questions, getDefaultQuestion(questions.length + 1, false)];
 		setQuestions(updatedQuestions);
 	};
 
@@ -349,7 +462,26 @@ export default function CreateQuizPage() {
 			setLoading(true);
 			const response = await generateQuiz(topic, questionNumber);
 			if (response.status == 200 || response.statusText == 'OK') {
-				setQuestions(response.data.quiz_data.questions);
+				// Map AI-generated questions to our internal structure
+				const aiQuestions = response.data.quiz_data.questions.map((q, idx) => ({
+					id: idx + 1,
+					title: q.title || '',
+					choices: Array.isArray(q.choices) ? q.choices : ['', '', '', ''],
+					choiceImages: Array.isArray(q.choices)
+						? new Array(q.choices.length).fill(null)
+						: [null, null, null, null],
+					choiceImagePreviews: Array.isArray(q.choices)
+						? new Array(q.choices.length).fill(null)
+						: [null, null, null, null],
+					correctAnswerIndex: typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : 0,
+					mathematical: !!q.mathematical,
+					identification: !!q.identification,
+					randomChoices: !!q.randomChoices,
+					hasChoiceImages: !!q.hasChoiceImages,
+					question_image: null,
+					question_image_preview: null
+				}));
+				setQuestions(aiQuestions);
 			}
 			setLoading(false);
 			return response;
@@ -360,7 +492,6 @@ export default function CreateQuizPage() {
 	};
 
 	useEffect(() => {}, [questions, selectedColor]);
-
 	useEffect(() => {}, [quizTitle]);
 
 	return (
@@ -370,6 +501,25 @@ export default function CreateQuizPage() {
 			<div className="mt-4 flex flex-col gap-8 lg:flex-row lg:gap-12">
 				{/* Main Content: Questions */}
 				<div className="flex flex-1 flex-col">
+					{/* Import Quiz JSON */}
+					<div className="mb-4 flex items-center gap-3">
+						<input
+							type="file"
+							accept="application/json"
+							ref={fileInputRef}
+							onChange={handleImportQuiz}
+							className="hidden"
+						/>
+						<button
+							type="button"
+							onClick={triggerImport}
+							className="flex items-center gap-2 rounded-lg bg-gray-200 px-3 py-2 text-xs font-medium text-gray-700 transition hover:bg-blue-100"
+						>
+							<Import className="h-4 w-4" />
+							Import Quiz (JSON)
+						</button>
+						{importError && <span className="text-xs text-red-500">{importError}</span>}
+					</div>
 					{questions.map((question, index) => (
 						<div
 							className="mb-6 w-full rounded-xl border border-gray-100 bg-white/80 p-4 shadow-md md:p-6"
@@ -382,7 +532,7 @@ export default function CreateQuizPage() {
 									onClick={() => removeQuestion(question.id)}
 									aria-label="Remove question"
 								>
-									<FontAwesomeIcon icon={faXmark} className="h-4 w-4 text-red-500" />
+									<X className="h-4 w-4 text-red-500" />
 								</button>
 							</div>
 							<input
@@ -408,7 +558,7 @@ export default function CreateQuizPage() {
 											className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-500 transition hover:bg-red-600"
 											aria-label="Remove image"
 										>
-											<FontAwesomeIcon icon={faXmark} className="h-3 w-3 text-white" />
+											<X className="h-3 w-3 text-white" />
 										</button>
 									</div>
 								) : (
@@ -420,7 +570,7 @@ export default function CreateQuizPage() {
 											className="hidden"
 										/>
 										<div className="flex flex-col items-center">
-											<FontAwesomeIcon icon={faPlus} className="mb-1 h-5 w-5 text-gray-400" />
+											<Plus className="mb-1 h-5 w-5 text-gray-400" />
 											<p className="text-xs text-gray-400">Add Image</p>
 										</div>
 									</label>
@@ -440,10 +590,7 @@ export default function CreateQuizPage() {
 										handleInputChange(question.id, 'mathematical', !question.mathematical)
 									}
 								>
-									<FontAwesomeIcon
-										icon={faCheck}
-										className={`h-3 w-3 ${question.mathematical ? '' : 'opacity-0'}`}
-									/>
+									<Check className={`h-3 w-3 ${question.mathematical ? '' : 'opacity-0'}`} />
 									Mathematical
 								</button>
 								<button
@@ -456,10 +603,7 @@ export default function CreateQuizPage() {
 										handleInputChange(question.id, 'identification', !question.identification)
 									}
 								>
-									<FontAwesomeIcon
-										icon={faCheck}
-										className={`h-3 w-3 ${question.identification ? '' : 'opacity-0'}`}
-									/>
+									<Check className={`h-3 w-3 ${question.identification ? '' : 'opacity-0'}`} />
 									Identification
 								</button>
 								<button
@@ -475,8 +619,7 @@ export default function CreateQuizPage() {
 									}
 									disabled={question.identification}
 								>
-									<FontAwesomeIcon
-										icon={faCheck}
+									<Check
 										className={`h-3 w-3 ${question.randomChoices && !question.identification ? '' : 'opacity-0'}`}
 									/>
 									Random Choices
@@ -499,9 +642,7 @@ export default function CreateQuizPage() {
 											onClick={() => handleInputChange(question.id, 'correctAnswerIndex', 0)}
 											aria-label="Mark as correct"
 										>
-											{question.correctAnswerIndex == 0 && (
-												<FontAwesomeIcon icon={faCheck} className="h-3 w-3 text-white" />
-											)}
+											{question.correctAnswerIndex == 0 && <Check className="h-3 w-3 text-white" />}
 										</button>
 										<input
 											type="text"
@@ -525,7 +666,7 @@ export default function CreateQuizPage() {
 												aria-label="Mark as correct"
 											>
 												{question.correctAnswerIndex == choice_index && (
-													<FontAwesomeIcon icon={faCheck} className="h-3 w-3 text-white" />
+													<Check className="h-3 w-3 text-white" />
 												)}
 											</button>
 											<input
@@ -543,7 +684,7 @@ export default function CreateQuizPage() {
 												onClick={() => removeChoice(question.id, choice_index)}
 												aria-label="Remove choice"
 											>
-												<FontAwesomeIcon icon={faXmark} className="h-3 w-3 text-red-500" />
+												<X className="h-3 w-3 text-red-500" />
 											</button>
 											{/* Choice Image Upload */}
 											<div className="ml-2 w-24">
@@ -559,7 +700,7 @@ export default function CreateQuizPage() {
 															className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 transition hover:bg-red-600"
 															aria-label="Remove choice image"
 														>
-															<FontAwesomeIcon icon={faXmark} className="h-2 w-2 text-white" />
+															<X className="h-2 w-2 text-white" />
 														</button>
 													</div>
 												) : (
@@ -573,7 +714,7 @@ export default function CreateQuizPage() {
 															className="hidden"
 														/>
 														<div className="flex flex-col items-center">
-															<FontAwesomeIcon icon={faPlus} className="h-3 w-3 text-gray-400" />
+															<Plus className="h-3 w-3 text-gray-400" />
 															<p className="text-[10px] text-gray-400">Add</p>
 														</div>
 													</label>
@@ -587,7 +728,7 @@ export default function CreateQuizPage() {
 								className="mb-2 flex h-8 w-full items-center justify-center rounded-lg bg-green-500 text-xs font-semibold text-white transition hover:bg-green-600"
 								onClick={() => addChoice(question.id)}
 							>
-								<FontAwesomeIcon icon={faPlus} className="mr-1 h-4 w-4" />
+								<Plus className="mr-1 h-4 w-4" />
 								Add Choice
 							</button>
 						</div>
@@ -596,7 +737,7 @@ export default function CreateQuizPage() {
 						className="flex h-10 w-full items-center justify-center rounded-lg bg-blue-500 text-sm font-semibold text-white transition hover:bg-blue-600"
 						onClick={addQuestion}
 					>
-						<FontAwesomeIcon icon={faPlus} className="mr-2 h-5 w-5" />
+						<Plus className="mr-2 h-5 w-5" />
 						Add Question
 					</button>
 				</div>
@@ -620,9 +761,9 @@ export default function CreateQuizPage() {
 									aria-label={editQuizTitle ? 'Cancel edit' : 'Edit title'}
 								>
 									{editQuizTitle ? (
-										<FontAwesomeIcon icon={faXmark} className="h-4 w-4 text-gray-500" />
+										<X className="h-4 w-4 text-gray-500" />
 									) : (
-										<FontAwesomeIcon icon={faEdit} className="h-4 w-4 text-gray-500" />
+										<Pencil className="h-4 w-4 text-gray-500" />
 									)}
 								</button>
 								{editQuizTitle ? (
@@ -638,7 +779,7 @@ export default function CreateQuizPage() {
 											className="flex h-8 w-8 items-center justify-center rounded-full bg-green-500 transition hover:bg-green-600"
 											aria-label="Save title"
 										>
-											<FontAwesomeIcon icon={faCheck} className="h-4 w-4 text-white" />
+											<Check className="h-4 w-4 text-white" />
 										</button>
 									</form>
 								) : (
@@ -661,7 +802,7 @@ export default function CreateQuizPage() {
 										className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-500 transition hover:bg-red-600"
 										aria-label="Remove quiz image"
 									>
-										<FontAwesomeIcon icon={faXmark} className="h-3 w-3 text-white" />
+										<X className="h-3 w-3 text-white" />
 									</button>
 								</div>
 							) : (
@@ -673,7 +814,7 @@ export default function CreateQuizPage() {
 										className="hidden"
 									/>
 									<div className="flex flex-col items-center">
-										<FontAwesomeIcon icon={faPlus} className="mb-1 h-4 w-4 text-gray-400" />
+										<Plus className="mb-1 h-4 w-4 text-gray-400" />
 										<p className="text-xs text-gray-400">Add Quiz Image</p>
 									</div>
 								</label>
@@ -727,10 +868,7 @@ export default function CreateQuizPage() {
 							}`}
 							onClick={() => setRandomQuestionOrder(!randomQuestionOrder)}
 						>
-							<FontAwesomeIcon
-								icon={faCheck}
-								className={`h-3 w-3 ${randomQuestionOrder ? '' : 'opacity-0'}`}
-							/>
+							<Check className={`h-3 w-3 ${randomQuestionOrder ? '' : 'opacity-0'}`} />
 							Randomize Questions
 						</button>
 						<button
@@ -744,10 +882,7 @@ export default function CreateQuizPage() {
 								randomizeQuestionChoices(!randomQuestionChoices);
 							}}
 						>
-							<FontAwesomeIcon
-								icon={faCheck}
-								className={`h-3 w-3 ${randomQuestionChoices ? '' : 'opacity-0'}`}
-							/>
+							<Check className={`h-3 w-3 ${randomQuestionChoices ? '' : 'opacity-0'}`} />
 							Randomize Choices
 						</button>
 					</div>

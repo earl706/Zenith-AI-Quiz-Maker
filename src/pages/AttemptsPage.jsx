@@ -67,7 +67,7 @@ export default function AttemptsPage() {
 			setAttempts(Array.from(response.data.data));
 			return response;
 		} catch (err) {
-			return response;
+			return err;
 		}
 	};
 
@@ -87,17 +87,17 @@ export default function AttemptsPage() {
 								No attempts yet.
 							</div>
 						) : (
-							<div className="grid grid-cols-1 gap-6">
+							<div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
 								{attempts.map((attempt, index) => (
 									<div
 										key={index}
-										className="flex flex-col rounded-xl bg-white p-6 shadow-md transition hover:shadow-lg"
+										className="flex h-full flex-col rounded-xl bg-white p-6 shadow-md transition hover:shadow-lg"
 									>
-										<div className="mb-4 flex items-center justify-between">
-											<span className="truncate text-lg font-bold text-gray-800">
+										<div className="mb-2 flex items-center justify-between">
+											<span className="max-w-[60%] truncate text-lg font-bold text-gray-800">
 												{attempt.quiz_title}
 											</span>
-											<span className="text-xs text-gray-400">
+											<span className="ml-2 text-xs whitespace-nowrap text-gray-400">
 												{new Date(attempt.attempt_datetime).toLocaleDateString()}{' '}
 												{new Date(attempt.attempt_datetime).toLocaleTimeString([], {
 													hour: '2-digit',
@@ -105,10 +105,18 @@ export default function AttemptsPage() {
 												})}
 											</span>
 										</div>
-										<div className="flex flex-col items-center gap-4 sm:flex-row">
+										<div className="mt-2 flex flex-col items-center gap-4">
+											<div className="ml-2 flex flex-shrink-0 items-center justify-center">
+												<div className="h-10 w-10 sm:h-12 sm:w-12">
+													<AttemptAccuracyDoughnutGraph
+														data_points={[
+															attempt.score_accuracy_data.score,
+															attempt.quiz_data.questions.length - attempt.score_accuracy_data.score
+														]}
+													/>
+												</div>
+											</div>
 											<div className="grid flex-1 grid-cols-2 gap-x-4 gap-y-2 text-sm">
-												<div className="text-gray-500">Duration</div>
-												<div className="font-medium text-gray-700">{attempt.duration}</div>
 												<div className="text-gray-500">Score</div>
 												<div className="font-medium text-gray-700">
 													{attempt.score_accuracy_data.score} / {attempt.quiz_data.questions.length}
@@ -117,6 +125,8 @@ export default function AttemptsPage() {
 												<div className="font-medium text-gray-700">
 													{attempt.score_accuracy_data.accuracy}%
 												</div>
+												<div className="text-gray-500">Duration</div>
+												<div className="font-medium text-gray-700">{attempt.duration}</div>
 												<div className="text-gray-500">Mathematical</div>
 												<div className="font-medium text-gray-700">
 													{attempt.mathematical_questions}
@@ -124,16 +134,6 @@ export default function AttemptsPage() {
 												<div className="text-gray-500">Identification</div>
 												<div className="font-medium text-gray-700">
 													{attempt.identification_questions}
-												</div>
-											</div>
-											<div className="flex flex-shrink-0 items-center justify-center">
-												<div className="h-24 w-24 sm:h-32 sm:w-32">
-													<AttemptAccuracyDoughnutGraph
-														data_points={[
-															attempt.score_accuracy_data.score,
-															attempt.quiz_data.questions.length - attempt.score_accuracy_data.score
-														]}
-													/>
 												</div>
 											</div>
 										</div>
@@ -144,7 +144,7 @@ export default function AttemptsPage() {
 					</section>
 
 					{/* Sidebar: Most Recent & Most Accurate */}
-					<aside className="mt-8 flex w-full flex-col gap-8 lg:mt-0 lg:w-80">
+					<aside className="mt-8 flex w-full flex-col gap-8 lg:mt-0 lg:w-70">
 						<div>
 							<span className="mb-3 block text-base font-semibold text-gray-700">Most Recent</span>
 							<div className="flex flex-col gap-4">

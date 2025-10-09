@@ -1,21 +1,28 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { AuthProvider } from './context/AuthContext';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Navbar from './components/Navbar';
-import Dashboard from './pages/Dashboard';
-import QuizzesPage from './pages/QuizzesPage';
-import CreateQuizPage from './pages/CreateQuizPage';
-import EditQuizPage from './pages/EditQuizPage';
-import AttemptsPage from './pages/AttemptsPage';
-import AccuracyPage from './pages/AccuracyPage';
-import AchievementsPage from './pages/AchievementsPage';
-import QuizPage from './pages/QuizPage';
-import QuizAttempt from './pages/QuizAttempt';
+import LoadingComponent from './components/LoadingComponent';
+
+// Eager load only critical components for login page
 import LoginPage from './pages/LoginPage';
-import RegistrationPage from './pages/RegistrationPage';
-import VerificationPage from './pages/VerificationPage';
-import ResendVerification from './pages/ResendVerification';
-import VerificationSuccessPage from './pages/VerificationSuccessPage';
+
+// Lazy load Navbar to prevent FontAwesome from loading on initial page load
+const Navbar = lazy(() => import('./components/Navbar'));
+
+// Lazy load all other pages
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const QuizzesPage = lazy(() => import('./pages/QuizzesPage'));
+const CreateQuizPage = lazy(() => import('./pages/CreateQuizPage'));
+const EditQuizPage = lazy(() => import('./pages/EditQuizPage'));
+const AttemptsPage = lazy(() => import('./pages/AttemptsPage'));
+const AccuracyPage = lazy(() => import('./pages/AccuracyPage'));
+const AchievementsPage = lazy(() => import('./pages/AchievementsPage'));
+const QuizPage = lazy(() => import('./pages/QuizPage'));
+const QuizAttempt = lazy(() => import('./pages/QuizAttempt'));
+const RegistrationPage = lazy(() => import('./pages/RegistrationPage'));
+const VerificationPage = lazy(() => import('./pages/VerificationPage'));
+const ResendVerification = lazy(() => import('./pages/ResendVerification'));
+const VerificationSuccessPage = lazy(() => import('./pages/VerificationSuccessPage'));
 
 function App() {
 	const [authenticated, setAuthenticated] = useState(false);
@@ -46,22 +53,30 @@ function App() {
 		<>
 			<AuthProvider>
 				<Router>
-					<Routes>
-						<Route index exact path="/login" element={<LoginPage performLogin={performLogin} />} />
-						<Route index exact path="/registration" element={<RegistrationPage />} />
-						<Route index exact path="/verify" element={<VerificationPage />} />
-						<Route index exact path="/resend-verification" element={<ResendVerification />} />
-						<Route index exact path="/verification" element={<VerificationSuccessPage />} />
-						{routes.map((route, index) => (
-							<Route
-								key={index}
-								path={route.route}
-								element={
-									authenticated ? <Navbar>{route.component}</Navbar> : <Navigate to="/login" />
-								}
-							/>
-						))}
-					</Routes>
+					<Suspense fallback={<LoadingComponent fullscreen light />}>
+						<Routes>
+							<Route index path="/login" element={<LoginPage performLogin={performLogin} />} />
+							<Route index path="/registration" element={<RegistrationPage />} />
+							<Route index path="/verify" element={<VerificationPage />} />
+							<Route index path="/resend-verification" element={<ResendVerification />} />
+							<Route index path="/verification" element={<VerificationSuccessPage />} />
+							{routes.map((route, index) => (
+								<Route
+									key={index}
+									path={route.route}
+									element={
+										authenticated ? (
+											<Suspense fallback={<LoadingComponent fullscreen light />}>
+												<Navbar>{route.component}</Navbar>
+											</Suspense>
+										) : (
+											<Navigate to="/login" />
+										)
+									}
+								/>
+							))}
+						</Routes>
+					</Suspense>
 				</Router>
 			</AuthProvider>
 		</>

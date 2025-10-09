@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import Latex from 'react-latex';
+import Latex from 'react-latex-next';
 
 export default function MathExpressionEncoder({ choice }) {
 	const [mathExpression, setMathExpression] = useState('');

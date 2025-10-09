@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import QuizFlashcardAttemptPage from './QuizFlashcardAttemptPage';
 import QuestionCard from '../components/QuestionCard';
@@ -9,6 +9,7 @@ import { AuthContext } from '../context/AuthContext';
 export default function QuizAttempt() {
 	const { attemptQuiz, getQuiz, deleteMode, setDeleteMode, quizDeleteData, submitQuizAnswers } =
 		useContext(AuthContext);
+	const navigate = useNavigate();
 
 	const questions_data = [
 		{
@@ -154,29 +155,30 @@ export default function QuizAttempt() {
 
 	return (
 		<>
-			<div className="px-[30px] pt-[18px] pb-[30px] transition-all">
+			<div className="min-h-screen px-2 py-4 transition-all sm:px-6 md:px-10 lg:px-16 xl:px-32">
 				<Header page={'Attempt'} />
 
 				{/* Quiz Title and Image */}
-				<div className="mb-[20px] text-center">
-					<h1 className="mb-[10px] text-[24px] font-bold text-[#646464]">{quizData.quiz_title}</h1>
-
-					{/* Quiz Image Display */}
+				<div className="mb-8 flex flex-col items-center">
+					<h1 className="mb-2 text-center text-2xl font-extrabold text-gray-800 sm:text-3xl">
+						{quizData.quiz_title}
+					</h1>
 					{quizData.quiz_image && (
-						<div className="mb-[20px] flex justify-center">
+						<div className="mb-4 flex justify-center">
 							<img
 								src={quizData.quiz_image}
 								alt="Quiz"
-								className="max-h-[150px] rounded-[15px] object-cover"
+								className="max-h-52 w-auto rounded-2xl object-cover shadow-md"
 							/>
 						</div>
 					)}
 				</div>
 
-				<div className="flex gap-[40px]">
-					{quizResults ? (
-						<>
-							<div className="flex w-full flex-col gap-[10px]">
+				<div className="mx-auto flex w-full max-w-5xl flex-col gap-8 md:flex-row md:gap-10">
+					{/* Main Content */}
+					<div className="flex flex-1 flex-col gap-6">
+						{quizResults ? (
+							<div className="flex flex-col gap-4">
 								{questions.map((question, index) => {
 									const answer = answers.find((a) => a.id === question.id);
 									const correct =
@@ -193,54 +195,75 @@ export default function QuizAttempt() {
 										/>
 									);
 								})}
+								{/* Retake and Go Back Buttons */}
+								<div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
+									<button
+										onClick={() => {
+											// Use react-router-dom navigation to retake (reload) the quiz attempt page
+											navigate(`/quizzes/attempt/${quiz_id}`, { replace: true });
+										}}
+										className="rounded-xl bg-gradient-to-r from-blue-500 to-blue-700 px-6 py-3 text-lg font-bold text-white shadow transition hover:from-blue-600 hover:to-blue-800 focus:ring-2 focus:ring-blue-300 focus:outline-none"
+									>
+										Retake Quiz
+									</button>
+									<button
+										onClick={() => {
+											navigate('/quizzes');
+										}}
+										className="rounded-xl bg-gradient-to-r from-gray-400 to-gray-600 px-6 py-3 text-lg font-bold text-white shadow transition hover:from-gray-500 hover:to-gray-700 focus:ring-2 focus:ring-gray-300 focus:outline-none sm:ml-3"
+									>
+										Go to Quiz List
+									</button>
+								</div>
 							</div>
-						</>
-					) : quizData.flashcard_quiz ? (
-						<div className="flex w-[67%] flex-col">
-							<QuizFlashcardAttemptPage
-								questionsParam={questions}
-								submitAnswers={submitAnswers}
-								handleAnswerChange={handleAnswerChange}
-								handleIdentificationAnswerChange={handleIdentificationAnswerChange}
-								answers={answers}
-							/>
-						</div>
-					) : (
-						<div className="flex w-[67%] flex-col">
-							{questions.map((question, index) => {
-								return (
-									<>
-										<QuestionCard
-											question={question}
-											answers={answers}
-											handleAnswerChange={handleAnswerChange}
-											handleIdentificationAnswerChange={handleIdentificationAnswerChange}
-											key={index}
-										/>
-									</>
-								);
-							})}
-							<button
-								onClick={submitAnswers}
-								className="w-full cursor-pointer rounded-full bg-[#00CA4E] p-[10px] text-[16px] font-extrabold text-white transition-all hover:bg-[#00AA2E]"
-							>
-								Submit
-							</button>
-						</div>
-					)}
-
-					<div className="flex w-[29%] flex-col">
-						<span className="mb-[20px] w-full text-center text-[16px] font-bold">Time</span>
-						<div className="mb-[20px] flex w-full flex-col items-center justify-center rounded-full bg-[#3C6B9F] p-4 text-white drop-shadow-lg">
-							<p className="font-mono text-3xl text-white">{formatTime(time)}</p>
-						</div>
-						{quizResults ? (
-							<div className="flex w-full flex-col rounded-full bg-[#3C6B9F] py-[20px] text-center font-bold text-white">
-								<span className="">Score: {score}</span>
-								<span className="">Accuracy: {accuracy}</span>
+						) : quizData.flashcard_quiz ? (
+							<div className="flex flex-col">
+								<QuizFlashcardAttemptPage
+									questionsParam={questions}
+									submitAnswers={submitAnswers}
+									handleAnswerChange={handleAnswerChange}
+									handleIdentificationAnswerChange={handleIdentificationAnswerChange}
+									answers={answers}
+								/>
 							</div>
 						) : (
-							''
+							<div className="flex flex-col gap-4">
+								{questions.map((question, index) => (
+									<QuestionCard
+										question={question}
+										answers={answers}
+										handleAnswerChange={handleAnswerChange}
+										handleIdentificationAnswerChange={handleIdentificationAnswerChange}
+										key={index}
+									/>
+								))}
+								<button
+									onClick={submitAnswers}
+									className="mt-4 w-full rounded-xl bg-gradient-to-r from-green-500 to-lime-500 py-3 text-lg font-bold text-white shadow transition hover:from-green-600 hover:to-lime-600 focus:ring-2 focus:ring-green-300 focus:outline-none"
+								>
+									Submit
+								</button>
+							</div>
+						)}
+					</div>
+
+					{/* Sidebar: Timer and Results */}
+					<div className="mt-8 flex w-full flex-col items-center md:mt-0 md:w-80">
+						<span className="mb-4 w-full text-center text-base font-semibold tracking-wide text-gray-700">
+							Time
+						</span>
+						<div className="mb-6 flex w-full flex-col items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 p-6 shadow-lg">
+							<p className="font-mono text-4xl text-white">{formatTime(time)}</p>
+						</div>
+						{quizResults && (
+							<div className="flex w-full flex-col items-center gap-2 rounded-2xl bg-gradient-to-br from-green-500 to-lime-500 py-6 text-center font-bold text-white shadow">
+								<span className="text-lg">
+									Score: <span className="font-extrabold">{score}</span>
+								</span>
+								<span className="text-lg">
+									Accuracy: <span className="font-extrabold">{accuracy}</span>
+								</span>
+							</div>
 						)}
 					</div>
 				</div>

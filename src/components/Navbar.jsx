@@ -1,18 +1,26 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-	faAdd,
-	faBookOpenReader,
-	faBox,
-	faBullseye,
-	faGear,
-	faPen,
-	faQuestion,
-	faRightFromBracket,
-	faTrophy
-} from '@fortawesome/free-solid-svg-icons';
+	Box,
+	BookOpen,
+	Target,
+	Settings,
+	Pen,
+	HelpCircle,
+	LogOut,
+	Trophy,
+	Plus
+} from 'lucide-react';
 import zenithLogoLight from '/src/assets/ZENITH - LOGO DARK.png';
+
+const navIcons = {
+	Dashboard: Box,
+	Quizzes: HelpCircle,
+	'Create Quiz': Plus,
+	Attempts: Pen
+	// Accuracy: Target,
+	// Achievements: Trophy,
+};
 
 export default function Navbar({ children }) {
 	const [activeItemHover, setActiveItemHover] = useState('');
@@ -20,12 +28,12 @@ export default function Navbar({ children }) {
 	const location = window.location.pathname;
 
 	const navigationItems = [
-		{ navItem: 'Dashboard', link: '/', icon: faBox },
-		{ navItem: 'Quizzes', link: '/quizzes', icon: faQuestion },
-		{ navItem: 'Create Quiz', link: '/create-quiz', icon: faAdd },
-		{ navItem: 'Attempts', link: '/attempts', icon: faPen }
-		// { navItem: "Accuracy", link: "/accuracy", icon: faBullseye },
-		// { navItem: "Achievements", link: "/achievements", icon: faTrophy },
+		{ navItem: 'Dashboard', link: '/', icon: 'Dashboard' },
+		{ navItem: 'Quizzes', link: '/quizzes', icon: 'Quizzes' },
+		{ navItem: 'Create Quiz', link: '/create-quiz', icon: 'Create Quiz' },
+		{ navItem: 'Attempts', link: '/attempts', icon: 'Attempts' }
+		// { navItem: "Accuracy", link: "/accuracy", icon: "Accuracy" },
+		// { navItem: "Achievements", link: "/achievements", icon: "Achievements" },
 	];
 
 	useEffect(() => {}, [location]);
@@ -50,6 +58,7 @@ export default function Navbar({ children }) {
 						{navigationItems.map((navItem, index) => {
 							const isActive = navItem.link === location;
 							const isHover = activeItemHover === navItem.link;
+							const LucideIcon = navIcons[navItem.icon];
 							return (
 								<li
 									key={index}
@@ -73,7 +82,7 @@ export default function Navbar({ children }) {
 													: 'text-[#b2c2a2] group-hover:text-[#6F8055]'
 											}`}
 										>
-											<FontAwesomeIcon icon={navItem.icon} className="h-full w-full" />
+											{LucideIcon && <LucideIcon className="h-full w-full" />}
 										</span>
 										<span className="hidden lg:block">{navItem.navItem}</span>
 									</NavLink>
@@ -100,7 +109,7 @@ export default function Navbar({ children }) {
 									: 'text-[#b2c2a2] group-hover:text-red-600'
 							} transition-all`}
 						>
-							<FontAwesomeIcon icon={faRightFromBracket} className="h-full w-full" />
+							<LogOut className="h-full w-full" />
 						</span>
 						<span className="hidden lg:block">Logout</span>
 					</NavLink>

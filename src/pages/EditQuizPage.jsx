@@ -2,15 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import MathInput from '../components/MathInput';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import {
-	faCheck,
-	faEdit,
-	faPlus,
-	faXmark,
-	faSave,
-	faArrowLeft
-} from '@fortawesome/free-solid-svg-icons';
+import { Check, Pencil, Plus, X, Save, ArrowLeft } from 'lucide-react';
 import Header from '../components/Header';
 import LoadingComponent from '../components/LoadingComponent';
 
@@ -446,7 +438,7 @@ export default function EditQuizPage() {
 				onClick={() => navigate(`/quizzes/${id}`)}
 				className="mb-4 flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-gray-700 hover:bg-gray-200"
 			>
-				<FontAwesomeIcon icon={faArrowLeft} />
+				<ArrowLeft size={18} />
 				Back to Quiz
 			</button>
 
@@ -467,7 +459,7 @@ export default function EditQuizPage() {
 									type="submit"
 									className="rounded-lg bg-green-500 p-2 text-white hover:bg-green-600"
 								>
-									<FontAwesomeIcon icon={faCheck} />
+									<Check size={18} />
 								</button>
 								<button
 									type="button"
@@ -477,7 +469,7 @@ export default function EditQuizPage() {
 									}}
 									className="rounded-lg bg-red-500 p-2 text-white hover:bg-red-600"
 								>
-									<FontAwesomeIcon icon={faXmark} />
+									<X size={18} />
 								</button>
 							</form>
 						) : (
@@ -487,7 +479,7 @@ export default function EditQuizPage() {
 									onClick={() => setEditQuizTitle(true)}
 									className="rounded-lg bg-blue-500 p-2 text-white hover:bg-blue-600"
 								>
-									<FontAwesomeIcon icon={faEdit} />
+									<Pencil size={18} />
 								</button>
 							</>
 						)}
@@ -506,7 +498,7 @@ export default function EditQuizPage() {
 									onClick={removeQuizImage}
 									className="absolute -top-2 -right-2 rounded-full bg-red-500 p-1 text-white hover:bg-red-600"
 								>
-									<FontAwesomeIcon icon={faXmark} />
+									<X size={16} />
 								</button>
 							</div>
 						) : (
@@ -662,7 +654,7 @@ export default function EditQuizPage() {
 										onClick={() => removeQuestion(question.id)}
 										className="rounded-lg bg-red-500 p-2 text-white hover:bg-red-600"
 									>
-										<FontAwesomeIcon icon={faXmark} />
+										<X size={18} />
 									</button>
 								</div>
 
@@ -688,7 +680,7 @@ export default function EditQuizPage() {
 												onClick={() => removeQuestionImage(question.id)}
 												className="absolute -top-2 -right-2 rounded-full bg-red-500 p-1 text-white hover:bg-red-600"
 											>
-												<FontAwesomeIcon icon={faXmark} />
+												<X size={16} />
 											</button>
 										</div>
 									) : (
@@ -755,7 +747,7 @@ export default function EditQuizPage() {
 												onClick={() => addChoice(question.id)}
 												className="rounded-lg bg-green-500 p-2 text-white hover:bg-green-600"
 											>
-												<FontAwesomeIcon icon={faPlus} />
+												<Plus size={18} />
 											</button>
 										</div>
 										{question.mathematical ? (
@@ -798,7 +790,7 @@ export default function EditQuizPage() {
 																onClick={() => removeChoiceImage(question.id, choiceIndex)}
 																className="absolute -top-1 -right-1 rounded-full bg-red-500 p-1 text-white hover:bg-red-600"
 															>
-																<FontAwesomeIcon icon={faXmark} />
+																<X size={14} />
 															</button>
 														</div>
 													) : (
@@ -825,7 +817,7 @@ export default function EditQuizPage() {
 															onClick={() => removeChoice(question.id, choiceIndex)}
 															className="rounded-lg bg-red-500 p-2 text-white hover:bg-red-600"
 														>
-															<FontAwesomeIcon icon={faXmark} />
+															<X size={18} />
 														</button>
 													)}
 												</div>
@@ -841,7 +833,7 @@ export default function EditQuizPage() {
 							onClick={addQuestion}
 							className="flex w-full items-center justify-center gap-2 rounded-[20px] border-2 border-dashed border-gray-300 p-[30px] text-gray-500 hover:border-gray-400 hover:text-gray-700"
 						>
-							<FontAwesomeIcon icon={faPlus} />
+							<Plus size={20} />
 							Add Question
 						</button>
 					</div>
@@ -857,7 +849,7 @@ export default function EditQuizPage() {
 								<LoadingComponent />
 							) : (
 								<>
-									<FontAwesomeIcon icon={faSave} />
+									<Save size={20} />
 									Save Changes
 								</>
 							)}

@@ -54,8 +54,12 @@ export default function LoginPage({ performLogin }) {
 
 	useEffect(() => {
 		console.log('zenithQuizMakerAccessToken', localStorage.getItem('zenithQuizMakerAccessToken'));
+		// Defer auto-login to not block initial render
 		if (localStorage.getItem('zenithQuizMakerAccessToken')) {
-			handleSavedLogin(localStorage.getItem('zenithQuizMakerRefreshToken'));
+			// Use setTimeout to defer to next event loop, allowing page to render first
+			setTimeout(() => {
+				handleSavedLogin(localStorage.getItem('zenithQuizMakerRefreshToken'));
+			}, 0);
 		}
 	}, []);
 	return (

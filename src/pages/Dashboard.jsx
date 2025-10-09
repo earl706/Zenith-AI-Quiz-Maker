@@ -1,14 +1,13 @@
 import React, { useContext, useEffect, useState } from 'react';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
-	faAngleDown,
-	faAnglesRight,
-	faBullseye,
-	faChartPie,
-	faHourglass,
-	faUpDownLeftRight,
-	faXmark
-} from '@fortawesome/free-solid-svg-icons';
+	ChevronDown,
+	ChevronsRight,
+	CircleX,
+	Move,
+	Target,
+	PieChart,
+	Hourglass
+} from 'lucide-react';
 import zenithLogoDark from '/src/assets/ZENITH - LOGO DARK.png';
 import AttemptAccuracyDoughnutGraph from '../components/AttemptAccuracyDoughnutGraph';
 import Header from '../components/Header';
@@ -150,7 +149,7 @@ export default function Dashboard() {
 							className="flex items-center rounded-full bg-[#EFF7FF] px-4 py-2 text-xs font-medium text-[#6F8055] transition hover:bg-[#e0e9f2] focus:outline-none"
 						>
 							<span className="mr-2">{filter}</span>
-							<FontAwesomeIcon icon={faAngleDown} className="h-3 w-3" />
+							<ChevronDown className="h-3 w-3" />
 						</button>
 					))}
 				</div>
@@ -221,21 +220,21 @@ export default function Dashboard() {
 											title="Delete"
 											className="rounded-full bg-red-100 p-2 text-red-500 transition hover:bg-red-200"
 										>
-											<FontAwesomeIcon icon={faXmark} className="h-4 w-4" />
+											<CircleX className="h-4 w-4" />
 										</button>
 										<button
 											onClick={() => navigate(`/quizzes/${quiz.quiz_id}`)}
 											title="View"
 											className="rounded-full bg-yellow-100 p-2 text-yellow-600 transition hover:bg-yellow-200"
 										>
-											<FontAwesomeIcon icon={faUpDownLeftRight} className="h-4 w-4" />
+											<Move className="h-4 w-4" />
 										</button>
 										<button
 											onClick={() => navigate(`/quizzes/attempt/${quiz.quiz_id}`)}
 											title="Attempt"
 											className="rounded-full bg-green-100 p-2 text-green-600 transition hover:bg-green-200"
 										>
-											<FontAwesomeIcon icon={faAnglesRight} className="h-4 w-4" />
+											<ChevronsRight className="h-4 w-4" />
 										</button>
 									</div>
 								</div>
@@ -276,17 +275,17 @@ export default function Dashboard() {
 										</div>
 										<div className="flex flex-wrap gap-3 text-xs text-gray-600">
 											<div className="flex items-center gap-1">
-												<FontAwesomeIcon icon={faHourglass} className="h-3 w-3" />
+												<Hourglass className="h-3 w-3" />
 												<span className="font-medium">{attempt.duration}</span>
 											</div>
 											<div className="flex items-center gap-1">
-												<FontAwesomeIcon icon={faBullseye} className="h-3 w-3" />
+												<Target className="h-3 w-3" />
 												<span className="font-medium">
 													{attempt.score.accuracy ? attempt.score.accuracy : 'Unfinished'}
 												</span>
 											</div>
 											<div className="flex items-center gap-1">
-												<FontAwesomeIcon icon={faChartPie} className="h-3 w-3" />
+												<PieChart className="h-3 w-3" />
 												<span className="font-medium">
 													{attempt.score_accuracy ? attempt.score_accuracy : 'Unfinished'}
 												</span>
