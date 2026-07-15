@@ -15,7 +15,6 @@
   },
   "dependencies": {
     "@babel/traverse": "^7.28.0",
-    "@originjs/vite-plugin-commonjs": "^1.0.3",
     "@tailwindcss/vite": "^4.0.12",
     "@vitejs/plugin-react-swc": "^3.8.0",
     "axios": "^1.8.2",
