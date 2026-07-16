@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useContext } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { AuthContext } from '../context/AuthContext';
-import MathInput from '../components/MathInput';
-import { Check, Pencil, Plus, X, Save, ArrowLeft } from 'lucide-react';
-import Header from '../components/Header';
-import LoadingComponent from '../components/LoadingComponent';
+import { Check, Plus, X, Save, ArrowLeft, Pencil } from 'lucide-react';
+
+import { api } from '../lib/api';
+import { toast } from '../stores/toastStore';
+import { PageHeader } from '../components/layout/PageHeader';
+import { Button, Card, CardBody, CardHeader, Input, LoadingScreen } from '../components/ui';
+import MathInput from '../components/quiz/MathInput';
 
 const colors = [
 	{ name: 'Red', hex: '#EF4444' },
@@ -25,7 +27,6 @@ const colors = [
 ];
 
 export default function EditQuizPage() {
-	const { getQuiz, updateQuiz, setQuizzes, quizzes } = useContext(AuthContext);
 	const navigate = useNavigate();
 	const { id } = useParams();
 
@@ -33,11 +34,8 @@ export default function EditQuizPage() {
 	const [saving, setSaving] = useState(false);
 	const [randomQuestionOrder, setRandomQuestionOrder] = useState(false);
 	const [randomQuestionChoices, setRandomQuestionChoices] = useState(false);
-	const [view, setView] = useState('list');
 	const [quizType, setQuizType] = useState('list');
 	const [quizTitle, setQuizTitle] = useState('');
-	const [quizTitleInput, setQuizTitleInput] = useState('');
-	const [editQuizTitle, setEditQuizTitle] = useState(false);
 	const [selectedColor, setSelectedColor] = useState(colors[0].hex);
 	const [quizImage, setQuizImage] = useState(null);
 	const [quizImagePreview, setQuizImagePreview] = useState(null);
@@ -45,19 +43,15 @@ export default function EditQuizPage() {
 	const [questions, setQuestions] = useState([]);
 	const [isPublic, setIsPublic] = useState(false);
 
-	// Load existing quiz data
 	useEffect(() => {
 		const loadQuizData = async () => {
 			try {
 				setLoading(true);
-				const response = await getQuiz(id, false); // Don't randomize for editing
+				const response = await api.get(`/quizzes/quiz/${id}/`);
+				const quizData = response.data.data || response.data;
+				const questionsData = response.data.questions || quizData.questions || [];
 
-				const quizData = response.data.data;
-				const questionsData = response.data.questions;
-
-				// Set quiz properties
 				setQuizTitle(quizData.quiz_title);
-				setQuizTitleInput(quizData.quiz_title);
 				setSelectedColor(quizData.tag_color);
 				setRandomQuestionOrder(quizData.random_question_order);
 				setIsPublic(quizData.public);
@@ -65,25 +59,10 @@ export default function EditQuizPage() {
 				setOriginalQuizImage(quizData.quiz_image);
 				setQuizImagePreview(quizData.quiz_image);
 
-				// Transform questions data to match the form structure
 				const transformedQuestions = questionsData.map((question, index) => {
-					// Determine question type based on choices and properties
-					let questionType = 'MUL';
-					if (question.question_type === 'IDE' || question.question_type === 'IDE-COM') {
-						questionType = 'IDE';
-					} else if (question.question_type === 'MUL-COM' || question.question_type === 'COM') {
-						questionType = 'MUL-COM';
-					}
-
-					// Transform choices to handle both string and object formats
-					const transformedChoices = question.choices.map((choice) => {
-						if (typeof choice === 'object' && choice !== null) {
-							return choice.text || choice;
-						}
-						return choice;
-					});
-
-					// Find correct answer index
+					const transformedChoices = question.choices.map((choice) =>
+						typeof choice === 'object' && choice !== null ? choice.text || choice : choice
+					);
 					const correctAnswerIndex = transformedChoices.findIndex(
 						(choice) => choice === question.correct_answer
 					);
@@ -107,68 +86,79 @@ export default function EditQuizPage() {
 
 				setQuestions(transformedQuestions);
 				setLoading(false);
-			} catch (error) {
-				console.error('Error loading quiz:', error);
+			} catch {
 				setLoading(false);
-				// Redirect to quizzes page if quiz not found or not accessible
+				toast.error('Could not load quiz.');
 				navigate('/quizzes');
 			}
 		};
-
 		loadQuizData();
-	}, [id, getQuiz, navigate]);
+	}, [id, navigate]);
 
-	const handleQuizTitleChange = (event) => {
-		const newTitle = event.target.value;
-		setQuizTitleInput(newTitle);
+	const handleInputChange = (qid, field, value) => {
+		setQuestions((qs) => qs.map((q) => (q.id === qid ? { ...q, [field]: value } : q)));
 	};
 
-	const handleInputChange = (id, field, value) => {
-		const updatedQuestions = questions.map((question) =>
-			question.id === id ? { ...question, [field]: value } : question
+	const removeQuestion = (qid) => {
+		setQuestions((qs) => qs.filter((q) => q.id !== qid));
+	};
+
+	const removeChoice = (qid, index) => {
+		setQuestions((qs) =>
+			qs.map((q) =>
+				q.id === qid
+					? {
+							...q,
+							choices: q.choices.filter((_, i) => i !== index),
+							choiceImages: q.choiceImages.filter((_, i) => i !== index),
+							choiceImagePreviews: q.choiceImagePreviews.filter((_, i) => i !== index)
+						}
+					: q
+			)
 		);
-		setQuestions(updatedQuestions);
 	};
 
-	const removeQuestion = (questionID) => {
-		const updatedQuestions = questions.filter((question) => question.id !== questionID);
-		setQuestions(updatedQuestions);
-	};
-
-	const removeChoice = (id, index) => {
-		const updatedQuestions = questions.map((question) =>
-			question.id === id
-				? {
-						...question,
-						choices: question.choices.filter((choice, indx) => indx !== index),
-						choiceImages: question.choiceImages.filter((img, indx) => indx !== index),
-						choiceImagePreviews: question.choiceImagePreviews.filter(
-							(preview, indx) => indx !== index
-						)
-					}
-				: question
+	const addChoice = (qid) => {
+		setQuestions((qs) =>
+			qs.map((q) =>
+				q.id === qid
+					? {
+							...q,
+							choices: [...q.choices, ''],
+							choiceImages: [...q.choiceImages, null],
+							choiceImagePreviews: [...q.choiceImagePreviews, null]
+						}
+					: q
+			)
 		);
-		setQuestions(updatedQuestions);
 	};
 
-	const addChoice = (id) => {
-		const updatedQuestions = questions.map((question) =>
-			question.id === id
-				? {
-						...question,
-						choices: [...question.choices, ''],
-						choiceImages: [...question.choiceImages, null],
-						choiceImagePreviews: [...question.choiceImagePreviews, null]
-					}
-				: question
+	const handleChoicesChange = (qid, index, value) => {
+		setQuestions((qs) =>
+			qs.map((q) =>
+				q.id === qid ? { ...q, choices: q.choices.map((c, i) => (i === index ? value : c)) } : q
+			)
 		);
-		setQuestions(updatedQuestions);
 	};
 
-	const updateQuizTitle = (event) => {
-		event.preventDefault();
-		setQuizTitle(quizTitleInput);
-		setEditQuizTitle(false);
+	const addQuestion = () => {
+		setQuestions((qs) => [
+			...qs,
+			{
+				id: qs.length + 1,
+				title: '',
+				choices: ['', '', '', ''],
+				choiceImages: [null, null, null, null],
+				choiceImagePreviews: [null, null, null, null],
+				correctAnswerIndex: 0,
+				mathematical: false,
+				identification: false,
+				randomChoices: false,
+				hasChoiceImages: false,
+				question_image: null,
+				question_image_preview: null
+			}
+		]);
 	};
 
 	const handleQuizImageUpload = (event) => {
@@ -186,100 +176,30 @@ export default function EditQuizPage() {
 		if (file) {
 			const reader = new FileReader();
 			reader.onload = (e) => {
-				const updatedQuestions = questions.map((question) =>
-					question.id === questionId
-						? {
-								...question,
-								question_image: file,
-								question_image_preview: e.target.result
-							}
-						: question
+				setQuestions((qs) =>
+					qs.map((q) =>
+						q.id === questionId
+							? { ...q, question_image: file, question_image_preview: e.target.result }
+							: q
+					)
 				);
-				setQuestions(updatedQuestions);
 			};
 			reader.readAsDataURL(file);
 		}
 	};
 
-	const removeQuizImage = () => {
-		setQuizImage(null);
-		setQuizImagePreview(null);
-	};
-
-	const removeQuestionImage = (questionId) => {
-		const updatedQuestions = questions.map((question) =>
-			question.id === questionId
-				? {
-						...question,
-						question_image: null,
-						question_image_preview: null
-					}
-				: question
-		);
-		setQuestions(updatedQuestions);
-	};
-
-	const handleChoiceImageUpload = (questionId, choiceIndex, event) => {
-		const file = event.target.files[0];
-		if (file) {
-			const reader = new FileReader();
-			reader.onload = (e) => {
-				const updatedQuestions = questions.map((question) =>
-					question.id === questionId
-						? {
-								...question,
-								choiceImages: question.choiceImages.map((img, idx) =>
-									idx === choiceIndex ? file : img
-								),
-								choiceImagePreviews: question.choiceImagePreviews.map((preview, idx) =>
-									idx === choiceIndex ? e.target.result : preview
-								),
-								hasChoiceImages: true
-							}
-						: question
-				);
-				setQuestions(updatedQuestions);
-			};
-			reader.readAsDataURL(file);
-		}
-	};
-
-	const removeChoiceImage = (questionId, choiceIndex) => {
-		const updatedQuestions = questions.map((question) =>
-			question.id === questionId
-				? {
-						...question,
-						choiceImages: question.choiceImages.map((img, idx) =>
-							idx === choiceIndex ? null : img
-						),
-						choiceImagePreviews: question.choiceImagePreviews.map((preview, idx) =>
-							idx === choiceIndex ? null : preview
-						),
-						hasChoiceImages: question.choiceImages.some(
-							(img, idx) => idx !== choiceIndex && img !== null
-						)
-					}
-				: question
-		);
-		setQuestions(updatedQuestions);
-	};
-
-	// Helper function to convert file to base64
-	const fileToBase64 = (file) => {
-		return new Promise((resolve, reject) => {
+	const fileToBase64 = (file) =>
+		new Promise((resolve, reject) => {
 			const reader = new FileReader();
 			reader.readAsDataURL(file);
 			reader.onload = () => resolve(reader.result);
-			reader.onerror = (error) => reject(error);
+			reader.onerror = reject;
 		});
-	};
 
 	const handleUpdateQuiz = async (e) => {
 		e.preventDefault();
 		try {
 			setSaving(true);
-
-			// Prepare quiz data
 			const quizData = {
 				quiz_title: quizTitle,
 				public: isPublic,
@@ -288,18 +208,15 @@ export default function EditQuizPage() {
 				quizType: quizType === 'flashcard' ? 'flashcard' : 'quiz'
 			};
 
-			// Handle quiz image
 			if (quizImage) {
 				quizData.quiz_image = await fileToBase64(quizImage);
 			} else if (originalQuizImage) {
-				// Keep existing image if no new image is uploaded
 				quizData.quiz_image = originalQuizImage;
 			}
 
-			// Prepare questions data
-			const questionsData = await Promise.all(
+			quizData.questions = await Promise.all(
 				questions.map(async (question) => {
-					const questionData = {
+					const qData = {
 						title: question.title,
 						correctAnswerIndex: question.correctAnswerIndex,
 						randomChoices: question.randomChoices,
@@ -308,584 +225,296 @@ export default function EditQuizPage() {
 						hasChoiceImages: question.hasChoiceImages,
 						choices: question.choices
 					};
-
-					// Handle question image
 					if (question.question_image) {
-						questionData.question_image = await fileToBase64(question.question_image);
-					} else if (
-						question.question_image_preview &&
-						question.question_image_preview !== originalQuizImage
-					) {
-						// Keep existing image if no new image is uploaded
-						questionData.question_image = question.question_image_preview;
+						qData.question_image = await fileToBase64(question.question_image);
+					} else if (question.question_image_preview) {
+						qData.question_image = question.question_image_preview;
 					}
-
-					// Handle choice images
-					if (question.hasChoiceImages) {
-						const choiceImages = [];
-						for (let i = 0; i < question.choiceImages.length; i++) {
-							if (question.choiceImages[i]) {
-								choiceImages[i] = await fileToBase64(question.choiceImages[i]);
-							} else if (question.choiceImagePreviews[i]) {
-								choiceImages[i] = question.choiceImagePreviews[i];
-							}
-						}
-						questionData.choice_images = choiceImages;
-					}
-
-					return questionData;
+					return qData;
 				})
 			);
 
-			quizData.questions = questionsData;
-
-			const update_response = await updateQuiz(id, quizData);
-			console.log(update_response);
-			if (update_response.status == 200 || update_response.statusText == 'OK') {
-				// Update the quiz in the quizzes list
-				const updatedQuizzes = quizzes.map((quiz) =>
-					quiz.quiz_id == id ? update_response.data.quiz : quiz
-				);
-				setQuizzes(updatedQuizzes);
+			const response = await api.put(`/quizzes/quiz/${id}/`, quizData);
+			if (response.status === 200) {
+				toast.success('Quiz updated!');
 				navigate(`/quizzes/${id}`);
 			}
+		} catch {
+			toast.error('Failed to update quiz.');
+		} finally {
 			setSaving(false);
-			return update_response;
-		} catch (err) {
-			setSaving(false);
-			return err;
 		}
 	};
 
-	const handleChoicesChange = (id, index, value) => {
-		const updatedQuestions = questions.map((question) =>
-			question.id === id
-				? {
-						...question,
-						choices: question.choices.map((choice, indx) => (indx === index ? value : choice))
-					}
-				: question
-		);
-		setQuestions(updatedQuestions);
-	};
-
-	const addQuestion = () => {
-		const updatedQuestions = randomQuestionChoices
-			? [
-					...questions,
-					{
-						id: questions.length + 1,
-						title: '',
-						choices: ['', '', '', ''],
-						choiceImages: [null, null, null, null],
-						choiceImagePreviews: [null, null, null, null],
-						correctAnswerIndex: 0,
-						mathematical: false,
-						identification: false,
-						randomChoices: false,
-						hasChoiceImages: false,
-						question_image: null,
-						question_image_preview: null
-					}
-				]
-			: [
-					...questions,
-					{
-						id: questions.length + 1,
-						title: '',
-						choices: ['', '', '', ''],
-						choiceImages: [null, null, null, null],
-						choiceImagePreviews: [null, null, null, null],
-						correctAnswerIndex: 0,
-						mathematical: false,
-						identification: false,
-						randomChoices: false,
-						hasChoiceImages: false,
-						question_image: null,
-						question_image_preview: null
-					}
-				];
-		setQuestions(updatedQuestions);
-	};
-
-	const randomizeQuestionChoices = (randomize) => {
-		setRandomQuestionChoices(randomize);
-		if (randomize) {
-			const updatedQuestions = questions.map((question) => ({
-				...question,
-				randomChoices: true
-			}));
-			setQuestions(updatedQuestions);
-		} else {
-			const updatedQuestions = questions.map((question) => ({
-				...question,
-				randomChoices: false
-			}));
-			setQuestions(updatedQuestions);
-		}
-	};
-
-	if (loading) {
-		return <LoadingComponent />;
-	}
+	if (loading) return <LoadingScreen />;
 
 	return (
-		<div className="px-[30px] pt-[18px] pb-[30px] transition-all">
-			<Header page={'Edit Quiz'} />
+		<div>
+			<PageHeader
+				title="Edit Quiz"
+				icon={Pencil}
+				description={quizTitle}
+				actions={
+					<Button variant="secondary" onClick={() => navigate(`/quizzes/${id}`)}>
+						<ArrowLeft size={14} /> Back
+					</Button>
+				}
+			/>
 
-			{/* Back Button */}
-			<button
-				onClick={() => navigate(`/quizzes/${id}`)}
-				className="mb-4 flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-2 text-gray-700 hover:bg-gray-200"
-			>
-				<ArrowLeft size={18} />
-				Back to Quiz
-			</button>
-
-			<div className="flex gap-[40px]">
-				<div className="flex w-[67%] flex-col">
-					{/* Quiz Title */}
-					<div className="mb-[20px] flex items-center gap-[10px]">
-						{editQuizTitle ? (
-							<form onSubmit={updateQuizTitle} className="flex items-center gap-[10px]">
-								<input
-									type="text"
-									value={quizTitleInput}
-									onChange={handleQuizTitleChange}
-									className="rounded-lg border border-gray-300 px-3 py-2 text-2xl font-bold focus:border-blue-500 focus:outline-none"
-									autoFocus
-								/>
-								<button
-									type="submit"
-									className="rounded-lg bg-green-500 p-2 text-white hover:bg-green-600"
-								>
-									<Check size={18} />
-								</button>
-								<button
-									type="button"
-									onClick={() => {
-										setEditQuizTitle(false);
-										setQuizTitleInput(quizTitle);
-									}}
-									className="rounded-lg bg-red-500 p-2 text-white hover:bg-red-600"
-								>
-									<X size={18} />
-								</button>
-							</form>
-						) : (
-							<>
-								<h1 className="text-2xl font-bold">{quizTitle}</h1>
-								<button
-									onClick={() => setEditQuizTitle(true)}
-									className="rounded-lg bg-blue-500 p-2 text-white hover:bg-blue-600"
-								>
-									<Pencil size={18} />
-								</button>
-							</>
-						)}
-					</div>
-
-					{/* Quiz Image */}
-					<div className="mb-[20px] flex flex-col items-center">
-						{quizImagePreview ? (
-							<div className="relative">
-								<img
-									src={quizImagePreview}
-									alt="Quiz"
-									className="max-h-[200px] rounded-[15px] object-cover"
-								/>
-								<button
-									onClick={removeQuizImage}
-									className="absolute -top-2 -right-2 rounded-full bg-red-500 p-1 text-white hover:bg-red-600"
-								>
-									<X size={16} />
-								</button>
-							</div>
-						) : (
-							<div className="flex h-[200px] w-full items-center justify-center rounded-[15px] border-2 border-dashed border-gray-300">
-								<input
-									type="file"
-									accept="image/*"
-									onChange={handleQuizImageUpload}
-									className="hidden"
-									id="quiz-image-upload"
-								/>
-								<label
-									htmlFor="quiz-image-upload"
-									className="cursor-pointer text-gray-500 hover:text-gray-700"
-								>
-									Click to upload quiz image
-								</label>
-							</div>
-						)}
-					</div>
-
-					{/* Quiz Settings */}
-					<div className="mb-[20px] flex flex-col gap-[10px] rounded-[20px] bg-[#EFF7FF] p-[20px] drop-shadow-lg">
-						{/* Tag Color */}
-						<div className="flex w-full items-center rounded-full bg-white p-[10px]">
-							<div className="mr-[10px] h-[19px] w-[19px] rounded-full bg-[#34C759]"></div>
-							<span className="w-[95px] text-[14px] font-semibold text-[#646464]">Tag Color</span>
-							<div className="flex gap-2">
-								{colors.map((color) => (
-									<button
-										key={color.hex}
-										onClick={() => setSelectedColor(color.hex)}
-										className={`h-[19px] w-[19px] rounded-full border-2 ${
-											selectedColor === color.hex ? 'border-black' : 'border-gray-300'
-										}`}
-										style={{ backgroundColor: color.hex }}
-									></button>
-								))}
-							</div>
-						</div>
-
-						{/* Quiz Type */}
-						<div className="flex w-full items-center rounded-full bg-white p-[10px]">
-							<div className="mr-[10px] h-[19px] w-[19px] rounded-full bg-[#34C759]"></div>
-							<span className="w-[95px] text-[14px] font-semibold text-[#646464]">Type</span>
-							<div className="flex gap-2">
-								<button
-									onClick={() => setQuizType('list')}
-									className={`rounded-full px-4 py-1 text-sm font-semibold ${
-										quizType === 'list' ? 'bg-[#007AFF] text-white' : 'bg-gray-200 text-gray-700'
-									}`}
-								>
-									List
-								</button>
-								<button
-									onClick={() => setQuizType('flashcard')}
-									className={`rounded-full px-4 py-1 text-sm font-semibold ${
-										quizType === 'flashcard'
-											? 'bg-[#007AFF] text-white'
-											: 'bg-gray-200 text-gray-700'
-									}`}
-								>
-									Flashcard
-								</button>
-							</div>
-						</div>
-
-						{/* Public/Private */}
-						<div className="flex w-full items-center rounded-full bg-white p-[10px]">
-							<div className="mr-[10px] h-[19px] w-[19px] rounded-full bg-[#34C759]"></div>
-							<span className="w-[95px] text-[14px] font-semibold text-[#646464]">Visibility</span>
-							<div className="flex gap-2">
-								<button
-									onClick={() => setIsPublic(true)}
-									className={`rounded-full px-4 py-1 text-sm font-semibold ${
-										isPublic ? 'bg-[#007AFF] text-white' : 'bg-gray-200 text-gray-700'
-									}`}
-								>
-									Public
-								</button>
-								<button
-									onClick={() => setIsPublic(false)}
-									className={`rounded-full px-4 py-1 text-sm font-semibold ${
-										!isPublic ? 'bg-[#007AFF] text-white' : 'bg-gray-200 text-gray-700'
-									}`}
-								>
-									Private
-								</button>
-							</div>
-						</div>
-
-						{/* Random Question Order */}
-						<div className="flex w-full items-center rounded-full bg-white p-[10px]">
-							<div className="mr-[10px] h-[19px] w-[19px] rounded-full bg-[#34C759]"></div>
-							<span className="w-[95px] text-[14px] font-semibold text-[#646464]">Sequence</span>
-							<div className="flex gap-2">
-								<button
-									onClick={() => setRandomQuestionOrder(false)}
-									className={`rounded-full px-4 py-1 text-sm font-semibold ${
-										!randomQuestionOrder ? 'bg-[#007AFF] text-white' : 'bg-gray-200 text-gray-700'
-									}`}
-								>
-									Ordered
-								</button>
-								<button
-									onClick={() => setRandomQuestionOrder(true)}
-									className={`rounded-full px-4 py-1 text-sm font-semibold ${
-										randomQuestionOrder ? 'bg-[#007AFF] text-white' : 'bg-gray-200 text-gray-700'
-									}`}
-								>
-									Random
-								</button>
-							</div>
-						</div>
-
-						{/* Random Choices */}
-						<div className="flex w-full items-center rounded-full bg-white p-[10px]">
-							<div className="mr-[10px] h-[19px] w-[19px] rounded-full bg-[#34C759]"></div>
-							<span className="w-[95px] text-[14px] font-semibold text-[#646464]">
-								Random Choices
-							</span>
-							<div className="flex gap-2">
-								<button
-									onClick={() => randomizeQuestionChoices(false)}
-									className={`rounded-full px-4 py-1 text-sm font-semibold ${
-										!randomQuestionChoices ? 'bg-[#007AFF] text-white' : 'bg-gray-200 text-gray-700'
-									}`}
-								>
-									Off
-								</button>
-								<button
-									onClick={() => randomizeQuestionChoices(true)}
-									className={`rounded-full px-4 py-1 text-sm font-semibold ${
-										randomQuestionChoices ? 'bg-[#007AFF] text-white' : 'bg-gray-200 text-gray-700'
-									}`}
-								>
-									On
-								</button>
-							</div>
-						</div>
-					</div>
-
-					{/* Questions */}
-					<div className="flex flex-col gap-[20px]">
-						{questions.map((question, index) => (
-							<div
-								key={question.id}
-								className="flex w-full flex-col rounded-[20px] bg-[#EFF7FF] p-[30px] drop-shadow-lg"
-							>
-								<div className="mb-[20px] flex items-center justify-between">
-									<h3 className="text-lg font-bold">Question {index + 1}</h3>
-									<button
-										onClick={() => removeQuestion(question.id)}
-										className="rounded-lg bg-red-500 p-2 text-white hover:bg-red-600"
-									>
-										<X size={18} />
-									</button>
-								</div>
-
-								{/* Question Text */}
-								<input
-									type="text"
+			<div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
+				<div className="flex flex-1 flex-col gap-4">
+					{questions.map((question, index) => (
+						<Card key={question.id}>
+							<CardHeader
+								title={`Question ${index + 1}`}
+								action={
+									<Button variant="ghost" size="icon" onClick={() => removeQuestion(question.id)}>
+										<X size={16} />
+									</Button>
+								}
+							/>
+							<CardBody className="space-y-4">
+								<Input
 									value={question.title}
 									onChange={(e) => handleInputChange(question.id, 'title', e.target.value)}
 									placeholder="Enter question text"
-									className="mb-[15px] w-full rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
 								/>
 
-								{/* Question Image */}
-								<div className="mb-[15px] flex flex-col items-center">
-									{question.question_image_preview ? (
-										<div className="relative">
-											<img
-												src={question.question_image_preview}
-												alt="Question"
-												className="max-h-[200px] rounded-[10px] object-cover"
-											/>
+								{question.question_image_preview ? (
+									<div className="relative">
+										<img
+											src={question.question_image_preview}
+											alt="Question"
+											className="h-36 w-full rounded-md object-cover"
+										/>
+										<button
+											onClick={() =>
+												setQuestions((qs) =>
+													qs.map((q) =>
+														q.id === question.id
+															? { ...q, question_image: null, question_image_preview: null }
+															: q
+													)
+												)
+											}
+											className="bg-danger absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full text-white"
+										>
+											<X size={12} />
+										</button>
+									</div>
+								) : (
+									<label className="border-line hover:border-primary/40 flex h-20 w-full cursor-pointer items-center justify-center rounded-md border-2 border-dashed transition">
+										<input
+											type="file"
+											accept="image/*"
+											onChange={(e) => handleQuestionImageUpload(question.id, e)}
+											className="hidden"
+										/>
+										<div className="text-muted flex flex-col items-center text-xs">
+											<Plus size={16} />
+											<span>Add Image</span>
+										</div>
+									</label>
+								)}
+
+								<div className="flex flex-wrap gap-2">
+									{[
+										{ key: 'mathematical', label: 'Mathematical' },
+										{ key: 'identification', label: 'Identification' }
+									].map(({ key, label }) => (
+										<button
+											key={key}
+											type="button"
+											className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition ${question[key] ? 'bg-primary text-primary-fg' : 'bg-surface-2 text-fg hover:bg-line'}`}
+											onClick={() => handleInputChange(question.id, key, !question[key])}
+										>
+											<Check size={12} className={question[key] ? '' : 'opacity-0'} />
+											{label}
+										</button>
+									))}
+								</div>
+
+								<div className="space-y-2">
+									{question.mathematical ? (
+										<MathInput
+											handleChoicesChange={handleChoicesChange}
+											handleInputChange={handleInputChange}
+											question={question}
+											removeChoice={removeChoice}
+										/>
+									) : question.identification ? (
+										<div className="flex items-center gap-3">
 											<button
-												onClick={() => removeQuestionImage(question.id)}
-												className="absolute -top-2 -right-2 rounded-full bg-red-500 p-1 text-white hover:bg-red-600"
+												type="button"
+												className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition ${question.correctAnswerIndex === 0 ? 'border-primary bg-primary' : 'border-line bg-surface'}`}
+												onClick={() => handleInputChange(question.id, 'correctAnswerIndex', 0)}
 											>
-												<X size={16} />
+												{question.correctAnswerIndex === 0 && (
+													<Check size={12} className="text-primary-fg" />
+												)}
 											</button>
+											<input
+												type="text"
+												value={question.choices[0] || ''}
+												onChange={(e) => handleChoicesChange(question.id, 0, e.target.value)}
+												placeholder="Answer"
+												className="border-line bg-surface text-fg focus:border-primary flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none"
+											/>
 										</div>
 									) : (
-										<div className="flex h-[100px] w-full items-center justify-center rounded-[10px] border-2 border-dashed border-gray-300">
-											<input
-												type="file"
-												accept="image/*"
-												onChange={(e) => handleQuestionImageUpload(question.id, e)}
-												className="hidden"
-												id={`question-image-${question.id}`}
-											/>
-											<label
-												htmlFor={`question-image-${question.id}`}
-												className="cursor-pointer text-gray-500 hover:text-gray-700"
-											>
-												Add question image
-											</label>
-										</div>
+										question.choices.map((choice, ci) => (
+											<div className="flex items-center gap-3" key={ci}>
+												<button
+													type="button"
+													className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition ${question.correctAnswerIndex === ci ? 'border-primary bg-primary' : 'border-line bg-surface'}`}
+													onClick={() => handleInputChange(question.id, 'correctAnswerIndex', ci)}
+												>
+													{question.correctAnswerIndex === ci && (
+														<Check size={12} className="text-primary-fg" />
+													)}
+												</button>
+												<input
+													type="text"
+													value={choice}
+													onChange={(e) => handleChoicesChange(question.id, ci, e.target.value)}
+													placeholder={`Choice ${ci + 1}`}
+													className="border-line bg-surface text-fg focus:border-primary flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none"
+												/>
+												{question.choices.length > 2 && (
+													<Button
+														variant="ghost"
+														size="icon"
+														onClick={() => removeChoice(question.id, ci)}
+													>
+														<X size={14} className="text-danger" />
+													</Button>
+												)}
+											</div>
+										))
 									)}
 								</div>
 
-								{/* Question Type */}
-								<div className="mb-[15px] flex gap-2">
-									<button
-										onClick={() => handleInputChange(question.id, 'identification', false)}
-										className={`rounded-full px-4 py-1 text-sm font-semibold ${
-											!question.identification
-												? 'bg-[#007AFF] text-white'
-												: 'bg-gray-200 text-gray-700'
-										}`}
-									>
-										Multiple Choice
-									</button>
-									<button
-										onClick={() => handleInputChange(question.id, 'identification', true)}
-										className={`rounded-full px-4 py-1 text-sm font-semibold ${
-											question.identification
-												? 'bg-[#007AFF] text-white'
-												: 'bg-gray-200 text-gray-700'
-										}`}
-									>
-										Identification
-									</button>
-									<button
-										onClick={() =>
-											handleInputChange(question.id, 'mathematical', !question.mathematical)
-										}
-										className={`rounded-full px-4 py-1 text-sm font-semibold ${
-											question.mathematical
-												? 'bg-[#007AFF] text-white'
-												: 'bg-gray-200 text-gray-700'
-										}`}
-									>
-										Mathematical
-									</button>
-								</div>
-
-								{/* Choices */}
 								{!question.identification && (
-									<div className="flex flex-col gap-[10px]">
-										<div className="flex items-center justify-between">
-											<h4 className="font-semibold">Choices:</h4>
-											<button
-												onClick={() => addChoice(question.id)}
-												className="rounded-lg bg-green-500 p-2 text-white hover:bg-green-600"
-											>
-												<Plus size={18} />
-											</button>
-										</div>
-										{question.mathematical ? (
-											<MathInput
-												handleChoicesChange={handleChoicesChange}
-												handleInputChange={handleInputChange}
-												question={question}
-												removeChoice={removeChoice}
-											/>
-										) : (
-											question.choices.map((choice, choiceIndex) => (
-												<div key={choiceIndex} className="flex items-center gap-[10px]">
-													<input
-														type="radio"
-														name={`correct-${question.id}`}
-														checked={question.correctAnswerIndex === choiceIndex}
-														onChange={() =>
-															handleInputChange(question.id, 'correctAnswerIndex', choiceIndex)
-														}
-														className="h-4 w-4"
-													/>
-													<input
-														type="text"
-														value={choice}
-														onChange={(e) =>
-															handleChoicesChange(question.id, choiceIndex, e.target.value)
-														}
-														placeholder={`Choice ${choiceIndex + 1}`}
-														className="flex-1 rounded-lg border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none"
-													/>
-
-													{question.choiceImagePreviews[choiceIndex] ? (
-														<div className="relative">
-															<img
-																src={question.choiceImagePreviews[choiceIndex]}
-																alt={`Choice ${choiceIndex + 1}`}
-																className="h-[40px] w-[40px] rounded object-cover"
-															/>
-															<button
-																onClick={() => removeChoiceImage(question.id, choiceIndex)}
-																className="absolute -top-1 -right-1 rounded-full bg-red-500 p-1 text-white hover:bg-red-600"
-															>
-																<X size={14} />
-															</button>
-														</div>
-													) : (
-														<div className="flex h-[40px] w-[40px] items-center justify-center rounded border-2 border-dashed border-gray-300">
-															<input
-																type="file"
-																accept="image/*"
-																onChange={(e) =>
-																	handleChoiceImageUpload(question.id, choiceIndex, e)
-																}
-																className="hidden"
-																id={`choice-image-${question.id}-${choiceIndex}`}
-															/>
-															<label
-																htmlFor={`choice-image-${question.id}-${choiceIndex}`}
-																className="cursor-pointer text-xs text-gray-500 hover:text-gray-700"
-															>
-																+
-															</label>
-														</div>
-													)}
-													{question.choices.length > 2 && (
-														<button
-															onClick={() => removeChoice(question.id, choiceIndex)}
-															className="rounded-lg bg-red-500 p-2 text-white hover:bg-red-600"
-														>
-															<X size={18} />
-														</button>
-													)}
-												</div>
-											))
-										)}
-									</div>
+									<Button
+										variant="secondary"
+										size="sm"
+										className="w-full"
+										onClick={() => addChoice(question.id)}
+									>
+										<Plus size={14} /> Add Choice
+									</Button>
 								)}
-							</div>
-						))}
+							</CardBody>
+						</Card>
+					))}
 
-						{/* Add Question Button */}
-						<button
-							onClick={addQuestion}
-							className="flex w-full items-center justify-center gap-2 rounded-[20px] border-2 border-dashed border-gray-300 p-[30px] text-gray-500 hover:border-gray-400 hover:text-gray-700"
-						>
-							<Plus size={20} />
-							Add Question
-						</button>
-					</div>
+					<Button variant="secondary" className="w-full" onClick={addQuestion}>
+						<Plus size={16} /> Add Question
+					</Button>
 
-					{/* Save Button */}
-					<div className="mt-[30px] flex justify-center">
-						<button
-							onClick={handleUpdateQuiz}
-							disabled={saving}
-							className="flex items-center gap-2 rounded-full bg-[#007AFF] px-8 py-3 font-bold text-white transition hover:bg-[#0056CC] disabled:bg-gray-400"
-						>
-							{saving ? (
-								<LoadingComponent />
-							) : (
-								<>
-									<Save size={20} />
-									Save Changes
-								</>
-							)}
-						</button>
-					</div>
+					<Button className="w-full" loading={saving} onClick={handleUpdateQuiz}>
+						<Save size={16} /> Save Changes
+					</Button>
 				</div>
 
-				{/* Preview Panel */}
-				<div className="flex w-[33%] flex-col">
-					<div className="sticky top-4 rounded-[20px] bg-[#EFF7FF] p-[20px] drop-shadow-lg">
-						<h3 className="mb-[20px] text-lg font-bold">Preview</h3>
-						<div className="flex flex-col gap-[10px]">
-							<div className="flex items-center justify-between rounded-full bg-white p-[10px]">
-								<span className="text-sm font-semibold text-[#646464]">Questions</span>
-								<span className="text-lg font-bold text-[#646464]">{questions.length}</span>
+				<div className="flex w-full shrink-0 flex-col gap-4 lg:w-80">
+					<Card>
+						<CardHeader title="Quiz Settings" />
+						<CardBody className="space-y-4">
+							<Input
+								label="Quiz Title"
+								value={quizTitle}
+								onChange={(e) => setQuizTitle(e.target.value)}
+							/>
+
+							{quizImagePreview ? (
+								<div className="relative">
+									<img
+										src={quizImagePreview}
+										alt="Quiz"
+										className="h-28 w-full rounded-md object-cover"
+									/>
+									<button
+										onClick={() => {
+											setQuizImage(null);
+											setQuizImagePreview(null);
+										}}
+										className="bg-danger absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full text-white"
+									>
+										<X size={12} />
+									</button>
+								</div>
+							) : (
+								<label className="border-line hover:border-primary/40 flex h-20 w-full cursor-pointer items-center justify-center rounded-md border-2 border-dashed transition">
+									<input
+										type="file"
+										accept="image/*"
+										onChange={handleQuizImageUpload}
+										className="hidden"
+									/>
+									<div className="text-muted flex flex-col items-center text-xs">
+										<Plus size={16} />
+										<span>Quiz Image</span>
+									</div>
+								</label>
+							)}
+
+							<div>
+								<span className="text-fg mb-1.5 block text-sm font-medium">Quiz Type</span>
+								<div className="flex gap-2">
+									{['list', 'flashcard'].map((t) => (
+										<button
+											key={t}
+											type="button"
+											className={`flex-1 rounded-md px-3 py-2 text-xs font-medium capitalize transition ${quizType === t ? 'bg-primary text-primary-fg' : 'bg-surface-2 text-fg hover:bg-line'}`}
+											onClick={() => setQuizType(t)}
+										>
+											{t}
+										</button>
+									))}
+								</div>
 							</div>
-							<div className="flex items-center justify-between rounded-full bg-white p-[10px]">
-								<span className="text-sm font-semibold text-[#646464]">Type</span>
-								<span className="text-lg font-bold text-[#646464]">
-									{quizType === 'flashcard' ? 'Flashcard' : 'List'}
-								</span>
+
+							<div>
+								<span className="text-fg mb-1.5 block text-sm font-medium">Tag Color</span>
+								<div className="grid grid-cols-5 gap-2">
+									{colors.map((color) => (
+										<button
+											key={color.hex}
+											type="button"
+											onClick={() => setSelectedColor(color.hex)}
+											className={`flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border-2 transition ${selectedColor === color.hex ? 'border-primary ring-primary/30 ring-2' : 'border-line'}`}
+											style={{ backgroundColor: color.hex }}
+										/>
+									))}
+								</div>
 							</div>
-							<div className="flex items-center justify-between rounded-full bg-white p-[10px]">
-								<span className="text-sm font-semibold text-[#646464]">Visibility</span>
-								<span className="text-lg font-bold text-[#646464]">
-									{isPublic ? 'Public' : 'Private'}
-								</span>
+						</CardBody>
+					</Card>
+
+					<Card>
+						<CardHeader title="Preview" />
+						<CardBody className="space-y-2 text-sm">
+							<div className="flex justify-between">
+								<span className="text-muted">Questions</span>
+								<span className="text-fg font-medium">{questions.length}</span>
 							</div>
-							<div className="flex items-center justify-between rounded-full bg-white p-[10px]">
-								<span className="text-sm font-semibold text-[#646464]">Sequence</span>
-								<span className="text-lg font-bold text-[#646464]">
+							<div className="flex justify-between">
+								<span className="text-muted">Type</span>
+								<span className="text-fg font-medium capitalize">{quizType}</span>
+							</div>
+							<div className="flex justify-between">
+								<span className="text-muted">Visibility</span>
+								<span className="text-fg font-medium">{isPublic ? 'Public' : 'Private'}</span>
+							</div>
+							<div className="flex justify-between">
+								<span className="text-muted">Sequence</span>
+								<span className="text-fg font-medium">
 									{randomQuestionOrder ? 'Random' : 'Ordered'}
 								</span>
 							</div>
-						</div>
-					</div>
+						</CardBody>
+					</Card>
 				</div>
 			</div>
 		</div>

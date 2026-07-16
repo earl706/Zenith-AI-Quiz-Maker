@@ -1,0 +1,266 @@
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { BookOpen } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { useAuthStore } from '../stores/authStore';
+import { Button, Input } from '../components/ui';
+
+export function AuthShell({ children }) {
+	return (
+		<div className="bg-bg flex min-h-screen">
+			<div className="bg-primary relative hidden w-1/2 overflow-hidden lg:block">
+				<div className="text-primary-fg relative flex h-full flex-col justify-between p-12">
+					<div className="flex items-center gap-2">
+						<div className="flex h-10 w-10 items-center justify-center rounded-sm bg-white/20">
+							<BookOpen size={22} />
+						</div>
+						<span className="text-2xl font-bold">Zenith Quiz Maker</span>
+					</div>
+					<h1 className="text-4xl leading-tight font-bold">
+						Create, share, and master quizzes with AI-powered generation.
+					</h1>
+					<p className="text-primary-fg/70 text-sm">Zenith Quiz Maker</p>
+				</div>
+			</div>
+			<div className="flex w-full items-center justify-center p-6 lg:w-1/2">
+				<motion.div
+					initial={{ opacity: 0, y: 12 }}
+					animate={{ opacity: 1, y: 0 }}
+					className="w-full max-w-sm"
+				>
+					{children}
+				</motion.div>
+			</div>
+		</div>
+	);
+}
+
+function OAuthButtons() {
+	const oauthStart = useAuthStore((s) => s.oauthStart);
+	return (
+		<div className="space-y-2">
+			<Button
+				type="button"
+				variant="secondary"
+				className="w-full"
+				onClick={() => oauthStart('google')}
+			>
+				Continue with Google
+			</Button>
+			<Button
+				type="button"
+				variant="secondary"
+				className="w-full"
+				onClick={() => oauthStart('github')}
+			>
+				Continue with GitHub
+			</Button>
+		</div>
+	);
+}
+
+function MfaForm() {
+	const navigate = useNavigate();
+	const verifyMfa = useAuthStore((s) => s.verifyMfa);
+	const clearMfa = useAuthStore((s) => s.clearMfa);
+	const error = useAuthStore((s) => s.error);
+	const [code, setCode] = useState('');
+	const [recoveryCode, setRecoveryCode] = useState('');
+	const [useRecovery, setUseRecovery] = useState(false);
+	const [loading, setLoading] = useState(false);
+
+	const submit = async (e) => {
+		e.preventDefault();
+		setLoading(true);
+		try {
+			await verifyMfa({
+				code: useRecovery ? undefined : code,
+				recoveryCode: useRecovery ? recoveryCode : undefined
+			});
+			navigate('/', { replace: true });
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	return (
+		<AuthShell>
+			<h2 className="text-fg text-2xl font-bold">Two-factor authentication</h2>
+			<p className="text-muted mt-2 text-sm">Enter the code from your authenticator app.</p>
+			<form onSubmit={submit} className="mt-6 space-y-4">
+				{useRecovery ? (
+					<Input
+						label="Recovery code"
+						value={recoveryCode}
+						onChange={(e) => setRecoveryCode(e.target.value)}
+						placeholder="abcd1234"
+						required
+					/>
+				) : (
+					<Input
+						label="Authentication code"
+						value={code}
+						onChange={(e) => setCode(e.target.value)}
+						placeholder="123456"
+						inputMode="numeric"
+						autoComplete="one-time-code"
+						required
+					/>
+				)}
+				{error && <p className="bg-danger/10 text-danger rounded-md px-3 py-2 text-sm">{error}</p>}
+				<Button type="submit" className="w-full" loading={loading}>
+					Verify
+				</Button>
+				<button
+					type="button"
+					className="text-primary w-full cursor-pointer text-sm"
+					onClick={() => setUseRecovery((v) => !v)}
+				>
+					{useRecovery ? 'Use authenticator code' : 'Use a recovery code'}
+				</button>
+				<button
+					type="button"
+					className="text-muted w-full cursor-pointer text-sm"
+					onClick={() => {
+						clearMfa();
+						navigate('/login', { replace: true });
+					}}
+				>
+					Cancel
+				</button>
+			</form>
+		</AuthShell>
+	);
+}
+
+export function LoginPage() {
+	const navigate = useNavigate();
+	const login = useAuthStore((s) => s.login);
+	const error = useAuthStore((s) => s.error);
+	const mfaRequired = useAuthStore((s) => s.mfaRequired);
+	const [email, setEmail] = useState('');
+	const [password, setPassword] = useState('');
+	const [loading, setLoading] = useState(false);
+
+	if (mfaRequired) return <MfaForm />;
+
+	const submit = async (e) => {
+		e.preventDefault();
+		setLoading(true);
+		try {
+			await login(email, password);
+			const user = useAuthStore.getState().user;
+			if (user) navigate('/', { replace: true });
+		} catch (err) {
+			if (err.message === 'verification_required') {
+				navigate('/check-email', { replace: true });
+			}
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	return (
+		<AuthShell>
+			<h2 className="text-fg text-2xl font-bold">Welcome back</h2>
+			<form onSubmit={submit} className="mt-6 space-y-4">
+				<Input
+					label="Email"
+					type="email"
+					value={email}
+					onChange={(e) => setEmail(e.target.value)}
+					placeholder="Email"
+					required
+				/>
+				<Input
+					label="Password"
+					type="password"
+					value={password}
+					onChange={(e) => setPassword(e.target.value)}
+					placeholder="Password"
+					required
+				/>
+				{error && <p className="bg-danger/10 text-danger rounded-md px-3 py-2 text-sm">{error}</p>}
+				<Button type="submit" className="w-full" loading={loading}>
+					Sign in
+				</Button>
+			</form>
+			<div className="my-4 flex items-center gap-3">
+				<div className="bg-line h-px flex-1" />
+				<span className="text-muted text-xs">or</span>
+				<div className="bg-line h-px flex-1" />
+			</div>
+			<OAuthButtons />
+			<p className="text-muted mt-6 text-center text-sm">
+				No account?{' '}
+				<Link to="/register" className="text-primary">
+					Create one
+				</Link>
+			</p>
+		</AuthShell>
+	);
+}
+
+export function RegisterPage() {
+	const navigate = useNavigate();
+	const register = useAuthStore((s) => s.register);
+	const error = useAuthStore((s) => s.error);
+	const [form, setForm] = useState({ full_name: '', email: '', password: '' });
+	const [loading, setLoading] = useState(false);
+	const submit = async (e) => {
+		e.preventDefault();
+		setLoading(true);
+		try {
+			await register(form);
+			navigate('/check-email', { replace: true });
+		} finally {
+			setLoading(false);
+		}
+	};
+	return (
+		<AuthShell>
+			<h2 className="text-fg text-2xl font-bold">Create account</h2>
+			<form onSubmit={submit} className="mt-6 space-y-4">
+				<Input
+					label="Full name"
+					value={form.full_name}
+					onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))}
+					required
+				/>
+				<Input
+					label="Email"
+					type="email"
+					value={form.email}
+					onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+					placeholder="you@example.com"
+					required
+				/>
+				<Input
+					label="Password"
+					type="password"
+					minLength={8}
+					value={form.password}
+					onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+					placeholder="At least 8 characters"
+					required
+				/>
+				{error && <p className="bg-danger/10 text-danger rounded-md px-3 py-2 text-sm">{error}</p>}
+				<Button type="submit" className="w-full" loading={loading}>
+					Create account
+				</Button>
+			</form>
+			<div className="my-4 flex items-center gap-3">
+				<div className="bg-line h-px flex-1" />
+				<span className="text-muted text-xs">or</span>
+				<div className="bg-line h-px flex-1" />
+			</div>
+			<OAuthButtons />
+			<p className="text-muted mt-6 text-center text-sm">
+				Have an account?{' '}
+				<Link to="/login" className="text-primary">
+					Sign in
+				</Link>
+			</p>
+		</AuthShell>
+	);
+}

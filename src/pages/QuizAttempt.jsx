@@ -1,273 +1,374 @@
-import React, { useContext, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import Header from '../components/Header';
-import QuizFlashcardAttemptPage from './QuizFlashcardAttemptPage';
-import QuestionCard from '../components/QuestionCard';
-import QuizResultsPage from './QuizResultsPage';
-import { AuthContext } from '../context/AuthContext';
+import { Clock, Target } from 'lucide-react';
+
+import { api } from '../lib/api';
+import { formatDurationSeconds } from '../lib/format';
+import { toast } from '../stores/toastStore';
+import { PageHeader } from '../components/layout/PageHeader';
+import { Button, Card, CardBody, LoadingScreen } from '../components/ui';
+import QuestionCard from '../components/quiz/QuestionCard';
+import IdentificationAnswerInput from '../components/quiz/IdentificationAnswerInput';
+import MathRenderer from '../components/quiz/MathRenderer';
+
+function QuizFlashcardAttemptView({
+	questions,
+	submitAnswers,
+	handleAnswerChange,
+	handleIdentificationAnswerChange,
+	answers
+}) {
+	const [questionNumber, setQuestionNumber] = useState(0);
+	const currentQuestion = questions[questionNumber];
+	const answer = answers.find((a) => a.id === currentQuestion?.id);
+
+	if (!currentQuestion) return <LoadingScreen />;
+
+	const getChoiceData = (choice) =>
+		typeof choice === 'object' && choice !== null
+			? { text: choice.text || choice, image: choice.image }
+			: { text: choice, image: null };
+
+	const isMathematical = ['MUL-COM', 'COM', 'IDE-COM'].includes(currentQuestion.question_type);
+
+	return (
+		<div className="space-y-4">
+			<div className="flex gap-3">
+				<Button
+					variant="secondary"
+					className="flex-1"
+					onClick={() => setQuestionNumber((p) => (p - 1 + questions.length) % questions.length)}
+				>
+					Prev
+				</Button>
+				<Button
+					variant="secondary"
+					className="flex-1"
+					onClick={() => setQuestionNumber((p) => (p + 1) % questions.length)}
+				>
+					Next
+				</Button>
+			</div>
+			<Button className="w-full" onClick={submitAnswers}>
+				Submit
+			</Button>
+			<p className="text-muted text-center text-sm">
+				Question {questionNumber + 1} of {questions.length}
+			</p>
+
+			{currentQuestion.question_type === 'IDE' || currentQuestion.question_type === 'IDE-COM' ? (
+				<IdentificationAnswerInput
+					answer={answer}
+					question={currentQuestion}
+					handleIdentificationAnswerChange={handleIdentificationAnswerChange}
+				/>
+			) : (
+				<Card>
+					<CardBody className="space-y-4 p-6">
+						<p className="text-fg text-center text-base font-semibold">
+							{currentQuestion.question}
+						</p>
+						{currentQuestion.question_image && (
+							<div className="flex justify-center">
+								<img
+									src={currentQuestion.question_image}
+									alt="Question"
+									className="max-h-[200px] rounded-md object-cover"
+								/>
+							</div>
+						)}
+						<div className="space-y-2">
+							{currentQuestion.choices.map((choice, index) => {
+								const choiceData = getChoiceData(choice);
+								return (
+									<button
+										key={index}
+										type="button"
+										onClick={() =>
+											handleAnswerChange(currentQuestion.id, 'userAnswer', choiceData.text)
+										}
+										className={`w-full cursor-pointer rounded-md px-4 py-3 text-center font-semibold transition ${
+											answer?.userAnswer === choiceData.text
+												? 'bg-primary text-primary-fg'
+												: 'bg-surface-2 text-fg hover:bg-primary/10'
+										}`}
+									>
+										<div className="flex flex-col items-center gap-2">
+											{choiceData.image && (
+												<img
+													src={choiceData.image}
+													alt=""
+													className="max-h-[100px] rounded-md object-cover"
+												/>
+											)}
+											{isMathematical ? (
+												<MathRenderer expression={choiceData.text} displayMode={false} />
+											) : (
+												<span className="text-sm">{choiceData.text}</span>
+											)}
+										</div>
+									</button>
+								);
+							})}
+						</div>
+					</CardBody>
+				</Card>
+			)}
+		</div>
+	);
+}
+
+function QuizResultView({ questions, answers, submittedAnswers }) {
+	const getChoiceData = (choice) =>
+		typeof choice === 'object' && choice !== null
+			? { text: choice.text || choice, image: choice.image }
+			: { text: choice, image: null };
+
+	return (
+		<div className="space-y-4">
+			{questions.map((question, index) => {
+				const submitted = submittedAnswers[index];
+				const correct = submitted?.correctAnswer === submitted?.userAnswer;
+				const isMathematical = ['COM', 'IDE-COM', 'MUL-COM'].includes(question.question_type);
+				const isIdentification =
+					question.question_type === 'IDE' || question.question_type === 'IDE-COM';
+
+				return (
+					<Card key={index} className={correct ? 'border-success/30' : 'border-danger/30'}>
+						<CardBody className="space-y-3 p-5">
+							<p className="text-fg text-center font-semibold">{question.question}</p>
+							{question.question_image && (
+								<div className="flex justify-center">
+									<img
+										src={question.question_image}
+										alt="Question"
+										className="max-h-[200px] rounded-md object-cover"
+									/>
+								</div>
+							)}
+
+							{isIdentification ? (
+								<div className="space-y-2">
+									<div>
+										<p className="text-muted text-xs font-medium">Correct Answer:</p>
+										<div className="bg-success/10 rounded-md p-2">
+											{isMathematical ? (
+												<MathRenderer expression={submitted?.correctAnswer} displayMode={true} />
+											) : (
+												<p className="text-sm">{submitted?.correctAnswer}</p>
+											)}
+										</div>
+									</div>
+									<div>
+										<p className="text-muted text-xs font-medium">Your Answer:</p>
+										<div className={`rounded-md p-2 ${correct ? 'bg-success/10' : 'bg-danger/10'}`}>
+											{isMathematical ? (
+												<MathRenderer expression={submitted?.userAnswer} displayMode={true} />
+											) : (
+												<p className="text-sm">{submitted?.userAnswer}</p>
+											)}
+										</div>
+									</div>
+								</div>
+							) : (
+								<div className="space-y-1.5">
+									{question.choices.map((choice, ci) => {
+										const choiceData = getChoiceData(choice);
+										const isCorrectChoice = choiceData.text === submitted?.correctAnswer;
+										const isUserChoice = choiceData.text === submitted?.userAnswer;
+										let bg = 'bg-surface-2';
+										if (isCorrectChoice) bg = 'bg-success/15 text-success';
+										else if (isUserChoice) bg = 'bg-danger/15 text-danger';
+										return (
+											<div
+												key={ci}
+												className={`rounded-md px-4 py-2 text-center text-sm font-medium ${bg}`}
+											>
+												{choiceData.image && (
+													<img
+														src={choiceData.image}
+														alt=""
+														className="mx-auto mb-2 max-h-[80px] rounded-md object-cover"
+													/>
+												)}
+												{isMathematical ? (
+													<MathRenderer expression={choiceData.text} displayMode={false} />
+												) : (
+													choiceData.text
+												)}
+											</div>
+										);
+									})}
+								</div>
+							)}
+						</CardBody>
+					</Card>
+				);
+			})}
+		</div>
+	);
+}
 
 export default function QuizAttempt() {
-	const { attemptQuiz, getQuiz, deleteMode, setDeleteMode, quizDeleteData, submitQuizAnswers } =
-		useContext(AuthContext);
+	const { id } = useParams();
 	const navigate = useNavigate();
-
-	const questions_data = [
-		{
-			id: 0,
-			question: 'Question 1',
-			question_type: 'MUL',
-			choices: ['', '', '', ''],
-			correct_answer: '',
-			random_choices: true,
-			correct_answer_index: 0
-		}
-	];
-
-	const answers_data = questions_data.map((question) => ({
-		id: question.id,
-		question: question.question,
-		correctAnswer: question.correct_answer,
-		questionType: question.question_type,
-		userAnswer: ''
-	}));
 
 	const [time, setTime] = useState(0);
 	const [isRunning, setIsRunning] = useState(true);
+	const [loading, setLoading] = useState(true);
 	const [submittedAnswers, setSubmittedAnswers] = useState([]);
-
-	const [questions, setQuestions] = useState(questions_data);
+	const [questions, setQuestions] = useState([]);
 	const [score, setScore] = useState(0);
 	const [accuracy, setAccuracy] = useState(0);
 	const [quizResults, setQuizResults] = useState(false);
-	const [answers, setAnswers] = useState(answers_data);
+	const [answers, setAnswers] = useState([]);
 	const [quizData, setQuizData] = useState({
-		quiz_id: '',
-		questions: [],
 		quiz_title: '',
-		quiz_image: null,
-		date_created: '',
-		public: false,
-		flashcard_quiz: true,
-		owner: 0
+		flashcard_quiz: false,
+		quiz_image: null
 	});
 
-	const quiz_id = useParams().id;
-	const handleAnswerChange = (id, field, index) => {
-		const updatedAnswers = answers.map((answer) =>
-			answer.id === id ? { ...answer, [field]: index } : answer
-		);
-		setAnswers(updatedAnswers);
+	const handleAnswerChange = (qid, field, value) => {
+		setAnswers((prev) => prev.map((a) => (a.id === qid ? { ...a, [field]: value } : a)));
 	};
 
-	const handleMathematicalAnswerChange = (id, index, value) => {
-		const updatedAnswers = answers.map((answer) =>
-			answer.id === id ? { ...answer, [field]: index } : answer
-		);
-		setAnswers(updatedAnswers);
-	};
-
-	const handleIdentificationAnswerChange = (id, value) => {
-		const updatedAnswers = answers.map((answer) =>
-			answer.id === id ? { ...answer, userAnswer: value } : answer
-		);
-		setAnswers(updatedAnswers);
-	};
-
-	const initializeQuiz = async () => {
-		try {
-			const response = await getQuiz(quiz_id);
-			setQuizData(response.data.data);
-			setQuestions(Array.from(response.data.questions));
-			console.log(response.data.questions);
-			const answersInitialization = response.data.questions.map((question) => ({
-				id: question.id,
-				question: question.question,
-				correctAnswer: question.correct_answer,
-				questionType: question.question_type,
-				userAnswer: ''
-			}));
-			setAnswers(answersInitialization);
-			return response;
-		} catch (err) {
-			return err;
-		}
-	};
-
-	const submitAnswers = async () => {
-		try {
-			const answers_submission_response = await submitQuizAnswers(quiz_id, answers, time);
-			setSubmittedAnswers(Array.from(answers_submission_response.data.answers));
-			setScore(answers_submission_response.data.score);
-			setAccuracy(answers_submission_response.data.accuracy);
-			setQuizResults(true);
-			setIsRunning(false);
-			return answers_submission_response;
-		} catch (err) {
-			return err;
-		}
-	};
-
-	const closeDeleteConfirmationModal = () => {
-		setDeleteMode(false);
-	};
-
-	const formatTime = (milliseconds) => {
-		const mins = String(Math.floor((milliseconds / 6000) % 60)).padStart(2, '0');
-		const secs = String(Math.floor((milliseconds / 60) % 60)).padStart(2, '0');
-		const ms = String(milliseconds % 60).padStart(2, '0');
-		return `${mins}:${secs}:${ms}`;
+	const handleIdentificationAnswerChange = (qid, value) => {
+		setAnswers((prev) => prev.map((a) => (a.id === qid ? { ...a, userAnswer: value } : a)));
 	};
 
 	useEffect(() => {
-		initializeQuiz();
-	}, []);
-
-	useEffect(() => {
-		const controller = new AbortController();
-
-		const initializeQuizAttempt = async () => {
+		const initializeQuiz = async () => {
 			try {
-				const response = await attemptQuiz(quiz_id);
-				return response;
-			} catch (err) {}
+				const response = await api
+					.get(`/quizzes/quiz/${id}/?randomize=true`)
+					.catch(() => api.get(`/quizzes/quiz/${id}/`));
+				const data = response.data;
+				const qData = data.data || data;
+				const questionsArr = data.questions || qData.questions || [];
+
+				setQuizData(qData);
+				setQuestions(questionsArr);
+				setAnswers(
+					questionsArr.map((q) => ({
+						id: q.id,
+						question: q.question,
+						correctAnswer: q.correct_answer,
+						questionType: q.question_type,
+						userAnswer: ''
+					}))
+				);
+				setLoading(false);
+			} catch {
+				toast.error('Could not load quiz.');
+				navigate('/quizzes');
+			}
 		};
-
-		initializeQuizAttempt();
-
-		return () => controller.abort();
-	}, []);
+		initializeQuiz();
+	}, [id, navigate]);
 
 	useEffect(() => {
-		console.log(answers);
-	}, [answers]);
+		api.post(`/quizzes/quiz/attempt/${id}/`).catch(() => {});
+	}, [id]);
 
 	useEffect(() => {
-		let interval;
-		if (isRunning) {
-			interval = setInterval(() => {
-				setTime((prevTime) => prevTime + 1);
-			}, 1000);
-		} else {
-			clearInterval(interval);
-		}
+		if (!isRunning) return;
+		const interval = setInterval(() => setTime((t) => t + 1), 1000);
 		return () => clearInterval(interval);
 	}, [isRunning]);
 
-	return (
-		<>
-			<div className="min-h-screen px-2 py-4 transition-all sm:px-6 md:px-10 lg:px-16 xl:px-32">
-				<Header page={'Attempt'} />
+	const submitAnswers = async () => {
+		try {
+			const response = await api.post(`/quizzes/quiz/submit/${id}/`, { answers, time });
+			setSubmittedAnswers(Array.from(response.data.answers));
+			setScore(response.data.score);
+			setAccuracy(response.data.accuracy);
+			setQuizResults(true);
+			setIsRunning(false);
+		} catch {
+			toast.error('Failed to submit answers.');
+		}
+	};
 
-				{/* Quiz Title and Image */}
-				<div className="mb-8 flex flex-col items-center">
-					<h1 className="mb-2 text-center text-2xl font-extrabold text-gray-800 sm:text-3xl">
-						{quizData.quiz_title}
-					</h1>
-					{quizData.quiz_image && (
-						<div className="mb-4 flex justify-center">
-							<img
-								src={quizData.quiz_image}
-								alt="Quiz"
-								className="max-h-52 w-auto rounded-2xl object-cover shadow-md"
+	if (loading) return <LoadingScreen />;
+
+	return (
+		<div>
+			<PageHeader title={quizData.quiz_title} icon={Target} />
+
+			{quizData.quiz_image && (
+				<div className="mb-6 flex justify-center">
+					<img
+						src={quizData.quiz_image}
+						alt="Quiz"
+						className="max-h-40 rounded-lg object-cover shadow"
+					/>
+				</div>
+			)}
+
+			<div className="flex flex-col gap-6 md:flex-row">
+				<div className="flex-1">
+					{quizResults ? (
+						<div className="space-y-4">
+							<QuizResultView
+								questions={questions}
+								answers={answers}
+								submittedAnswers={submittedAnswers}
 							/>
+							<div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+								<Button
+									onClick={() => {
+										navigate(0);
+									}}
+								>
+									Retake Quiz
+								</Button>
+								<Button variant="secondary" onClick={() => navigate('/quizzes')}>
+									Go to Quiz List
+								</Button>
+							</div>
+						</div>
+					) : quizData.flashcard_quiz ? (
+						<QuizFlashcardAttemptView
+							questions={questions}
+							submitAnswers={submitAnswers}
+							handleAnswerChange={handleAnswerChange}
+							handleIdentificationAnswerChange={handleIdentificationAnswerChange}
+							answers={answers}
+						/>
+					) : (
+						<div className="space-y-4">
+							{questions.map((question, index) => (
+								<QuestionCard
+									key={index}
+									question={question}
+									answers={answers}
+									handleAnswerChange={handleAnswerChange}
+									handleIdentificationAnswerChange={handleIdentificationAnswerChange}
+								/>
+							))}
+							<Button className="w-full" onClick={submitAnswers}>
+								Submit
+							</Button>
 						</div>
 					)}
 				</div>
 
-				<div className="mx-auto flex w-full max-w-5xl flex-col gap-8 md:flex-row md:gap-10">
-					{/* Main Content */}
-					<div className="flex flex-1 flex-col gap-6">
-						{quizResults ? (
-							<div className="flex flex-col gap-4">
-								{questions.map((question, index) => {
-									const answer = answers.find((a) => a.id === question.id);
-									const correct =
-										submittedAnswers[index].correctAnswer === submittedAnswers[index].userAnswer;
-									return (
-										<QuizResultsPage
-											question={question}
-											answer={answer}
-											correct={correct}
-											handleIdentificationAnswerChange={handleIdentificationAnswerChange}
-											submittedAnswers={submittedAnswers}
-											index={index}
-											key={index}
-										/>
-									);
-								})}
-								{/* Retake and Go Back Buttons */}
-								<div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
-									<button
-										onClick={() => {
-											// Use react-router-dom navigation to retake (reload) the quiz attempt page
-											navigate(`/quizzes/attempt/${quiz_id}`, { replace: true });
-										}}
-										className="rounded-xl bg-gradient-to-r from-blue-500 to-blue-700 px-6 py-3 text-lg font-bold text-white shadow transition hover:from-blue-600 hover:to-blue-800 focus:ring-2 focus:ring-blue-300 focus:outline-none"
-									>
-										Retake Quiz
-									</button>
-									<button
-										onClick={() => {
-											navigate('/quizzes');
-										}}
-										className="rounded-xl bg-gradient-to-r from-gray-400 to-gray-600 px-6 py-3 text-lg font-bold text-white shadow transition hover:from-gray-500 hover:to-gray-700 focus:ring-2 focus:ring-gray-300 focus:outline-none sm:ml-3"
-									>
-										Go to Quiz List
-									</button>
-								</div>
-							</div>
-						) : quizData.flashcard_quiz ? (
-							<div className="flex flex-col">
-								<QuizFlashcardAttemptPage
-									questionsParam={questions}
-									submitAnswers={submitAnswers}
-									handleAnswerChange={handleAnswerChange}
-									handleIdentificationAnswerChange={handleIdentificationAnswerChange}
-									answers={answers}
-								/>
-							</div>
-						) : (
-							<div className="flex flex-col gap-4">
-								{questions.map((question, index) => (
-									<QuestionCard
-										question={question}
-										answers={answers}
-										handleAnswerChange={handleAnswerChange}
-										handleIdentificationAnswerChange={handleIdentificationAnswerChange}
-										key={index}
-									/>
-								))}
-								<button
-									onClick={submitAnswers}
-									className="mt-4 w-full rounded-xl bg-gradient-to-r from-green-500 to-lime-500 py-3 text-lg font-bold text-white shadow transition hover:from-green-600 hover:to-lime-600 focus:ring-2 focus:ring-green-300 focus:outline-none"
-								>
-									Submit
-								</button>
-							</div>
-						)}
-					</div>
-
-					{/* Sidebar: Timer and Results */}
-					<div className="mt-8 flex w-full flex-col items-center md:mt-0 md:w-80">
-						<span className="mb-4 w-full text-center text-base font-semibold tracking-wide text-gray-700">
+				<div className="flex w-full shrink-0 flex-col items-center gap-4 md:w-64">
+					<Card className="w-full p-6 text-center">
+						<p className="text-muted mb-2 text-sm font-medium">
+							<Clock size={14} className="mr-1 inline" />
 							Time
-						</span>
-						<div className="mb-6 flex w-full flex-col items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 p-6 shadow-lg">
-							<p className="font-mono text-4xl text-white">{formatTime(time)}</p>
-						</div>
-						{quizResults && (
-							<div className="flex w-full flex-col items-center gap-2 rounded-2xl bg-gradient-to-br from-green-500 to-lime-500 py-6 text-center font-bold text-white shadow">
-								<span className="text-lg">
-									Score: <span className="font-extrabold">{score}</span>
-								</span>
-								<span className="text-lg">
-									Accuracy: <span className="font-extrabold">{accuracy}</span>
-								</span>
-							</div>
-						)}
-					</div>
+						</p>
+						<p className="text-fg font-mono text-3xl font-bold">{formatDurationSeconds(time)}</p>
+					</Card>
+					{quizResults && (
+						<Card className="w-full p-6 text-center">
+							<p className="text-fg text-lg font-bold">Score: {score}</p>
+							<p className="text-fg text-lg font-bold">Accuracy: {accuracy}</p>
+						</Card>
+					)}
 				</div>
 			</div>
-		</>
+		</div>
 	);
 }
