@@ -47,7 +47,8 @@ export default function CreateQuizPage() {
 	const navigate = useNavigate();
 	const [topic, setTopic] = useState('');
 	const [questionNumber, setQuestionNumber] = useState(5);
-	const [loading, setLoading] = useState(false);
+	const [creating, setCreating] = useState(false);
+	const [generating, setGenerating] = useState(false);
 	const [randomQuestionOrder, setRandomQuestionOrder] = useState(false);
 	const [randomQuestionChoices, setRandomQuestionChoices] = useState(false);
 	const [quizType, setQuizType] = useState('list');
@@ -235,7 +236,7 @@ export default function CreateQuizPage() {
 	const handleCreateQuiz = async (e) => {
 		e.preventDefault();
 		try {
-			setLoading(true);
+			setCreating(true);
 			const formData = new FormData();
 			formData.append('quiz_title', quizTitle);
 			formData.append('public', false);
@@ -272,36 +273,85 @@ export default function CreateQuizPage() {
 		} catch (err) {
 			toast.error('Failed to create quiz.');
 		} finally {
-			setLoading(false);
+			setCreating(false);
 		}
 	};
 
+	const clampQuestionCount = (value) => {
+		const parsed = Number.parseInt(String(value), 10);
+		if (Number.isNaN(parsed)) return 5;
+		return Math.max(1, parsed);
+	};
+
+	const mapAiQuestion = (question, index) => {
+		const rawChoices = Array.isArray(question?.choices) ? question.choices : [];
+		const choices =
+			rawChoices.length > 0 ? rawChoices.map((choice) => String(choice)) : ['', '', '', ''];
+		while (choices.length < 4) choices.push('');
+
+		const correctAnswerIndex =
+			typeof question?.correctAnswerIndex === 'number' ? question.correctAnswerIndex : 0;
+
+		return {
+			id: index + 1,
+			title: question?.title || '',
+			choices,
+			choiceImages: new Array(choices.length).fill(null),
+			choiceImagePreviews: new Array(choices.length).fill(null),
+			correctAnswerIndex,
+			mathematical: !!question?.mathematical,
+			identification: !!question?.identification,
+			randomChoices: question?.randomChoices ?? true,
+			hasChoiceImages: false,
+			question_image: null,
+			question_image_preview: null
+		};
+	};
+
+	const getGenerateErrorMessage = (error) => {
+		const apiError = error?.response?.data?.error || error?.response?.data?.detail;
+		if (apiError) return apiError;
+		if (error?.response?.status === 503) {
+			return 'Cannot reach Ollama. Start Ollama locally and try again.';
+		}
+		return 'Failed to generate quiz.';
+	};
+
 	const generateAIQuiz = async () => {
+		const trimmedTopic = topic.trim();
+		if (!trimmedTopic) {
+			toast.error('Enter a topic before generating.');
+			return;
+		}
+
+		const count = clampQuestionCount(questionNumber);
+		setQuestionNumber(count);
+
 		try {
-			setLoading(true);
-			const response = await api.post('/quizzes/quiz/generate/', { topic, questionNumber });
-			if (response.status === 200 || response.status === 201) {
-				const aiQuestions = response.data.quiz_data.questions.map((q, idx) => ({
-					id: idx + 1,
-					title: q.title || '',
-					choices: Array.isArray(q.choices) ? q.choices : ['', '', '', ''],
-					choiceImages: new Array((q.choices || []).length || 4).fill(null),
-					choiceImagePreviews: new Array((q.choices || []).length || 4).fill(null),
-					correctAnswerIndex: typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : 0,
-					mathematical: !!q.mathematical,
-					identification: !!q.identification,
-					randomChoices: !!q.randomChoices,
-					hasChoiceImages: false,
-					question_image: null,
-					question_image_preview: null
-				}));
-				setQuestions(aiQuestions);
-				toast.success('AI quiz generated!');
+			setGenerating(true);
+			const response = await api.post(
+				'/quizzes/quiz/generate/',
+				{
+					topic: trimmedTopic,
+					questionNumber: count
+				},
+				{
+					// Large local generations can take several minutes.
+					timeout: Math.max(300_000, count * 30_000)
+				}
+			);
+			const questionsPayload = response.data?.quiz_data?.questions;
+			if (!Array.isArray(questionsPayload) || questionsPayload.length === 0) {
+				toast.error('Ollama returned an empty quiz. Try again with a different topic.');
+				return;
 			}
-		} catch {
-			toast.error('Failed to generate quiz.');
+
+			setQuestions(questionsPayload.map(mapAiQuestion));
+			toast.success(`Generated ${questionsPayload.length} questions with Ollama.`);
+		} catch (error) {
+			toast.error(getGenerateErrorMessage(error));
 		} finally {
-			setLoading(false);
+			setGenerating(false);
 		}
 	};
 
@@ -559,15 +609,18 @@ export default function CreateQuizPage() {
 								</label>
 							)}
 
-							<Button className="w-full" loading={loading} onClick={handleCreateQuiz}>
+							<Button className="w-full" loading={creating} onClick={handleCreateQuiz}>
 								Create Quiz
 							</Button>
 						</CardBody>
 					</Card>
 
 					<Card>
-						<CardHeader title="AI Generate" />
+						<CardHeader title="AI Generate (Ollama)" />
 						<CardBody className="space-y-3">
+							<p className="text-muted text-xs">
+								Generate draft questions locally with Ollama ({'llama3.1:8b'} by default).
+							</p>
 							<Input
 								label="Topic"
 								value={topic}
@@ -577,17 +630,18 @@ export default function CreateQuizPage() {
 							<Input
 								label="Questions"
 								type="number"
+								min={1}
 								value={questionNumber}
-								onChange={(e) => setQuestionNumber(e.target.value)}
-								max={15}
+								onChange={(e) => setQuestionNumber(clampQuestionCount(e.target.value))}
 							/>
 							<Button
 								variant="secondary"
 								className="w-full"
-								loading={loading}
+								loading={generating}
+								disabled={!topic.trim() || generating}
 								onClick={generateAIQuiz}
 							>
-								<Sparkles size={14} /> Generate
+								<Sparkles size={14} /> Generate with Ollama
 							</Button>
 						</CardBody>
 					</Card>

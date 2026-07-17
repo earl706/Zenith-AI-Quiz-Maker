@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 import { api, tokenStore } from '../lib/api';
 
-const baseURL = import.meta.env.VITE_API_BASE_URL || '/api';
+const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8001/api';
 
 function applySession(set, data) {
 	if (data.mfa_required) {
