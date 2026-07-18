@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { Check, Plus, X, Save, ArrowLeft, Pencil } from 'lucide-react';
 
 import { api } from '../lib/api';
+import { invalidateQuizQueries } from '../lib/resources';
 import { toast } from '../stores/toastStore';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Button, Card, CardBody, CardHeader, Input, LoadingScreen } from '../components/ui';
@@ -236,6 +237,7 @@ export default function EditQuizPage() {
 
 			const response = await api.put(`/quizzes/quiz/${id}/`, quizData);
 			if (response.status === 200) {
+				await invalidateQuizQueries();
 				toast.success('Quiz updated!');
 				navigate(`/quizzes/${id}`);
 			}

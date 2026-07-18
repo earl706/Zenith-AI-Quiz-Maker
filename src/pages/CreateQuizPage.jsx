@@ -1,11 +1,12 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, Plus, X, Import, ListChecks, Sparkles } from 'lucide-react';
 
 import { api } from '../lib/api';
+import { invalidateQuizQueries } from '../lib/resources';
 import { toast } from '../stores/toastStore';
 import { PageHeader } from '../components/layout/PageHeader';
-import { Button, Card, CardBody, CardHeader, Input } from '../components/ui';
+import { Button, Card, CardBody, CardHeader, Input, Select } from '../components/ui';
 import MathInput from '../components/quiz/MathInput';
 
 const colors = [
@@ -47,6 +48,10 @@ export default function CreateQuizPage() {
 	const navigate = useNavigate();
 	const [topic, setTopic] = useState('');
 	const [questionNumber, setQuestionNumber] = useState(5);
+	const [ollamaModels, setOllamaModels] = useState([]);
+	const [ollamaModel, setOllamaModel] = useState('');
+	const [modelsLoading, setModelsLoading] = useState(true);
+	const [modelsError, setModelsError] = useState('');
 	const [creating, setCreating] = useState(false);
 	const [generating, setGenerating] = useState(false);
 	const [randomQuestionOrder, setRandomQuestionOrder] = useState(false);
@@ -59,6 +64,46 @@ export default function CreateQuizPage() {
 	const [questions, setQuestions] = useState([getDefaultQuestion(1)]);
 	const [importError, setImportError] = useState('');
 	const fileInputRef = useRef(null);
+
+	useEffect(() => {
+		let cancelled = false;
+
+		(async () => {
+			setModelsLoading(true);
+			setModelsError('');
+			try {
+				const { data } = await api.get('/quizzes/quiz/ollama/models/');
+				if (cancelled) return;
+				const models = Array.isArray(data?.models) ? data.models : [];
+				setOllamaModels(models);
+				const preferred =
+					(data?.default && models.includes(data.default) && data.default) ||
+					models[0] ||
+					data?.default ||
+					'';
+				setOllamaModel(preferred);
+				if (models.length === 0) {
+					setModelsError(
+						'No Ollama models found. Pull a model locally (e.g. ollama pull llama3.1:8b).'
+					);
+				}
+			} catch (error) {
+				if (cancelled) return;
+				const message =
+					error?.response?.data?.error ||
+					'Cannot reach Ollama to list models. Start Ollama and refresh.';
+				setModelsError(message);
+				setOllamaModels([]);
+				setOllamaModel('');
+			} finally {
+				if (!cancelled) setModelsLoading(false);
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	const handleImportQuiz = (event) => {
 		const file = event.target.files[0];
@@ -267,6 +312,7 @@ export default function CreateQuizPage() {
 			if (response.status === 200 || response.status === 201) {
 				const quizId =
 					response.data?.quiz?.uuid || response.data?.quiz?.quiz_id || response.data?.uuid;
+				await invalidateQuizQueries();
 				toast.success('Quiz created!');
 				navigate(`/quizzes/${quizId}`);
 			}
@@ -277,10 +323,13 @@ export default function CreateQuizPage() {
 		}
 	};
 
+	const MAX_AI_QUESTIONS = 100;
+	const AI_BATCH_SIZE = 5;
+
 	const clampQuestionCount = (value) => {
 		const parsed = Number.parseInt(String(value), 10);
 		if (Number.isNaN(parsed)) return 5;
-		return Math.max(1, parsed);
+		return Math.min(MAX_AI_QUESTIONS, Math.max(1, parsed));
 	};
 
 	const mapAiQuestion = (question, index) => {
@@ -323,21 +372,27 @@ export default function CreateQuizPage() {
 			toast.error('Enter a topic before generating.');
 			return;
 		}
+		if (!ollamaModel.trim()) {
+			toast.error('Select an Ollama model before generating.');
+			return;
+		}
 
 		const count = clampQuestionCount(questionNumber);
 		setQuestionNumber(count);
 
 		try {
 			setGenerating(true);
+			const batchCount = Math.max(1, Math.ceil(count / AI_BATCH_SIZE));
 			const response = await api.post(
 				'/quizzes/quiz/generate/',
 				{
 					topic: trimmedTopic,
-					questionNumber: count
+					questionNumber: count,
+					model: ollamaModel.trim()
 				},
 				{
-					// Large local generations can take several minutes.
-					timeout: Math.max(300_000, count * 30_000)
+					// Batched generations retry/top-up; allow ~8 minutes per batch of 5.
+					timeout: Math.max(300_000, batchCount * 8 * 60 * 1000)
 				}
 			);
 			const questionsPayload = response.data?.quiz_data?.questions;
@@ -347,7 +402,12 @@ export default function CreateQuizPage() {
 			}
 
 			setQuestions(questionsPayload.map(mapAiQuestion));
-			toast.success(`Generated ${questionsPayload.length} questions with Ollama.`);
+			const warning = response.data?.warning;
+			if (warning) {
+				toast.info(warning);
+			} else {
+				toast.success(`Generated ${questionsPayload.length} questions with Ollama.`);
+			}
 		} catch (error) {
 			toast.error(getGenerateErrorMessage(error));
 		} finally {
@@ -619,8 +679,27 @@ export default function CreateQuizPage() {
 						<CardHeader title="AI Generate (Ollama)" />
 						<CardBody className="space-y-3">
 							<p className="text-muted text-xs">
-								Generate draft questions locally with Ollama ({'llama3.1:8b'} by default).
+								Generate draft questions locally with any model installed in Ollama. Requests over 5
+								questions are batched automatically (max 100). Large runs can take several minutes
+								on Apple Silicon.
 							</p>
+							<Select
+								label="Model"
+								value={ollamaModel}
+								disabled={modelsLoading || ollamaModels.length === 0}
+								onChange={(e) => setOllamaModel(e.target.value)}
+								error={modelsError || undefined}
+							>
+								{modelsLoading && <option value="">Loading models…</option>}
+								{!modelsLoading && ollamaModels.length === 0 && (
+									<option value="">No models available</option>
+								)}
+								{ollamaModels.map((name) => (
+									<option key={name} value={name}>
+										{name}
+									</option>
+								))}
+							</Select>
 							<Input
 								label="Topic"
 								value={topic}
@@ -631,6 +710,7 @@ export default function CreateQuizPage() {
 								label="Questions"
 								type="number"
 								min={1}
+								max={MAX_AI_QUESTIONS}
 								value={questionNumber}
 								onChange={(e) => setQuestionNumber(clampQuestionCount(e.target.value))}
 							/>
@@ -638,7 +718,7 @@ export default function CreateQuizPage() {
 								variant="secondary"
 								className="w-full"
 								loading={generating}
-								disabled={!topic.trim() || generating}
+								disabled={!topic.trim() || !ollamaModel.trim() || generating || modelsLoading}
 								onClick={generateAIQuiz}
 							>
 								<Sparkles size={14} /> Generate with Ollama

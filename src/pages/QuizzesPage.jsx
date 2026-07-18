@@ -1,30 +1,32 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { BookOpen, Plus, Pencil, Trash2, Play, Eye } from 'lucide-react';
 
 import { get, del } from '../lib/api';
 import { formatDate } from '../lib/format';
+import { invalidateQuizQueries, normalizeQuizList } from '../lib/resources';
 import { toast } from '../stores/toastStore';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Button, Card, Badge, Modal, EmptyState, LoadingScreen } from '../components/ui';
 
 export default function QuizzesPage() {
 	const navigate = useNavigate();
-	const queryClient = useQueryClient();
 	const [deleteTarget, setDeleteTarget] = useState(null);
 
 	const { data, isLoading } = useQuery({
 		queryKey: ['quizzes', 'list'],
-		queryFn: () => get('/quizzes/quiz/')
+		queryFn: () => get('/quizzes/quiz/'),
+		staleTime: 0,
+		refetchOnMount: 'always'
 	});
 
-	const quizList = data?.results || data?.data || data || [];
+	const quizList = normalizeQuizList(data);
 
 	const removeMutation = useMutation({
 		mutationFn: (uuid) => del(`/quizzes/quiz/${uuid}/`),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ['quizzes'] });
+		onSuccess: async () => {
+			await invalidateQuizQueries();
 			toast.success('Quiz deleted.');
 			setDeleteTarget(null);
 		},

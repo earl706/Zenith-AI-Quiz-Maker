@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { get } from '../lib/api';
 import { formatDate, fromNow } from '../lib/format';
+import { normalizeQuizList } from '../lib/resources';
 import { useAuthStore } from '../stores/authStore';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Button, Card, CardBody, CardHeader, StatCard, EmptyState } from '../components/ui';
@@ -22,7 +23,9 @@ export default function DashboardPage() {
 
 	const { data: quizzes, isLoading } = useQuery({
 		queryKey: ['dashboard', 'quizzes'],
-		queryFn: () => get('/quizzes/quiz/')
+		queryFn: () => get('/quizzes/quiz/'),
+		staleTime: 0,
+		refetchOnMount: 'always'
 	});
 
 	const { data: attempts } = useQuery({
@@ -30,7 +33,7 @@ export default function DashboardPage() {
 		queryFn: () => get('/quizzes/quiz/attempts/')
 	});
 
-	const quizList = quizzes?.results || quizzes?.data || quizzes || [];
+	const quizList = normalizeQuizList(quizzes);
 	const attemptList = attempts?.results || attempts?.data || attempts || [];
 
 	const stats = [
