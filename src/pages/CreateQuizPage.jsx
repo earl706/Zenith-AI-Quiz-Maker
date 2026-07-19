@@ -27,6 +27,12 @@ const colors = [
 	{ name: 'Emerald', hex: '#50C878' }
 ];
 
+const AI_TYPE_MIX_OPTIONS = [
+	{ value: 'mostly_mc', label: 'Mostly multiple choice' },
+	{ value: 'balanced', label: 'Balanced (50/50)' },
+	{ value: 'mostly_identification', label: 'Mostly identification' }
+];
+
 function getDefaultQuestion(id, randomChoices = false) {
 	return {
 		id,
@@ -48,6 +54,7 @@ export default function CreateQuizPage() {
 	const navigate = useNavigate();
 	const [topic, setTopic] = useState('');
 	const [questionNumber, setQuestionNumber] = useState(5);
+	const [aiTypeMix, setAiTypeMix] = useState('balanced');
 	const [ollamaModels, setOllamaModels] = useState([]);
 	const [ollamaModel, setOllamaModel] = useState('');
 	const [modelsLoading, setModelsLoading] = useState(true);
@@ -324,7 +331,7 @@ export default function CreateQuizPage() {
 	};
 
 	const MAX_AI_QUESTIONS = 100;
-	const AI_BATCH_SIZE = 5;
+	const AI_BATCH_SIZE = 4;
 
 	const clampQuestionCount = (value) => {
 		const parsed = Number.parseInt(String(value), 10);
@@ -333,13 +340,26 @@ export default function CreateQuizPage() {
 	};
 
 	const mapAiQuestion = (question, index) => {
+		const identification = !!question?.identification;
 		const rawChoices = Array.isArray(question?.choices) ? question.choices : [];
-		const choices =
-			rawChoices.length > 0 ? rawChoices.map((choice) => String(choice)) : ['', '', '', ''];
-		while (choices.length < 4) choices.push('');
-
-		const correctAnswerIndex =
+		let choices = rawChoices.map((choice) => String(choice));
+		let correctAnswerIndex =
 			typeof question?.correctAnswerIndex === 'number' ? question.correctAnswerIndex : 0;
+
+		if (identification) {
+			const answer =
+				choices[correctAnswerIndex] ??
+				question?.correctAnswer ??
+				choices[0] ??
+				'';
+			choices = [String(answer)];
+			correctAnswerIndex = 0;
+		} else {
+			if (choices.length === 0) choices = ['', '', '', ''];
+			while (choices.length < 4) choices.push('');
+			choices = choices.slice(0, 4);
+			correctAnswerIndex = Math.max(0, Math.min(correctAnswerIndex, choices.length - 1));
+		}
 
 		return {
 			id: index + 1,
@@ -349,8 +369,8 @@ export default function CreateQuizPage() {
 			choiceImagePreviews: new Array(choices.length).fill(null),
 			correctAnswerIndex,
 			mathematical: !!question?.mathematical,
-			identification: !!question?.identification,
-			randomChoices: question?.randomChoices ?? true,
+			identification,
+			randomChoices: question?.randomChoices ?? randomQuestionChoices,
 			hasChoiceImages: false,
 			question_image: null,
 			question_image_preview: null
@@ -388,11 +408,13 @@ export default function CreateQuizPage() {
 				{
 					topic: trimmedTopic,
 					questionNumber: count,
-					model: ollamaModel.trim()
+					model: ollamaModel.trim(),
+					typeMix: aiTypeMix,
+					randomChoices: randomQuestionChoices
 				},
 				{
-					// Batched generations retry/top-up; allow ~8 minutes per batch of 5.
-					timeout: Math.max(300_000, batchCount * 8 * 60 * 1000)
+					// Small batches + retries; allow ~6 minutes per batch of ~4.
+					timeout: Math.max(300_000, batchCount * 6 * 60 * 1000)
 				}
 			);
 			const questionsPayload = response.data?.quiz_data?.questions;
@@ -679,9 +701,9 @@ export default function CreateQuizPage() {
 						<CardHeader title="AI Generate (Ollama)" />
 						<CardBody className="space-y-3">
 							<p className="text-muted text-xs">
-								Generate draft questions locally with any model installed in Ollama. Requests over 5
-								questions are batched automatically (max 100). Large runs can take several minutes
-								on Apple Silicon.
+								Generate draft questions locally with any model installed in Ollama. Requests over 8
+								questions are batched automatically (max 100). Prefer llama3.1:8b for speed; run
+								ollama run MODEL once first to warm the model before large generates.
 							</p>
 							<Select
 								label="Model"
@@ -714,6 +736,22 @@ export default function CreateQuizPage() {
 								value={questionNumber}
 								onChange={(e) => setQuestionNumber(clampQuestionCount(e.target.value))}
 							/>
+							<Select
+								label="Question mix"
+								value={aiTypeMix}
+								onChange={(e) => setAiTypeMix(e.target.value)}
+							>
+								{AI_TYPE_MIX_OPTIONS.map(({ value, label }) => (
+									<option key={value} value={value}>
+										{label}
+									</option>
+								))}
+							</Select>
+							<p className="text-muted text-xs">
+								Math questions are added only when the topic is math-related (50/50 math split).
+								Uses Options above for randomize questions/choices. Text only — add images after
+								generate.
+							</p>
 							<Button
 								variant="secondary"
 								className="w-full"
