@@ -71,6 +71,12 @@ export default function CreateQuizPage() {
 	const [questions, setQuestions] = useState([getDefaultQuestion(1)]);
 	const [importError, setImportError] = useState('');
 	const fileInputRef = useRef(null);
+	const referenceInputRef = useRef(null);
+	const [referenceMarkdown, setReferenceMarkdown] = useState('');
+	const [referenceMeta, setReferenceMeta] = useState(null);
+	const [referenceLoading, setReferenceLoading] = useState(false);
+	const [referenceError, setReferenceError] = useState('');
+	const [referencePendingFile, setReferencePendingFile] = useState(false);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -347,11 +353,7 @@ export default function CreateQuizPage() {
 			typeof question?.correctAnswerIndex === 'number' ? question.correctAnswerIndex : 0;
 
 		if (identification) {
-			const answer =
-				choices[correctAnswerIndex] ??
-				question?.correctAnswer ??
-				choices[0] ??
-				'';
+			const answer = choices[correctAnswerIndex] ?? question?.correctAnswer ?? choices[0] ?? '';
 			choices = [String(answer)];
 			correctAnswerIndex = 0;
 		} else {
@@ -386,6 +388,62 @@ export default function CreateQuizPage() {
 		return 'Failed to generate quiz.';
 	};
 
+	const clearReference = () => {
+		setReferenceMarkdown('');
+		setReferenceMeta(null);
+		setReferenceError('');
+		setReferencePendingFile(false);
+		if (referenceInputRef.current) {
+			referenceInputRef.current.value = '';
+		}
+	};
+
+	const handleReferenceFile = async (event) => {
+		const file = event.target.files?.[0];
+		if (!file) return;
+
+		setReferencePendingFile(true);
+		setReferenceLoading(true);
+		setReferenceError('');
+		setReferenceMarkdown('');
+		setReferenceMeta(null);
+
+		const formData = new FormData();
+		formData.append('file', file);
+
+		try {
+			const { data } = await api.post('/quizzes/quiz/reference/extract/', formData, {
+				timeout: 120_000
+			});
+			setReferenceMarkdown(data.markdown || '');
+			setReferenceMeta({
+				filename: data.filename || file.name,
+				charCount: data.char_count ?? (data.markdown || '').length,
+				truncated: Boolean(data.truncated),
+				sourceType: data.source_type || '',
+				warnings: Array.isArray(data.warnings) ? data.warnings : []
+			});
+			if (data.truncated) {
+				toast.info('Reference was truncated for model context.');
+			} else {
+				toast.success('Reference ready for generation.');
+			}
+		} catch (error) {
+			const message =
+				error?.response?.data?.error ||
+				error?.response?.data?.detail ||
+				'Failed to convert reference file.';
+			setReferenceError(message);
+			toast.error(message);
+			if (referenceInputRef.current) {
+				referenceInputRef.current.value = '';
+			}
+		} finally {
+			setReferenceLoading(false);
+			setReferencePendingFile(false);
+		}
+	};
+
 	const generateAIQuiz = async () => {
 		const trimmedTopic = topic.trim();
 		if (!trimmedTopic) {
@@ -396,6 +454,10 @@ export default function CreateQuizPage() {
 			toast.error('Select an Ollama model before generating.');
 			return;
 		}
+		if (referenceLoading || referencePendingFile) {
+			toast.error('Wait for the reference file to finish converting.');
+			return;
+		}
 
 		const count = clampQuestionCount(questionNumber);
 		setQuestionNumber(count);
@@ -403,20 +465,20 @@ export default function CreateQuizPage() {
 		try {
 			setGenerating(true);
 			const batchCount = Math.max(1, Math.ceil(count / AI_BATCH_SIZE));
-			const response = await api.post(
-				'/quizzes/quiz/generate/',
-				{
-					topic: trimmedTopic,
-					questionNumber: count,
-					model: ollamaModel.trim(),
-					typeMix: aiTypeMix,
-					randomChoices: randomQuestionChoices
-				},
-				{
-					// Small batches + retries; allow ~6 minutes per batch of ~4.
-					timeout: Math.max(300_000, batchCount * 6 * 60 * 1000)
-				}
-			);
+			const body = {
+				topic: trimmedTopic,
+				questionNumber: count,
+				model: ollamaModel.trim(),
+				typeMix: aiTypeMix,
+				randomChoices: randomQuestionChoices
+			};
+			if (referenceMarkdown.trim()) {
+				body.referenceMarkdown = referenceMarkdown;
+			}
+			const response = await api.post('/quizzes/quiz/generate/', body, {
+				// Small batches + retries; allow ~6 minutes per batch of ~4.
+				timeout: Math.max(300_000, batchCount * 6 * 60 * 1000)
+			});
 			const questionsPayload = response.data?.quiz_data?.questions;
 			if (!Array.isArray(questionsPayload) || questionsPayload.length === 0) {
 				toast.error('Ollama returned an empty quiz. Try again with a different topic.');
@@ -752,11 +814,50 @@ export default function CreateQuizPage() {
 								Uses Options above for randomize questions/choices. Text only — add images after
 								generate.
 							</p>
+							<div className="space-y-2">
+								<label className="text-foreground text-sm font-medium">
+									Reference file (optional)
+								</label>
+								<input
+									type="file"
+									accept=".txt,.md,.pdf,text/plain,text/markdown,application/pdf"
+									ref={referenceInputRef}
+									onChange={handleReferenceFile}
+									className="text-muted file:bg-secondary file:text-foreground block w-full text-xs file:mr-3 file:rounded-md file:border-0 file:px-3 file:py-1.5 file:text-xs file:font-medium"
+								/>
+								<p className="text-muted text-xs">
+									PDF/TXT/MD is converted to Markdown for the model; not saved on the server.
+								</p>
+								{referenceLoading && <p className="text-muted text-xs">Converting reference…</p>}
+								{referenceError && <p className="text-danger text-xs">{referenceError}</p>}
+								{referenceMeta && !referenceLoading && (
+									<div className="flex flex-wrap items-center gap-2 text-xs">
+										<span className="text-foreground">
+											{referenceMeta.filename} · {referenceMeta.charCount.toLocaleString()} chars
+										</span>
+										{referenceMeta.truncated && (
+											<span className="rounded bg-amber-500/15 px-2 py-0.5 text-amber-700 dark:text-amber-300">
+												Truncated
+											</span>
+										)}
+										<Button type="button" variant="ghost" size="sm" onClick={clearReference}>
+											Clear
+										</Button>
+									</div>
+								)}
+							</div>
 							<Button
 								variant="secondary"
 								className="w-full"
 								loading={generating}
-								disabled={!topic.trim() || !ollamaModel.trim() || generating || modelsLoading}
+								disabled={
+									!topic.trim() ||
+									!ollamaModel.trim() ||
+									generating ||
+									modelsLoading ||
+									referenceLoading ||
+									referencePendingFile
+								}
 								onClick={generateAIQuiz}
 							>
 								<Sparkles size={14} /> Generate with Ollama
