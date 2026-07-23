@@ -1,5 +1,8 @@
-import { useState } from 'react';
-import MathRenderer from './MathRenderer';
+import { Check, X } from 'lucide-react';
+
+import { cn } from '../../lib/format';
+import { Button } from '../ui';
+import MathFieldInput from './MathFieldInput';
 
 export default function MathInput({
 	handleChoicesChange,
@@ -7,69 +10,54 @@ export default function MathInput({
 	handleInputChange,
 	removeChoice
 }) {
-	const [inputs, setInputs] = useState(['', '', '', '']);
-
-	const handleMathInputChange = (id, index, e) => {
-		const rawInput = e.target.value;
-		setInputs(inputs.map((input, indx) => (indx === index ? rawInput : input)));
-		handleChoicesChange(id, index, rawInput);
-	};
-
-	return (
-		<>
-			{question.identification ? (
-				<div className="flex w-full items-center gap-3">
-					<button
-						type="button"
-						className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition ${
-							question.correctAnswerIndex === 0
-								? 'border-primary bg-primary'
-								: 'border-line bg-surface'
-						}`}
-						onClick={() => handleInputChange(question.id, 'correctAnswerIndex', 0)}
-					/>
-					<input
-						type="text"
-						value={question.choices[0]}
-						onChange={(e) => handleMathInputChange(question.id, 0, e)}
-						placeholder="Enter mathematical expression (e.g., x^2 + 2x + 1)"
-						className="border-line bg-surface text-fg focus:border-primary flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none"
-					/>
-					<div className="flex min-h-[40px] flex-1 items-center justify-center">
-						<MathRenderer expression={question.choices[0]} displayMode={true} />
-					</div>
-				</div>
-			) : (
-				[0, 1, 2, 3].map((index) => (
-					<div className="flex items-center gap-3" key={index}>
-						<button
-							type="button"
-							className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition ${
-								question.correctAnswerIndex === index
-									? 'border-primary bg-primary'
-									: 'border-line bg-surface'
-							}`}
-							onClick={() => handleInputChange(question.id, 'correctAnswerIndex', index)}
-						/>
-						<input
-							type="text"
-							value={question.choices[index]}
-							onChange={(e) => handleMathInputChange(question.id, index, e)}
-							placeholder={`Choice ${index + 1} (e.g., x^2 + 2x + 1)`}
-							className="border-line bg-surface text-fg focus:border-primary flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none"
-							required
-						/>
-						<div className="flex min-h-[40px] flex-1 items-center justify-center">
-							<MathRenderer expression={question.choices[index]} displayMode={true} />
-						</div>
-						<button
-							type="button"
-							className="bg-danger flex h-5 w-5 shrink-0 cursor-pointer items-center justify-center rounded-full"
-							onClick={() => removeChoice(question.id, index)}
-						/>
-					</div>
-				))
+	const renderRow = (index, { showRemove }) => (
+		<div className="flex items-center gap-1.5" key={index}>
+			<button
+				type="button"
+				aria-label={
+					question.identification ? 'Mark answer correct' : `Mark choice ${index + 1} correct`
+				}
+				className={cn(
+					'flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 transition',
+					question.correctAnswerIndex === index
+						? 'border-primary bg-primary'
+						: 'border-line bg-surface'
+				)}
+				onClick={() => handleInputChange(question.id, 'correctAnswerIndex', index)}
+			>
+				{question.correctAnswerIndex === index && <Check size={10} className="text-primary-fg" />}
+			</button>
+			<MathFieldInput
+				value={question.choices[index] || ''}
+				onChange={(latex) => handleChoicesChange(question.id, index, latex)}
+				placeholder={question.identification ? 'e.g. x^2 + 2x + 1' : `Choice ${index + 1}`}
+				aria-label={
+					question.identification ? 'Mathematical answer' : `Mathematical choice ${index + 1}`
+				}
+				className="min-w-0 flex-1"
+			/>
+			{showRemove && (
+				<Button
+					variant="ghost"
+					size="icon"
+					className="h-7 w-7 shrink-0 cursor-pointer"
+					aria-label={`Remove choice ${index + 1}`}
+					onClick={() => removeChoice(question.id, index)}
+				>
+					<X size={13} className="text-danger" />
+				</Button>
 			)}
-		</>
+		</div>
+	);
+
+	if (question.identification) {
+		return renderRow(0, { showRemove: false });
+	}
+
+	const count = Math.max(question.choices?.length || 0, 4);
+	return (
+		<div className="space-y-1.5">
+			{Array.from({ length: count }, (_, index) => renderRow(index, { showRemove: true }))}
+		</div>
 	);
 }

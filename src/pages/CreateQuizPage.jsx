@@ -1,12 +1,23 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Check, Plus, X, Import, ListChecks, Sparkles } from 'lucide-react';
+import {
+	Check,
+	Plus,
+	X,
+	Import,
+	ListChecks,
+	SlidersHorizontal,
+	Sparkles,
+	FileUp,
+	Image as ImageIcon
+} from 'lucide-react';
 
 import { api } from '../lib/api';
+import { cn } from '../lib/format';
 import { invalidateQuizQueries } from '../lib/resources';
 import { toast } from '../stores/toastStore';
 import { PageHeader } from '../components/layout/PageHeader';
-import { Button, Card, CardBody, CardHeader, Input, Select } from '../components/ui';
+import { Badge, Button, Card, CardBody, CardHeader, Input, Modal, Select } from '../components/ui';
 import MathInput from '../components/quiz/MathInput';
 
 const colors = [
@@ -28,10 +39,31 @@ const colors = [
 ];
 
 const AI_TYPE_MIX_OPTIONS = [
-	{ value: 'mostly_mc', label: 'Mostly multiple choice' },
-	{ value: 'balanced', label: 'Balanced (50/50)' },
-	{ value: 'mostly_identification', label: 'Mostly identification' }
+	{ value: 'mostly_mc', label: 'Mostly MC' },
+	{ value: 'balanced', label: 'Balanced' },
+	{ value: 'mostly_identification', label: 'Mostly ID' }
 ];
+
+/** Mirror backend auto heuristic for timeout/preview (chars ≈ words*5). */
+function estimateAutoQuestionCount(topic, referenceMarkdown) {
+	const autoMin = 5;
+	const autoMax = 200;
+	const charsPer = 2500;
+	const topicOnly = 10;
+	const reference = String(referenceMarkdown || '').trim();
+	if (reference) {
+		let estimate = Math.max(1, Math.round(reference.length / charsPer));
+		const headings = reference
+			.split('\n')
+			.filter((line) => line.trimStart().startsWith('#')).length;
+		estimate += Math.min(8, Math.floor(headings / 3));
+		return Math.min(autoMax, Math.max(autoMin, estimate));
+	}
+	const topicText = String(topic || '').trim();
+	if (topicText.length >= 80) return Math.min(autoMax, Math.max(autoMin, topicOnly + 2));
+	if (topicText.length <= 12) return Math.min(autoMax, Math.max(autoMin, topicOnly - 2));
+	return topicOnly;
+}
 
 function getDefaultQuestion(id, randomChoices = false) {
 	return {
@@ -45,18 +77,137 @@ function getDefaultQuestion(id, randomChoices = false) {
 		identification: false,
 		randomChoices,
 		hasChoiceImages: false,
+		showChoiceImages: false,
 		question_image: null,
 		question_image_preview: null
 	};
+}
+
+function ToggleChip({ active, onClick, children, className }) {
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			aria-pressed={active}
+			className={cn(
+				'inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-[0.7rem] font-medium whitespace-nowrap transition',
+				'focus-visible:outline-primary focus-visible:outline-2 focus-visible:outline-offset-2',
+				active
+					? 'border-primary/40 bg-primary/12 text-primary shadow-primary/10 shadow-sm'
+					: 'border-line bg-surface text-muted hover:border-primary/25 hover:bg-surface-2 hover:text-fg',
+				className
+			)}
+		>
+			<span
+				aria-hidden
+				className={cn(
+					'flex h-3.5 w-3.5 items-center justify-center rounded-full border transition',
+					active ? 'border-primary bg-primary text-primary-fg' : 'border-line bg-transparent'
+				)}
+			>
+				{active && <Check size={9} strokeWidth={3} />}
+			</span>
+			{children}
+		</button>
+	);
+}
+
+function ImageDropzone({ preview, onClear, onChange, onPreview, label, compact = false }) {
+	if (preview) {
+		return (
+			<div className="relative">
+				<button
+					type="button"
+					onClick={() => onPreview?.(preview, label || 'Image preview')}
+					className="block w-full cursor-pointer overflow-hidden rounded-md text-left"
+					aria-label={`Preview ${label || 'image'}`}
+				>
+					<img
+						src={preview}
+						alt=""
+						className={cn(
+							'w-full object-cover transition hover:opacity-90',
+							compact ? 'h-16' : 'h-24'
+						)}
+					/>
+				</button>
+				<button
+					type="button"
+					onClick={(e) => {
+						e.stopPropagation();
+						onClear?.();
+					}}
+					aria-label="Remove image"
+					className="bg-danger absolute top-1 right-1 z-10 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full text-white"
+				>
+					<X size={11} />
+				</button>
+			</div>
+		);
+	}
+
+	return (
+		<label
+			className={cn(
+				'border-line hover:border-primary/40 text-muted flex w-full cursor-pointer flex-col items-center justify-center rounded-md border border-dashed text-xs transition',
+				compact ? 'h-12 gap-0.5' : 'h-16 gap-1'
+			)}
+		>
+			<input type="file" accept="image/*" onChange={onChange} className="hidden" />
+			<Plus size={compact ? 14 : 16} />
+			<span>{label}</span>
+		</label>
+	);
+}
+
+/** Compact choice image control: icon button empty, tiny thumb when set. */
+function ChoiceImageControl({ preview, onChange, onClear, onPreview }) {
+	if (preview) {
+		return (
+			<div className="relative shrink-0">
+				<button
+					type="button"
+					onClick={() => onPreview?.(preview, 'Choice image')}
+					className="block cursor-pointer overflow-hidden rounded"
+					aria-label="Preview choice image"
+				>
+					<img src={preview} alt="" className="h-7 w-7 object-cover transition hover:opacity-90" />
+				</button>
+				<button
+					type="button"
+					aria-label="Remove choice image"
+					onClick={(e) => {
+						e.stopPropagation();
+						onClear?.();
+					}}
+					className="bg-danger absolute -top-1 -right-1 z-10 flex h-3.5 w-3.5 cursor-pointer items-center justify-center rounded-full text-white"
+				>
+					<X size={7} />
+				</button>
+			</div>
+		);
+	}
+
+	return (
+		<label
+			className="text-muted hover:bg-surface-2 hover:text-fg flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md transition"
+			title="Add image"
+		>
+			<input type="file" accept="image/*" onChange={onChange} className="hidden" />
+			<ImageIcon size={14} />
+		</label>
+	);
 }
 
 export default function CreateQuizPage() {
 	const navigate = useNavigate();
 	const [topic, setTopic] = useState('');
 	const [questionNumber, setQuestionNumber] = useState(5);
+	const [autoQuestionCount, setAutoQuestionCount] = useState(false);
 	const [aiTypeMix, setAiTypeMix] = useState('balanced');
 	const [ollamaModels, setOllamaModels] = useState([]);
 	const [ollamaModel, setOllamaModel] = useState('');
+	const [ollamaMode, setOllamaMode] = useState('local');
 	const [modelsLoading, setModelsLoading] = useState(true);
 	const [modelsError, setModelsError] = useState('');
 	const [creating, setCreating] = useState(false);
@@ -77,6 +228,16 @@ export default function CreateQuizPage() {
 	const [referenceLoading, setReferenceLoading] = useState(false);
 	const [referenceError, setReferenceError] = useState('');
 	const [referencePendingFile, setReferencePendingFile] = useState(false);
+	const [imagePreview, setImagePreview] = useState(null);
+	const [settingsOpen, setSettingsOpen] = useState(false);
+	const [aiOpen, setAiOpen] = useState(false);
+
+	const openImagePreview = (src, title = 'Image preview') => {
+		if (!src) return;
+		setImagePreview({ src, title });
+	};
+
+	const closeImagePreview = () => setImagePreview(null);
 
 	useEffect(() => {
 		let cancelled = false;
@@ -88,6 +249,8 @@ export default function CreateQuizPage() {
 				const { data } = await api.get('/quizzes/quiz/ollama/models/');
 				if (cancelled) return;
 				const models = Array.isArray(data?.models) ? data.models : [];
+				const mode = data?.mode === 'cloud' ? 'cloud' : 'local';
+				setOllamaMode(mode);
 				setOllamaModels(models);
 				const preferred =
 					(data?.default && models.includes(data.default) && data.default) ||
@@ -97,14 +260,18 @@ export default function CreateQuizPage() {
 				setOllamaModel(preferred);
 				if (models.length === 0) {
 					setModelsError(
-						'No Ollama models found. Pull a model locally (e.g. ollama pull llama3.1:8b).'
+						mode === 'cloud'
+							? 'No free-tier Ollama Cloud models available. Check your API key or Settings provider.'
+							: 'No Ollama models found. Pull a model locally (e.g. ollama pull llama3.1:8b).'
 					);
 				}
 			} catch (error) {
 				if (cancelled) return;
 				const message =
 					error?.response?.data?.error ||
-					'Cannot reach Ollama to list models. Start Ollama and refresh.';
+					(ollamaMode === 'cloud'
+						? 'Cannot reach Ollama Cloud. Check your API key in Settings.'
+						: 'Cannot reach Ollama to list models. Start Ollama and refresh.');
 				setModelsError(message);
 				setOllamaModels([]);
 				setOllamaModel('');
@@ -161,6 +328,7 @@ export default function CreateQuizPage() {
 						identification: !!q.identification,
 						randomChoices: !!q.randomChoices,
 						hasChoiceImages: !!q.hasChoiceImages,
+						showChoiceImages: !!q.hasChoiceImages,
 						question_image: null,
 						question_image_preview: null
 					};
@@ -174,7 +342,39 @@ export default function CreateQuizPage() {
 	};
 
 	const handleInputChange = (id, field, value) => {
-		setQuestions((qs) => qs.map((q) => (q.id === id ? { ...q, [field]: value } : q)));
+		setQuestions((qs) =>
+			qs.map((q) => {
+				if (q.id !== id) return q;
+				const next = { ...q, [field]: value };
+				// Choice images only apply to standard multiple-choice rows.
+				if ((field === 'identification' || field === 'mathematical') && value === true) {
+					next.showChoiceImages = false;
+					next.hasChoiceImages = false;
+					next.choiceImages = q.choiceImages.map(() => null);
+					next.choiceImagePreviews = q.choiceImagePreviews.map(() => null);
+				}
+				return next;
+			})
+		);
+	};
+
+	const toggleChoiceImages = (questionId) => {
+		setQuestions((qs) =>
+			qs.map((q) => {
+				if (q.id !== questionId) return q;
+				const next = !q.showChoiceImages;
+				if (next) {
+					return { ...q, showChoiceImages: true };
+				}
+				return {
+					...q,
+					showChoiceImages: false,
+					hasChoiceImages: false,
+					choiceImages: q.choiceImages.map(() => null),
+					choiceImagePreviews: q.choiceImagePreviews.map(() => null)
+				};
+			})
+		);
 	};
 
 	const removeQuestion = (questionID) => {
@@ -336,7 +536,7 @@ export default function CreateQuizPage() {
 		}
 	};
 
-	const MAX_AI_QUESTIONS = 100;
+	const MAX_AI_QUESTIONS = 200;
 	const AI_BATCH_SIZE = 4;
 
 	const clampQuestionCount = (value) => {
@@ -374,6 +574,7 @@ export default function CreateQuizPage() {
 			identification,
 			randomChoices: question?.randomChoices ?? randomQuestionChoices,
 			hasChoiceImages: false,
+			showChoiceImages: false,
 			question_image: null,
 			question_image_preview: null
 		};
@@ -382,8 +583,16 @@ export default function CreateQuizPage() {
 	const getGenerateErrorMessage = (error) => {
 		const apiError = error?.response?.data?.error || error?.response?.data?.detail;
 		if (apiError) return apiError;
+		if (error?.response?.status === 403) {
+			return 'Ollama Cloud denied access to this model. It may require a paid plan — try another model.';
+		}
+		if (error?.response?.status === 401) {
+			return 'Ollama Cloud rejected your API key. Update it in Settings.';
+		}
 		if (error?.response?.status === 503) {
-			return 'Cannot reach Ollama. Start Ollama locally and try again.';
+			return ollamaMode === 'cloud'
+				? 'Cannot reach Ollama Cloud. Check your API key in Settings.'
+				: 'Cannot reach Ollama. Start Ollama locally and try again.';
 		}
 		return 'Failed to generate quiz.';
 	};
@@ -445,9 +654,11 @@ export default function CreateQuizPage() {
 	};
 
 	const generateAIQuiz = async () => {
+		if (generating) return;
 		const trimmedTopic = topic.trim();
-		if (!trimmedTopic) {
-			toast.error('Enter a topic before generating.');
+		const trimmedReference = referenceMarkdown.trim();
+		if (!trimmedTopic && !trimmedReference) {
+			toast.error('Enter a topic or attach a reference file before generating.');
 			return;
 		}
 		if (!ollamaModel.trim()) {
@@ -459,20 +670,29 @@ export default function CreateQuizPage() {
 			return;
 		}
 
-		const count = clampQuestionCount(questionNumber);
-		setQuestionNumber(count);
+		const autoCount = autoQuestionCount;
+		const count = autoCount
+			? estimateAutoQuestionCount(trimmedTopic, trimmedReference)
+			: clampQuestionCount(questionNumber);
+		if (!autoCount) {
+			setQuestionNumber(count);
+		}
 
 		try {
 			setGenerating(true);
 			const batchCount = Math.max(1, Math.ceil(count / AI_BATCH_SIZE));
 			const body = {
 				topic: trimmedTopic,
-				questionNumber: count,
 				model: ollamaModel.trim(),
 				typeMix: aiTypeMix,
 				randomChoices: randomQuestionChoices
 			};
-			if (referenceMarkdown.trim()) {
+			if (autoCount) {
+				body.autoQuestionCount = true;
+			} else {
+				body.questionNumber = count;
+			}
+			if (trimmedReference) {
 				body.referenceMarkdown = referenceMarkdown;
 			}
 			const response = await api.post('/quizzes/quiz/generate/', body, {
@@ -486,12 +706,24 @@ export default function CreateQuizPage() {
 			}
 
 			setQuestions(questionsPayload.map(mapAiQuestion));
+			const resolvedCount =
+				typeof response.data?.questionNumber === 'number'
+					? response.data.questionNumber
+					: questionsPayload.length;
+			if (autoCount) {
+				setQuestionNumber(clampQuestionCount(resolvedCount));
+			}
 			const warning = response.data?.warning;
 			if (warning) {
 				toast.info(warning);
 			} else {
-				toast.success(`Generated ${questionsPayload.length} questions with Ollama.`);
+				toast.success(
+					response.data?.autoQuestionCount
+						? `Auto-generated ${questionsPayload.length} questions with Ollama.`
+						: `Generated ${questionsPayload.length} questions with Ollama.`
+				);
 			}
+			setAiOpen(false);
 		} catch (error) {
 			toast.error(getGenerateErrorMessage(error));
 		} finally {
@@ -500,16 +732,13 @@ export default function CreateQuizPage() {
 	};
 
 	return (
-		<div>
+		<div className="pb-20 lg:pb-0">
 			<PageHeader
 				title="Create Quiz"
 				icon={ListChecks}
-				description="Build a new quiz with custom questions."
-			/>
-
-			<div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
-				<div className="flex flex-1 flex-col gap-4">
-					<div className="flex items-center gap-3">
+				description={`${questions.length} question${questions.length === 1 ? '' : 's'}`}
+				actions={
+					<div className="flex items-center gap-1.5 sm:gap-2">
 						<input
 							type="file"
 							accept="application/json"
@@ -518,422 +747,493 @@ export default function CreateQuizPage() {
 							className="hidden"
 						/>
 						<Button
+							variant="ghost"
+							size="icon"
+							className="cursor-pointer"
+							aria-label="Quiz settings"
+							title="Quiz settings"
+							onClick={() => setSettingsOpen(true)}
+						>
+							<SlidersHorizontal size={16} />
+						</Button>
+						<Button
+							variant="ghost"
+							size="icon"
+							className="cursor-pointer"
+							aria-label="AI quiz generation"
+							title="AI quiz generation"
+							onClick={() => setAiOpen(true)}
+						>
+							<Sparkles size={16} />
+						</Button>
+						<Button
 							variant="secondary"
 							size="sm"
+							className="cursor-pointer"
 							onClick={() => {
 								fileInputRef.current.value = '';
 								fileInputRef.current.click();
 							}}
 						>
-							<Import size={14} /> Import JSON
+							<Import size={14} /> Import
 						</Button>
-						{importError && <span className="text-danger text-xs">{importError}</span>}
+						<Button
+							size="sm"
+							className="cursor-pointer"
+							loading={creating}
+							onClick={handleCreateQuiz}
+						>
+							Create
+						</Button>
 					</div>
+				}
+			/>
+			{importError && <p className="text-danger mb-3 text-xs">{importError}</p>}
 
-					{questions.map((question, index) => (
-						<Card key={question.id}>
-							<CardHeader
-								title={`Question ${index + 1}`}
-								action={
-									<Button variant="ghost" size="icon" onClick={() => removeQuestion(question.id)}>
-										<X size={16} />
-									</Button>
-								}
-							/>
-							<CardBody className="space-y-4">
-								<Input
-									value={question.title}
-									onChange={(e) => handleInputChange(question.id, 'title', e.target.value)}
-									placeholder="Enter your question"
-								/>
-
-								{question.question_image_preview ? (
-									<div className="relative">
-										<img
-											src={question.question_image_preview}
-											alt="Question"
-											className="h-36 w-full rounded-md object-cover"
-										/>
-										<button
-											onClick={() =>
-												setQuestions((qs) =>
-													qs.map((q) =>
-														q.id === question.id
-															? { ...q, question_image: null, question_image_preview: null }
-															: q
-													)
-												)
-											}
-											className="bg-danger absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full text-white"
+			<div className="flex min-w-0 flex-col gap-3">
+				{questions.map((question, index) => (
+					<Card key={question.id} className="overflow-hidden">
+						<CardHeader
+							className="px-4 py-3"
+							title={`Q${index + 1}`}
+							action={
+								<div className="flex items-center gap-1.5">
+									<ToggleChip
+										active={question.mathematical}
+										onClick={() =>
+											handleInputChange(question.id, 'mathematical', !question.mathematical)
+										}
+									>
+										Math
+									</ToggleChip>
+									<ToggleChip
+										active={question.identification}
+										onClick={() =>
+											handleInputChange(question.id, 'identification', !question.identification)
+										}
+									>
+										ID
+									</ToggleChip>
+									{!question.identification && !question.mathematical && (
+										<ToggleChip
+											active={question.showChoiceImages}
+											onClick={() => toggleChoiceImages(question.id)}
 										>
-											<X size={12} />
+											Images
+										</ToggleChip>
+									)}
+									<Button
+										variant="ghost"
+										size="icon"
+										className="cursor-pointer"
+										aria-label={`Remove question ${index + 1}`}
+										onClick={() => removeQuestion(question.id)}
+									>
+										<X size={15} />
+									</Button>
+								</div>
+							}
+						/>
+						<CardBody className="space-y-3 px-4 pb-4">
+							<Input
+								value={question.title}
+								onChange={(e) => handleInputChange(question.id, 'title', e.target.value)}
+								placeholder="Question text"
+								className="py-1.5"
+							/>
+
+							<ImageDropzone
+								preview={question.question_image_preview}
+								compact
+								label="Question image"
+								onPreview={openImagePreview}
+								onClear={() =>
+									setQuestions((qs) =>
+										qs.map((q) =>
+											q.id === question.id
+												? { ...q, question_image: null, question_image_preview: null }
+												: q
+										)
+									)
+								}
+								onChange={(e) => handleQuestionImageUpload(question.id, e)}
+							/>
+
+							<div className="space-y-1.5">
+								{question.mathematical ? (
+									<MathInput
+										handleChoicesChange={handleChoicesChange}
+										handleInputChange={handleInputChange}
+										question={question}
+										removeChoice={removeChoice}
+									/>
+								) : question.identification ? (
+									<div className="flex items-center gap-2">
+										<button
+											type="button"
+											aria-label="Mark as correct"
+											className={cn(
+												'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition',
+												question.correctAnswerIndex === 0
+													? 'border-primary bg-primary'
+													: 'border-line bg-surface'
+											)}
+											onClick={() => handleInputChange(question.id, 'correctAnswerIndex', 0)}
+										>
+											{question.correctAnswerIndex === 0 && (
+												<Check size={10} className="text-primary-fg" />
+											)}
 										</button>
+										<input
+											type="text"
+											value={question.choices[0]}
+											onChange={(e) => handleChoicesChange(question.id, 0, e.target.value)}
+											placeholder="Answer"
+											className="border-line bg-surface text-fg focus:border-primary flex-1 rounded-md border px-2.5 py-1.5 text-sm focus:outline-none"
+											required
+										/>
 									</div>
 								) : (
-									<label className="border-line hover:border-primary/40 flex h-20 w-full cursor-pointer items-center justify-center rounded-md border-2 border-dashed transition">
-										<input
-											type="file"
-											accept="image/*"
-											onChange={(e) => handleQuestionImageUpload(question.id, e)}
-											className="hidden"
-										/>
-										<div className="text-muted flex flex-col items-center text-xs">
-											<Plus size={16} />
-											<span>Add Image</span>
-										</div>
-									</label>
-								)}
-
-								<div className="flex flex-wrap gap-2">
-									{[
-										{ key: 'mathematical', label: 'Mathematical' },
-										{ key: 'identification', label: 'Identification' }
-									].map(({ key, label }) => (
-										<button
-											key={key}
-											type="button"
-											className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition ${
-												question[key]
-													? 'bg-primary text-primary-fg'
-													: 'bg-surface-2 text-fg hover:bg-line'
-											}`}
-											onClick={() => handleInputChange(question.id, key, !question[key])}
-										>
-											<Check size={12} className={question[key] ? '' : 'opacity-0'} />
-											{label}
-										</button>
-									))}
-								</div>
-
-								<div className="space-y-2">
-									{question.mathematical ? (
-										<MathInput
-											handleChoicesChange={handleChoicesChange}
-											handleInputChange={handleInputChange}
-											question={question}
-											removeChoice={removeChoice}
-										/>
-									) : question.identification ? (
-										<div className="flex items-center gap-3">
+									question.choices.map((choice, ci) => (
+										<div className="flex items-center gap-1.5" key={ci}>
 											<button
 												type="button"
-												className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition ${question.correctAnswerIndex === 0 ? 'border-primary bg-primary' : 'border-line bg-surface'}`}
-												onClick={() => handleInputChange(question.id, 'correctAnswerIndex', 0)}
+												aria-label={`Mark choice ${ci + 1} correct`}
+												className={cn(
+													'flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 transition',
+													question.correctAnswerIndex === ci
+														? 'border-primary bg-primary'
+														: 'border-line bg-surface'
+												)}
+												onClick={() => handleInputChange(question.id, 'correctAnswerIndex', ci)}
 											>
-												{question.correctAnswerIndex === 0 && (
-													<Check size={12} className="text-primary-fg" />
+												{question.correctAnswerIndex === ci && (
+													<Check size={10} className="text-primary-fg" />
 												)}
 											</button>
 											<input
 												type="text"
-												value={question.choices[0]}
-												onChange={(e) => handleChoicesChange(question.id, 0, e.target.value)}
-												placeholder="Answer"
-												className="border-line bg-surface text-fg focus:border-primary flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none"
+												value={choice}
+												onChange={(e) => handleChoicesChange(question.id, ci, e.target.value)}
+												placeholder={`Choice ${ci + 1}`}
+												className="border-line bg-surface text-fg focus:border-primary min-w-0 flex-1 rounded-md border px-2.5 py-1.5 text-sm focus:outline-none"
 												required
 											/>
-										</div>
-									) : (
-										question.choices.map((choice, ci) => (
-											<div className="flex items-center gap-3" key={ci}>
-												<button
-													type="button"
-													className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition ${question.correctAnswerIndex === ci ? 'border-primary bg-primary' : 'border-line bg-surface'}`}
-													onClick={() => handleInputChange(question.id, 'correctAnswerIndex', ci)}
-												>
-													{question.correctAnswerIndex === ci && (
-														<Check size={12} className="text-primary-fg" />
-													)}
-												</button>
-												<input
-													type="text"
-													value={choice}
-													onChange={(e) => handleChoicesChange(question.id, ci, e.target.value)}
-													placeholder={`Choice ${ci + 1}`}
-													className="border-line bg-surface text-fg focus:border-primary flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none"
-													required
+											{question.showChoiceImages && (
+												<ChoiceImageControl
+													preview={question.choiceImagePreviews[ci]}
+													onPreview={openImagePreview}
+													onChange={(e) => handleChoiceImageUpload(question.id, ci, e)}
+													onClear={() => removeChoiceImage(question.id, ci)}
 												/>
-												<Button
-													variant="ghost"
-													size="icon"
-													onClick={() => removeChoice(question.id, ci)}
-												>
-													<X size={14} className="text-danger" />
-												</Button>
-												<div className="w-20">
-													{question.choiceImagePreviews[ci] ? (
-														<div className="relative">
-															<img
-																src={question.choiceImagePreviews[ci]}
-																alt=""
-																className="h-10 w-full rounded object-cover"
-															/>
-															<button
-																onClick={() => removeChoiceImage(question.id, ci)}
-																className="bg-danger absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-full text-white"
-															>
-																<X size={8} />
-															</button>
-														</div>
-													) : (
-														<label className="border-line hover:border-primary/40 flex h-10 w-full cursor-pointer items-center justify-center rounded border-2 border-dashed text-xs transition">
-															<input
-																type="file"
-																accept="image/*"
-																onChange={(e) => handleChoiceImageUpload(question.id, ci, e)}
-																className="hidden"
-															/>
-															<Plus size={12} className="text-muted" />
-														</label>
-													)}
-												</div>
-											</div>
-										))
-									)}
-								</div>
-
-								{!question.identification && (
-									<Button
-										variant="secondary"
-										size="sm"
-										className="w-full"
-										onClick={() => addChoice(question.id)}
-									>
-										<Plus size={14} /> Add Choice
-									</Button>
+											)}
+											<Button
+												variant="ghost"
+												size="icon"
+												className="h-7 w-7 shrink-0 cursor-pointer"
+												aria-label={`Remove choice ${ci + 1}`}
+												onClick={() => removeChoice(question.id, ci)}
+											>
+												<X size={13} className="text-danger" />
+											</Button>
+										</div>
+									))
 								)}
-							</CardBody>
-						</Card>
-					))}
+							</div>
 
-					<Button variant="secondary" className="w-full" onClick={addQuestion}>
-						<Plus size={16} /> Add Question
-					</Button>
-				</div>
-
-				<div className="flex w-full shrink-0 flex-col gap-4 lg:w-80">
-					<Card>
-						<CardHeader title="Quiz Settings" />
-						<CardBody className="space-y-4">
-							<Input
-								label="Quiz Title"
-								value={quizTitle}
-								onChange={(e) => setQuizTitle(e.target.value)}
-							/>
-
-							{quizImagePreview ? (
-								<div className="relative">
-									<img
-										src={quizImagePreview}
-										alt="Quiz"
-										className="h-28 w-full rounded-md object-cover"
-									/>
-									<button
-										onClick={() => {
-											setQuizImage(null);
-											setQuizImagePreview(null);
-										}}
-										className="bg-danger absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full text-white"
-									>
-										<X size={12} />
-									</button>
-								</div>
-							) : (
-								<label className="border-line hover:border-primary/40 flex h-20 w-full cursor-pointer items-center justify-center rounded-md border-2 border-dashed transition">
-									<input
-										type="file"
-										accept="image/*"
-										onChange={handleQuizImageUpload}
-										className="hidden"
-									/>
-									<div className="text-muted flex flex-col items-center text-xs">
-										<Plus size={16} />
-										<span>Quiz Image</span>
-									</div>
-								</label>
+							{!question.identification && (
+								<Button
+									variant="ghost"
+									size="sm"
+									className="w-full"
+									onClick={() => addChoice(question.id)}
+								>
+									<Plus size={13} /> Add choice
+								</Button>
 							)}
-
-							<Button className="w-full" loading={creating} onClick={handleCreateQuiz}>
-								Create Quiz
-							</Button>
 						</CardBody>
 					</Card>
+				))}
 
-					<Card>
-						<CardHeader title="AI Generate (Ollama)" />
-						<CardBody className="space-y-3">
-							<p className="text-muted text-xs">
-								Generate draft questions locally with any model installed in Ollama. Requests over 8
-								questions are batched automatically (max 100). Prefer llama3.1:8b for speed; run
-								ollama run MODEL once first to warm the model before large generates.
-							</p>
-							<Select
-								label="Model"
-								value={ollamaModel}
-								disabled={modelsLoading || ollamaModels.length === 0}
-								onChange={(e) => setOllamaModel(e.target.value)}
-								error={modelsError || undefined}
-							>
-								{modelsLoading && <option value="">Loading models…</option>}
-								{!modelsLoading && ollamaModels.length === 0 && (
-									<option value="">No models available</option>
-								)}
-								{ollamaModels.map((name) => (
-									<option key={name} value={name}>
-										{name}
-									</option>
-								))}
-							</Select>
+				<Button
+					variant="secondary"
+					size="sm"
+					className="w-full cursor-pointer"
+					onClick={addQuestion}
+				>
+					<Plus size={14} /> Add question
+				</Button>
+			</div>
+
+			{/* Mobile sticky create */}
+			<div className="border-line bg-bg/95 fixed inset-x-0 bottom-0 z-20 border-t p-3 backdrop-blur lg:hidden">
+				<Button className="w-full cursor-pointer" loading={creating} onClick={handleCreateQuiz}>
+					Create quiz
+				</Button>
+			</div>
+
+			<Modal
+				open={settingsOpen}
+				onClose={() => setSettingsOpen(false)}
+				title="Quiz settings"
+				size="md"
+				footer={
+					<Button
+						className="w-full cursor-pointer sm:w-auto"
+						loading={creating}
+						onClick={handleCreateQuiz}
+					>
+						Create quiz
+					</Button>
+				}
+			>
+				<div className="space-y-3">
+					<Input
+						label="Title"
+						value={quizTitle}
+						onChange={(e) => setQuizTitle(e.target.value)}
+						className="py-1.5"
+					/>
+
+					<ImageDropzone
+						preview={quizImagePreview}
+						compact
+						label="Cover image"
+						onPreview={openImagePreview}
+						onClear={() => {
+							setQuizImage(null);
+							setQuizImagePreview(null);
+						}}
+						onChange={handleQuizImageUpload}
+					/>
+
+					<div>
+						<p className="text-fg mb-1.5 text-xs font-medium">Type</p>
+						<div className="flex gap-1.5">
+							{['list', 'flashcard'].map((t) => (
+								<button
+									key={t}
+									type="button"
+									className={cn(
+										'flex-1 cursor-pointer rounded-md px-2 py-1.5 text-xs font-medium capitalize transition',
+										quizType === t
+											? 'bg-primary text-primary-fg'
+											: 'bg-surface-2 text-fg hover:bg-line'
+									)}
+									onClick={() => setQuizType(t)}
+								>
+									{t}
+								</button>
+							))}
+						</div>
+					</div>
+
+					<div className="flex flex-col flex-nowrap gap-1.5">
+						<ToggleChip
+							active={randomQuestionOrder}
+							onClick={() => setRandomQuestionOrder(!randomQuestionOrder)}
+						>
+							Shuffle questions
+						</ToggleChip>
+						<ToggleChip
+							active={randomQuestionChoices}
+							onClick={() => {
+								setRandomQuestionChoices(!randomQuestionChoices);
+								setQuestions((qs) =>
+									qs.map((q) => ({ ...q, randomChoices: !randomQuestionChoices }))
+								);
+							}}
+						>
+							Shuffle choices
+						</ToggleChip>
+					</div>
+
+					<div>
+						<p className="text-fg mb-1.5 text-xs font-medium">Tag</p>
+						<div className="grid grid-cols-8 gap-1.5">
+							{colors.map((color) => (
+								<button
+									key={color.hex}
+									type="button"
+									title={color.name}
+									aria-label={color.name}
+									onClick={() => setSelectedColor(color.hex)}
+									className={cn(
+										'h-5 w-5 cursor-pointer rounded-full border transition',
+										selectedColor === color.hex
+											? 'border-fg ring-primary/40 scale-110 ring-2'
+											: 'border-line hover:scale-105'
+									)}
+									style={{ backgroundColor: color.hex }}
+								/>
+							))}
+						</div>
+					</div>
+				</div>
+			</Modal>
+
+			<Modal
+				open={aiOpen}
+				onClose={() => setAiOpen(false)}
+				title="AI quiz generation"
+				size="md"
+				footer={
+					<Button
+						variant="secondary"
+						className="w-full cursor-pointer sm:w-auto"
+						loading={generating}
+						disabled={
+							(!topic.trim() && !referenceMarkdown.trim()) ||
+							!ollamaModel.trim() ||
+							generating ||
+							modelsLoading ||
+							referenceLoading ||
+							referencePendingFile
+						}
+						onClick={generateAIQuiz}
+					>
+						{generating || modelsLoading ? (
+							'Generating'
+						) : (
+							<>
+								<Sparkles size={13} /> Generate
+							</>
+						)}
+					</Button>
+				}
+			>
+				<div className="space-y-2.5">
+					<div className="flex items-center gap-2">
+						<Badge tone="primary">Ollama</Badge>
+						<Badge tone={ollamaMode === 'cloud' ? 'primary' : 'default'}>
+							{ollamaMode === 'cloud' ? 'Cloud' : 'Local'}
+						</Badge>
+						<span className="text-muted text-xs">
+							{ollamaMode === 'cloud'
+								? 'Using your Ollama Cloud key from Settings'
+								: 'Using server local Ollama'}
+						</span>
+					</div>
+					<Select
+						label={ollamaMode === 'cloud' ? 'Model (free tier)' : 'Model'}
+						value={ollamaModel}
+						disabled={modelsLoading || ollamaModels.length === 0}
+						onChange={(e) => setOllamaModel(e.target.value)}
+						error={modelsError || undefined}
+						className="py-1.5"
+					>
+						{modelsLoading && <option value="">Loading…</option>}
+						{!modelsLoading && ollamaModels.length === 0 && <option value="">No models</option>}
+						{ollamaModels.map((name) => (
+							<option key={name} value={name}>
+								{name}
+							</option>
+						))}
+					</Select>
+
+					<Input
+						label={referenceMarkdown.trim() ? 'Topic (optional)' : 'Topic'}
+						value={topic}
+						onChange={(e) => setTopic(e.target.value)}
+						placeholder={
+							referenceMarkdown.trim() ? 'Optional focus, e.g. key dates' : 'e.g. World History'
+						}
+						className="py-1.5"
+					/>
+
+					<div className="grid grid-cols-2 gap-2">
+						<div className="space-y-1.5">
 							<Input
-								label="Topic"
-								value={topic}
-								onChange={(e) => setTopic(e.target.value)}
-								placeholder="e.g., World History"
-							/>
-							<Input
-								label="Questions"
+								label="Count"
 								type="number"
 								min={1}
 								max={MAX_AI_QUESTIONS}
-								value={questionNumber}
+								value={
+									autoQuestionCount
+										? estimateAutoQuestionCount(topic, referenceMarkdown)
+										: questionNumber
+								}
 								onChange={(e) => setQuestionNumber(clampQuestionCount(e.target.value))}
+								disabled={autoQuestionCount}
+								className={cn('py-1.5', autoQuestionCount && 'cursor-not-allowed opacity-60')}
 							/>
-							<Select
-								label="Question mix"
-								value={aiTypeMix}
-								onChange={(e) => setAiTypeMix(e.target.value)}
-							>
-								{AI_TYPE_MIX_OPTIONS.map(({ value, label }) => (
-									<option key={value} value={value}>
-										{label}
-									</option>
-								))}
-							</Select>
-							<p className="text-muted text-xs">
-								Math questions are added only when the topic is math-related (50/50 math split).
-								Uses Options above for randomize questions/choices. Text only — add images after
-								generate.
-							</p>
-							<div className="space-y-2">
-								<label className="text-foreground text-sm font-medium">
-									Reference file (optional)
-								</label>
+							<label className="text-fg flex cursor-pointer items-center gap-2 text-xs">
 								<input
-									type="file"
-									accept=".txt,.md,.pdf,text/plain,text/markdown,application/pdf"
-									ref={referenceInputRef}
-									onChange={handleReferenceFile}
-									className="text-muted file:bg-secondary file:text-foreground block w-full text-xs file:mr-3 file:rounded-md file:border-0 file:px-3 file:py-1.5 file:text-xs file:font-medium"
+									type="checkbox"
+									checked={autoQuestionCount}
+									onChange={(e) => setAutoQuestionCount(e.target.checked)}
+									className="border-line text-primary focus-visible:ring-primary/40 size-3.5 rounded accent-[var(--primary)]"
 								/>
-								<p className="text-muted text-xs">
-									PDF/TXT/MD is converted to Markdown for the model; not saved on the server.
-								</p>
-								{referenceLoading && <p className="text-muted text-xs">Converting reference…</p>}
-								{referenceError && <p className="text-danger text-xs">{referenceError}</p>}
-								{referenceMeta && !referenceLoading && (
-									<div className="flex flex-wrap items-center gap-2 text-xs">
-										<span className="text-foreground">
-											{referenceMeta.filename} · {referenceMeta.charCount.toLocaleString()} chars
-										</span>
-										{referenceMeta.truncated && (
-											<span className="rounded bg-amber-500/15 px-2 py-0.5 text-amber-700 dark:text-amber-300">
-												Truncated
-											</span>
-										)}
-										<Button type="button" variant="ghost" size="sm" onClick={clearReference}>
-											Clear
-										</Button>
-									</div>
-								)}
-							</div>
-							<Button
-								variant="secondary"
-								className="w-full"
-								loading={generating}
-								disabled={
-									!topic.trim() ||
-									!ollamaModel.trim() ||
-									generating ||
-									modelsLoading ||
-									referenceLoading ||
-									referencePendingFile
-								}
-								onClick={generateAIQuiz}
-							>
-								<Sparkles size={14} /> Generate with Ollama
-							</Button>
-						</CardBody>
-					</Card>
-
-					<Card>
-						<CardHeader title="Options" />
-						<CardBody className="space-y-3">
-							{[
-								{
-									label: 'Randomize Questions',
-									value: randomQuestionOrder,
-									toggle: () => setRandomQuestionOrder(!randomQuestionOrder)
-								},
-								{
-									label: 'Randomize Choices',
-									value: randomQuestionChoices,
-									toggle: () => {
-										setRandomQuestionChoices(!randomQuestionChoices);
-										setQuestions((qs) =>
-											qs.map((q) => ({ ...q, randomChoices: !randomQuestionChoices }))
-										);
-									}
-								}
-							].map(({ label, value, toggle }) => (
-								<button
-									key={label}
-									type="button"
-									className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-xs font-medium transition ${value ? 'bg-primary text-primary-fg' : 'bg-surface-2 text-fg hover:bg-line'}`}
-									onClick={toggle}
-								>
-									<Check size={12} className={value ? '' : 'opacity-0'} />
+								Auto (from topic / reference)
+							</label>
+						</div>
+						<Select
+							label="Mix"
+							value={aiTypeMix}
+							onChange={(e) => setAiTypeMix(e.target.value)}
+							className="py-1.5"
+						>
+							{AI_TYPE_MIX_OPTIONS.map(({ value, label }) => (
+								<option key={value} value={value}>
 									{label}
-								</button>
+								</option>
 							))}
-						</CardBody>
-					</Card>
+						</Select>
+					</div>
+					{autoQuestionCount && (
+						<p className="text-muted text-[0.65rem]">
+							Auto sizes count from the reference (or topic). Preview:{' '}
+							{estimateAutoQuestionCount(topic, referenceMarkdown)}.
+						</p>
+					)}
 
-					<Card>
-						<CardHeader title="Quiz Type" />
-						<CardBody>
-							<div className="flex gap-2">
-								{['list', 'flashcard'].map((t) => (
-									<button
-										key={t}
-										type="button"
-										className={`flex-1 rounded-md px-3 py-2 text-xs font-medium capitalize transition ${quizType === t ? 'bg-primary text-primary-fg' : 'bg-surface-2 text-fg hover:bg-line'}`}
-										onClick={() => setQuizType(t)}
-									>
-										{t}
-									</button>
-								))}
+					<div className="space-y-1.5">
+						<label className="text-fg text-xs font-medium">Reference (optional)</label>
+						<label className="border-line hover:border-primary/40 text-muted flex cursor-pointer items-center gap-2 rounded-md border border-dashed px-2.5 py-2 text-xs transition">
+							<input
+								type="file"
+								accept=".txt,.md,.pdf,text/plain,text/markdown,application/pdf"
+								ref={referenceInputRef}
+								onChange={handleReferenceFile}
+								className="hidden"
+							/>
+							<FileUp size={13} />
+							<span className="truncate">{referenceMeta?.filename || 'TXT / MD / PDF'}</span>
+						</label>
+						{referenceLoading && <p className="text-muted text-[0.65rem]">Converting…</p>}
+						{referenceError && <p className="text-danger text-[0.65rem]">{referenceError}</p>}
+						{referenceMeta && !referenceLoading && (
+							<div className="flex flex-wrap items-center gap-1.5 text-[0.65rem]">
+								<span className="text-muted">{referenceMeta.charCount.toLocaleString()} chars</span>
+								{referenceMeta.truncated && <Badge tone="warning">Truncated</Badge>}
+								<button
+									type="button"
+									className="text-primary cursor-pointer hover:underline"
+									onClick={clearReference}
+								>
+									Clear
+								</button>
 							</div>
-						</CardBody>
-					</Card>
-
-					<Card>
-						<CardHeader title="Tag Color" />
-						<CardBody>
-							<div className="grid grid-cols-5 gap-2">
-								{colors.map((color) => (
-									<button
-										key={color.hex}
-										type="button"
-										onClick={() => setSelectedColor(color.hex)}
-										className={`flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border-2 transition ${selectedColor === color.hex ? 'border-primary ring-primary/30 ring-2' : 'border-line'}`}
-										style={{ backgroundColor: color.hex }}
-									/>
-								))}
-							</div>
-						</CardBody>
-					</Card>
+						)}
+					</div>
 				</div>
-			</div>
+			</Modal>
+
+			<Modal
+				open={Boolean(imagePreview)}
+				onClose={closeImagePreview}
+				title={imagePreview?.title || 'Image preview'}
+				size="xl"
+				bodyClassName="flex h-[min(70vh,calc(100dvh-8rem))] max-h-[min(70vh,calc(100dvh-8rem))] items-center justify-center overflow-hidden p-3"
+			>
+				{imagePreview?.src && (
+					<img
+						src={imagePreview.src}
+						alt={imagePreview.title || 'Preview'}
+						className="max-h-full max-w-full rounded-md object-contain"
+					/>
+				)}
+			</Modal>
 		</div>
 	);
 }

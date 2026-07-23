@@ -1,0 +1,49 @@
+/* MathLive field themed to Zenith semantic tokens. */
+.math-field-input {
+	display: block;
+	width: 100%;
+	min-height: 2.5rem;
+	padding: 0.4rem 0.65rem;
+	border: 1px solid var(--line);
+	border-radius: var(--radius-md, 8px);
+	background: var(--surface);
+	color: var(--fg);
+	font-size: 1.2rem;
+	line-height: 1.4;
+	box-sizing: border-box;
+	cursor: text;
+	transition:
+		border-color 0.15s ease,
+		box-shadow 0.15s ease;
+
+	/* Selection / caret (defaults are too dark, especially in dark mode) */
+	--hue: 180;
+	--caret-color: var(--primary);
+	--selection-color: var(--fg);
+	--selection-background-color: color-mix(in srgb, var(--primary) 22%, transparent);
+	--contains-highlight-color: var(--primary);
+	--contains-highlight-background-color: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+.dark .math-field-input {
+	--selection-background-color: color-mix(in srgb, var(--primary) 32%, transparent);
+	--contains-highlight-background-color: color-mix(in srgb, var(--primary) 16%, transparent);
+}
+
+.math-field-input:focus,
+.math-field-input:focus-within {
+	border-color: var(--primary);
+	outline: none;
+	box-shadow: 0 0 0 2px var(--ring);
+}
+
+.math-field-input[disabled] {
+	opacity: 0.55;
+	cursor: not-allowed;
+}
+
+/* Soften MathLive chrome inside our bordered field */
+.math-field-input::part(virtual-keyboard-toggle),
+.math-field-input::part(menu-toggle) {
+	color: var(--muted);
+}

@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
-import { LogOut, Settings as SettingsIcon, Shield } from 'lucide-react';
+import { Cloud, Cpu, LogOut, Settings as SettingsIcon, Shield } from 'lucide-react';
 
 import { patch } from '../lib/api';
+import { cn } from '../lib/format';
 import { toast } from '../stores/toastStore';
 import { useAuthStore } from '../stores/authStore';
 import { useThemeStore } from '../stores/themeStore';
 import { MfaDisableSection, MfaSetupModal } from '../components/auth/MfaModals';
 import { PageHeader } from '../components/layout/PageHeader';
-import { Avatar, Button, Card, CardBody, CardHeader, Input } from '../components/ui';
+import { Avatar, Badge, Button, Card, CardBody, CardHeader, Input } from '../components/ui';
 
 export default function SettingsPage() {
 	const user = useAuthStore((s) => s.user);
@@ -17,6 +18,8 @@ export default function SettingsPage() {
 	const { theme, setTheme } = useThemeStore();
 	const [mfaSetupOpen, setMfaSetupOpen] = useState(false);
 	const [newEmail, setNewEmail] = useState('');
+	const [ollamaMode, setOllamaMode] = useState(user?.ollama_mode || 'local');
+	const [ollamaApiKey, setOllamaApiKey] = useState('');
 
 	const saveName = useMutation({
 		mutationFn: (body) => patch('/auth/me/', body),
@@ -25,6 +28,25 @@ export default function SettingsPage() {
 			toast.success('Profile updated.');
 		},
 		onError: () => toast.error('Could not update profile.')
+	});
+
+	const saveOllama = useMutation({
+		mutationFn: (body) => patch('/auth/me/', body),
+		onSuccess: (data) => {
+			updateUser(data);
+			setOllamaMode(data.ollama_mode || 'local');
+			setOllamaApiKey('');
+			toast.success('Ollama settings saved.');
+		},
+		onError: (err) => {
+			const data = err.response?.data;
+			const message =
+				data?.ollama_api_key?.[0] ||
+				data?.ollama_mode?.[0] ||
+				data?.detail ||
+				'Could not save Ollama settings.';
+			toast.error(message);
+		}
 	});
 
 	const changeEmail = useMutation({
@@ -37,6 +59,12 @@ export default function SettingsPage() {
 			toast.error(err.response?.data?.detail || 'Could not change email.');
 		}
 	});
+
+	useEffect(() => {
+		if (user?.ollama_mode) {
+			setOllamaMode(user.ollama_mode);
+		}
+	}, [user?.ollama_mode]);
 
 	if (!user) return null;
 
@@ -123,6 +151,100 @@ export default function SettingsPage() {
 								<Shield size={16} /> Enable MFA
 							</Button>
 						)}
+					</CardBody>
+				</Card>
+
+				<Card className="lg:col-span-2">
+					<CardHeader
+						title="AI generation (Ollama)"
+						subtitle="Choose local Ollama or Ollama Cloud for Create Quiz AI"
+						action={
+							<Badge tone={ollamaMode === 'cloud' ? 'primary' : 'default'}>
+								{ollamaMode === 'cloud' ? 'Cloud' : 'Local'}
+							</Badge>
+						}
+					/>
+					<CardBody className="space-y-4">
+						<div>
+							<span className="text-fg mb-1.5 block text-sm font-medium">Provider</span>
+							<div className="flex gap-2">
+								{[
+									{ id: 'local', label: 'Local', icon: Cpu },
+									{ id: 'cloud', label: 'Cloud API', icon: Cloud }
+								].map(({ id, label, icon: Icon }) => (
+									<button
+										key={id}
+										type="button"
+										onClick={() => setOllamaMode(id)}
+										className={cn(
+											'flex flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md border px-3 py-2 text-sm transition',
+											ollamaMode === id
+												? 'border-primary text-primary bg-primary/5'
+												: 'border-line text-muted hover:border-primary/40'
+										)}
+									>
+										<Icon size={14} />
+										{label}
+									</button>
+								))}
+							</div>
+						</div>
+
+						{ollamaMode === 'cloud' && (
+							<div className="space-y-2">
+								<Input
+									label="Ollama Cloud API key"
+									type="password"
+									value={ollamaApiKey}
+									onChange={(e) => setOllamaApiKey(e.target.value)}
+									placeholder={
+										user?.ollama_api_key_set
+											? 'Leave blank to keep current key'
+											: 'Paste key from ollama.com/settings/keys'
+									}
+									autoComplete="off"
+								/>
+								{user?.ollama_api_key_set && (
+									<p className="text-muted text-xs">A key is saved on your account.</p>
+								)}
+								<p className="text-muted text-xs">
+									Create a key at{' '}
+									<a
+										href="https://ollama.com/settings/keys"
+										target="_blank"
+										rel="noreferrer"
+										className="text-primary hover:underline"
+									>
+										ollama.com/settings/keys
+									</a>
+									. The key is encrypted and never shown again after saving.
+								</p>
+							</div>
+						)}
+
+						{ollamaMode === 'local' && (
+							<p className="text-muted text-xs">
+								Uses the server&apos;s local Ollama instance (
+								<code className="text-fg">OLLAMA_BASE_URL</code>). Run Ollama on the machine hosting
+								the API and pull models with <code className="text-fg">ollama pull</code>.
+							</p>
+						)}
+
+						<Button
+							type="button"
+							variant="secondary"
+							className="w-full sm:w-auto"
+							loading={saveOllama.isPending}
+							onClick={() => {
+								const body = { ollama_mode: ollamaMode };
+								if (ollamaMode === 'cloud' && ollamaApiKey.trim()) {
+									body.ollama_api_key = ollamaApiKey.trim();
+								}
+								saveOllama.mutate(body);
+							}}
+						>
+							Save Ollama settings
+						</Button>
 					</CardBody>
 				</Card>
 			</div>

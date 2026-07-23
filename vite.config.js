@@ -29,7 +29,7 @@ export default defineConfig(({ mode }) => {
 					manualChunks: {
 						'react-vendor': ['react', 'react-dom', 'react-router-dom'],
 						'chart-vendor': ['chart.js', 'react-chartjs-2'],
-						'math-vendor': ['react-latex-next']
+						'math-vendor': ['react-latex-next', 'mathlive']
 					}
 				}
 			},
