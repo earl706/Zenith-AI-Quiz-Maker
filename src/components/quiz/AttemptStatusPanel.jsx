@@ -2,14 +2,7 @@ import { Clock } from 'lucide-react';
 
 import { formatDurationSeconds } from '../../lib/format';
 import { Badge, Card, ProgressRing } from '../ui';
-
-function accuracyTone(accuracy) {
-	const value = Number.parseFloat(accuracy);
-	if (Number.isNaN(value)) return 'primary';
-	if (value >= 80) return 'success';
-	if (value >= 50) return 'warning';
-	return 'danger';
-}
+import { accuracyTone } from './quizHelpers';
 
 export default function AttemptStatusPanel({
 	time,

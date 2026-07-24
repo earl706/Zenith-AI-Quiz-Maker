@@ -1,36 +1,39 @@
-import { useEffect, useState } from 'react';
-import { Target } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
+import { Target, Clock, ChevronRight } from 'lucide-react';
 
-import { api } from '../lib/api';
-import { formatDate } from '../lib/format';
+import { get } from '../lib/api';
+import { formatDate, formatDurationSeconds, fromNow } from '../lib/format';
 import { PageHeader } from '../components/layout/PageHeader';
-import { Card, EmptyState, LoadingScreen } from '../components/ui';
-import AttemptAccuracyDoughnutGraph from '../components/quiz/AttemptAccuracyDoughnutGraph';
+import { Badge, Card, EmptyState, LoadingScreen, ProgressRing } from '../components/ui';
+import {
+	accuracyTone,
+	attemptQuizMeta,
+	getAttemptStats,
+	normalizeAttemptList
+} from '../components/quiz/quizHelpers';
 
 export default function AttemptsPage() {
-	const [attempts, setAttempts] = useState([]);
-	const [loading, setLoading] = useState(true);
+	const navigate = useNavigate();
 
-	useEffect(() => {
-		const fetchAttempts = async () => {
-			try {
-				const response = await api.get('/quizzes/quiz/attempts/');
-				const data = response.data;
-				setAttempts(data.results || data.data || data || []);
-			} catch {
-				setAttempts([]);
-			} finally {
-				setLoading(false);
-			}
-		};
-		fetchAttempts();
-	}, []);
+	const { data, isLoading } = useQuery({
+		queryKey: ['attempts', 'list'],
+		queryFn: () => get('/quizzes/quiz/attempts/'),
+		staleTime: 0,
+		refetchOnMount: 'always'
+	});
 
-	if (loading) return <LoadingScreen />;
+	const attempts = normalizeAttemptList(data);
+
+	if (isLoading) return <LoadingScreen />;
 
 	return (
 		<div>
-			<PageHeader title="Attempts" icon={Target} description="Review your quiz attempt history." />
+			<PageHeader
+				title="Attempts"
+				icon={Target}
+				description="Review your quiz attempt history and accuracy."
+			/>
 
 			{attempts.length === 0 ? (
 				<EmptyState
@@ -39,44 +42,70 @@ export default function AttemptsPage() {
 					description="Attempt a quiz to see your results here."
 				/>
 			) : (
-				<div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-					{attempts.map((attempt, index) => {
-						const scoreData = attempt.score_accuracy_data || {};
-						const quizInfo = attempt.quiz_data || attempt.quiz || {};
-						const totalQuestions = quizInfo.questions?.length || attempt.total_questions || 0;
-						const correctCount = scoreData.score ?? attempt.score ?? 0;
-						const accuracyVal = scoreData.accuracy ?? attempt.accuracy ?? 0;
+				<div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+					{attempts.map((attempt) => {
+						const key = attempt.uuid || attempt.id;
+						const { title, id: quizId } = attemptQuizMeta(attempt);
+						const { score, total, accuracy, complete } = getAttemptStats(attempt);
+						const tone = complete ? accuracyTone(accuracy) : 'primary';
+						const when = attempt.attempt_datetime;
 
 						return (
-							<Card key={index} className="flex flex-col p-5">
-								<div className="mb-3 flex items-center justify-between">
-									<span className="text-fg max-w-[60%] truncate font-semibold">
-										{attempt.quiz_title || quizInfo.quiz_title || 'Quiz'}
-									</span>
-									<span className="text-muted text-xs whitespace-nowrap">
-										{formatDate(attempt.attempt_datetime)}
-									</span>
-								</div>
-								<div className="flex items-center gap-4">
-									<div className="h-14 w-14 shrink-0">
-										<AttemptAccuracyDoughnutGraph
-											data_points={[correctCount, Math.max(0, totalQuestions - correctCount)]}
-										/>
+							<Card
+								key={key}
+								className={`flex flex-col gap-4 p-5 transition hover:shadow-md ${
+									quizId ? 'cursor-pointer' : ''
+								}`}
+								onClick={() => quizId && navigate(`/quizzes/${quizId}`)}
+							>
+								<div className="flex items-start justify-between gap-3">
+									<div className="min-w-0 flex-1">
+										<h3 className="text-fg truncate font-semibold">{title}</h3>
+										<p
+											className="text-muted mt-0.5 text-xs"
+											title={formatDate(when, 'MMM d, yyyy · h:mm a')}
+										>
+											{when ? fromNow(when) : '—'}
+										</p>
 									</div>
-									<div className="flex-1 space-y-1 text-sm">
-										<div className="flex justify-between">
+									{quizId && (
+										<ChevronRight size={16} className="text-muted mt-1 shrink-0" aria-hidden />
+									)}
+								</div>
+
+								<div className="flex items-center gap-4">
+									{complete ? (
+										<ProgressRing
+											value={accuracy}
+											size={64}
+											stroke={6}
+											tone={tone}
+											label={`${Math.round(accuracy)}`}
+										/>
+									) : (
+										<div className="bg-surface-2 text-muted flex h-16 w-16 shrink-0 items-center justify-center rounded-full text-xs font-medium">
+											—
+										</div>
+									)}
+
+									<div className="min-w-0 flex-1 space-y-2 text-sm">
+										<div className="flex items-center justify-between gap-2">
 											<span className="text-muted">Score</span>
 											<span className="text-fg font-medium">
-												{correctCount} / {totalQuestions}
+												{complete ? `${score} / ${total}` : 'Incomplete'}
 											</span>
 										</div>
-										<div className="flex justify-between">
+										<div className="flex items-center justify-between gap-2">
 											<span className="text-muted">Accuracy</span>
-											<span className="text-fg font-medium">{accuracyVal}%</span>
+											{complete ? (
+												<Badge tone={tone}>{Math.round(accuracy)}%</Badge>
+											) : (
+												<span className="text-muted">—</span>
+											)}
 										</div>
-										<div className="flex justify-between">
-											<span className="text-muted">Duration</span>
-											<span className="text-fg font-medium">{attempt.duration || '—'}</span>
+										<div className="text-muted flex items-center gap-1.5 text-xs">
+											<Clock size={12} />
+											{formatDurationSeconds(Number(attempt.duration) || 0)}
 										</div>
 									</div>
 								</div>

@@ -1,49 +1,141 @@
-import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
-import { BookOpen, Play, Pencil } from 'lucide-react';
+import {
+	BookOpen,
+	Play,
+	Pencil,
+	Layers,
+	Shuffle,
+	ListOrdered,
+	Clock,
+	HelpCircle
+} from 'lucide-react';
 
-import { api } from '../lib/api';
-import { formatDate } from '../lib/format';
+import { get } from '../lib/api';
+import { formatDate, formatDurationSeconds, fromNow } from '../lib/format';
 import { PageHeader } from '../components/layout/PageHeader';
-import { Button, Card, CardBody, CardHeader, Badge, LoadingScreen } from '../components/ui';
+import {
+	Badge,
+	Button,
+	Card,
+	CardBody,
+	EmptyState,
+	LoadingScreen,
+	ProgressRing
+} from '../components/ui';
 import MathRenderer from '../components/quiz/MathRenderer';
-import AttemptAccuracyDoughnutGraph from '../components/quiz/AttemptAccuracyDoughnutGraph';
+import {
+	accuracyTone,
+	getAttemptStats,
+	getChoiceData,
+	isMathematical,
+	questionTypeLabel
+} from '../components/quiz/quizHelpers';
+
+function parseQuizSummary(payload) {
+	if (!payload || typeof payload !== 'object') {
+		return { quiz: null, questions: [], attempts: [], meta: {} };
+	}
+
+	// Summary: { quiz, attempts, questions_length, ... }
+	// Detail:   { data, questions }
+	const quiz = payload.quiz || payload.data || (payload.quiz_title ? payload : null);
+	const questions = payload.questions || quiz?.questions || [];
+	const attempts = Array.isArray(payload.attempts) ? payload.attempts : [];
+
+	return {
+		quiz,
+		questions: Array.isArray(questions) ? questions : [],
+		attempts,
+		meta: {
+			questionsLength: payload.questions_length ?? questions.length,
+			computational: payload.computational_questions,
+			identification: payload.identification_questions,
+			multipleChoice: payload.multiple_choice_questions
+		}
+	};
+}
 
 export default function QuizPage() {
 	const { id } = useParams();
 	const navigate = useNavigate();
-	const [loading, setLoading] = useState(true);
-	const [quizData, setQuizData] = useState(null);
-	const [questions, setQuestions] = useState([]);
-	const [attempts, setAttempts] = useState([]);
 
-	useEffect(() => {
-		const fetchQuiz = async () => {
+	const { data, isLoading, isError } = useQuery({
+		queryKey: ['quizzes', 'summary', id],
+		queryFn: async () => {
 			try {
-				setLoading(true);
-				const response = await api
-					.get(`/quizzes/quiz/summary/${id}/`)
-					.catch(() => api.get(`/quizzes/quiz/${id}/`));
-				const data = response.data;
-				setQuizData(data.data || data);
-				setQuestions(data.questions || data.data?.questions || []);
-				setAttempts(data.attempts || []);
+				return await get(`/quizzes/quiz/summary/${id}/`);
 			} catch {
-				navigate('/quizzes');
-			} finally {
-				setLoading(false);
+				return await get(`/quizzes/quiz/${id}/`);
 			}
-		};
-		fetchQuiz();
-	}, [id, navigate]);
+		},
+		staleTime: 0,
+		refetchOnMount: 'always',
+		retry: false
+	});
 
-	if (loading || !quizData) return <LoadingScreen />;
+	if (isLoading) return <LoadingScreen />;
+
+	const { quiz, questions, attempts, meta } = parseQuizSummary(data);
+
+	if (isError || !quiz) {
+		return (
+			<div>
+				<PageHeader title="Quiz" icon={BookOpen} />
+				<EmptyState
+					icon={BookOpen}
+					title="Quiz not found"
+					description="This quiz may have been deleted or you no longer have access."
+					action={
+						<Button size="sm" onClick={() => navigate('/quizzes')}>
+							Back to quizzes
+						</Button>
+					}
+				/>
+			</div>
+		);
+	}
+
+	const questionCount = meta.questionsLength || questions.length;
+	const isFlashcard = Boolean(quiz.flashcard_quiz);
+	const isRandom = Boolean(quiz.random_question_order);
+
+	const stats = [
+		{ label: 'Questions', value: questionCount, icon: HelpCircle },
+		{ label: 'Format', value: isFlashcard ? 'Flashcard' : 'List', icon: Layers },
+		{
+			label: 'Created',
+			value: formatDate(quiz.created_at || quiz.date_created) || '—',
+			icon: Clock
+		},
+		{
+			label: 'Sequence',
+			value: isRandom ? 'Random' : 'Ordered',
+			icon: isRandom ? Shuffle : ListOrdered
+		}
+	];
 
 	return (
 		<div>
 			<PageHeader
-				title={quizData.quiz_title}
+				title={
+					<span className="inline-flex items-center gap-2.5">
+						{quiz.tag_color && (
+							<span
+								className="inline-block h-3 w-3 shrink-0 rounded-full"
+								style={{ backgroundColor: quiz.tag_color }}
+								aria-hidden
+							/>
+						)}
+						{quiz.quiz_title}
+					</span>
+				}
 				icon={BookOpen}
+				description={`${questionCount} question${questionCount === 1 ? '' : 's'}${
+					attempts.length > 0
+						? ` · ${attempts.length} attempt${attempts.length === 1 ? '' : 's'}`
+						: ''
+				}`}
 				actions={
 					<div className="flex gap-2">
 						<Button variant="secondary" onClick={() => navigate(`/quizzes/edit/${id}`)}>
@@ -56,117 +148,185 @@ export default function QuizPage() {
 				}
 			/>
 
-			{quizData.quiz_image && (
-				<div className="mb-6 flex justify-center">
-					<img
-						src={quizData.quiz_image}
-						alt="Quiz"
-						className="max-h-52 w-auto rounded-lg object-cover shadow-md"
-					/>
+			{quiz.quiz_image && (
+				<div className="border-line bg-surface mb-6 overflow-hidden rounded-md border">
+					<img src={quiz.quiz_image} alt="" className="max-h-56 w-full object-cover" />
 				</div>
 			)}
 
-			<div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-				{[
-					{ label: 'Questions', value: questions.length || quizData.questions?.length || 0 },
-					{ label: 'Type', value: quizData.flashcard_quiz ? 'Flashcard' : 'List' },
-					{ label: 'Created', value: formatDate(quizData.created_at || quizData.date_created) },
-					{ label: 'Sequence', value: quizData.random_question_order ? 'Random' : 'Ordered' }
-				].map(({ label, value }) => (
-					<Card key={label} className="p-4 text-center">
-						<p className="text-muted text-xs">{label}</p>
-						<p className="text-fg font-semibold">{value}</p>
+			<div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+				{stats.map(({ label, value, icon: Icon }) => (
+					<Card key={label} className="flex items-center gap-3 p-4">
+						<div className="bg-primary/12 text-primary flex h-9 w-9 shrink-0 items-center justify-center rounded-sm">
+							<Icon size={16} />
+						</div>
+						<div className="min-w-0">
+							<p className="text-muted text-xs">{label}</p>
+							<p className="text-fg truncate text-sm font-semibold">{value}</p>
+						</div>
 					</Card>
 				))}
 			</div>
 
-			<div className="flex flex-col gap-8 lg:flex-row">
-				<div className="flex-1 space-y-4">
-					<h2 className="text-fg text-lg font-bold">Questions</h2>
-					{questions.map((question, index) => (
-						<Card key={index}>
-							<CardBody className="space-y-3 p-5">
-								<p className="text-fg text-center font-semibold">{question.question}</p>
-
-								{question.question_image && (
-									<div className="flex justify-center">
-										<img
-											src={question.question_image}
-											alt="Question"
-											className="max-h-40 rounded-md object-cover"
-										/>
-									</div>
-								)}
-
-								<div className="flex flex-wrap justify-center gap-2">
-									{question.choices.map((choice, ci) => {
-										const choiceText = choice.text || choice;
-										const choiceImage = choice.image;
-										if (choiceText === '') return null;
-
-										return (
-											<div
-												key={ci}
-												className="bg-surface-2 flex min-w-[100px] flex-col items-center gap-2 rounded-md p-3"
-											>
-												{choiceImage && (
-													<img
-														src={choiceImage}
-														alt={`Choice ${ci + 1}`}
-														className="max-h-20 rounded-md object-cover"
-													/>
-												)}
-												{question.question_type === 'COM' ||
-												question.question_type === 'IDE-COM' ||
-												question.question_type === 'MUL-COM' ? (
-													<MathRenderer expression={choiceText} displayMode={false} />
-												) : (
-													<span className="text-fg text-sm font-medium">{choiceText}</span>
-												)}
-											</div>
-										);
-									})}
-								</div>
-							</CardBody>
-						</Card>
-					))}
+			{(meta.multipleChoice != null ||
+				meta.identification != null ||
+				meta.computational != null) && (
+				<div className="mb-8 flex flex-wrap gap-2">
+					{meta.multipleChoice > 0 && (
+						<Badge tone="primary">{meta.multipleChoice} multiple choice</Badge>
+					)}
+					{meta.identification > 0 && (
+						<Badge tone="accent">{meta.identification} identification</Badge>
+					)}
+					{meta.computational > 0 && (
+						<Badge tone="warning">{meta.computational} computational</Badge>
+					)}
 				</div>
+			)}
 
-				<aside className="w-full shrink-0 lg:w-72">
-					<h2 className="text-fg mb-3 text-lg font-bold">Attempts</h2>
+			<div className="flex flex-col gap-8 lg:flex-row lg:items-start">
+				<section className="min-w-0 flex-1 space-y-4">
+					<h2 className="text-fg text-lg font-bold tracking-tight">Questions</h2>
+
+					{questions.length === 0 ? (
+						<Card className="p-8 text-center">
+							<p className="text-muted text-sm">This quiz has no questions yet.</p>
+						</Card>
+					) : (
+						questions.map((question, index) => {
+							const choices = Array.isArray(question.choices) ? question.choices : [];
+							const math = isMathematical(question.question_type);
+
+							return (
+								<Card key={question.id ?? index} className="overflow-hidden">
+									<div className="border-line flex items-center justify-between gap-3 border-b px-5 py-3">
+										<span className="text-muted text-xs font-medium tracking-wide uppercase">
+											Question {index + 1}
+										</span>
+										<Badge tone="neutral">{questionTypeLabel(question.question_type)}</Badge>
+									</div>
+									<CardBody className="space-y-4 p-5">
+										{math ? (
+											<div className="text-fg text-center text-base font-semibold">
+												<MathRenderer expression={question.question} displayMode={false} />
+											</div>
+										) : (
+											<p className="text-fg text-center text-base font-semibold">
+												{question.question}
+											</p>
+										)}
+
+										{question.question_image && (
+											<div className="flex justify-center">
+												<img
+													src={question.question_image}
+													alt=""
+													className="max-h-40 rounded-md object-cover"
+												/>
+											</div>
+										)}
+
+										{choices.length > 0 && (
+											<div className="flex flex-wrap justify-center gap-2">
+												{choices.map((choice, ci) => {
+													const {
+														text: choiceText,
+														image: choiceImage,
+														id: choiceId
+													} = getChoiceData(choice);
+													if (!choiceText && !choiceImage) return null;
+
+													return (
+														<div
+															key={choiceId ?? ci}
+															className="bg-surface-2 flex min-w-30 max-w-56 flex-col items-center gap-2 rounded-md px-3 py-2.5"
+														>
+															{choiceImage && (
+																<img
+																	src={choiceImage}
+																	alt=""
+																	className="max-h-20 rounded-md object-cover"
+																/>
+															)}
+															{choiceText &&
+																(math ? (
+																	<MathRenderer expression={choiceText} displayMode={false} />
+																) : (
+																	<span className="text-fg text-center text-sm font-medium">
+																		{choiceText}
+																	</span>
+																))}
+														</div>
+													);
+												})}
+											</div>
+										)}
+									</CardBody>
+								</Card>
+							);
+						})
+					)}
+				</section>
+
+				<aside className="w-full shrink-0 lg:sticky lg:top-6 lg:w-72 lg:self-start">
+					<h2 className="text-fg mb-3 text-lg font-bold tracking-tight">Attempts</h2>
+
 					{attempts.length === 0 ? (
 						<Card className="p-6 text-center">
 							<p className="text-muted text-sm">No attempts yet.</p>
+							<Button size="sm" className="mt-3" onClick={() => navigate(`/quizzes/attempt/${id}`)}>
+								<Play size={14} /> Start one
+							</Button>
 						</Card>
 					) : (
 						<div className="space-y-3">
-							{attempts.map((attempt, index) => (
-								<Card key={index} className="flex items-center gap-3 p-4">
-									<div className="h-14 w-14 shrink-0">
-										<AttemptAccuracyDoughnutGraph
-											data_points={[attempt.score || 30, attempt.total - attempt.score || 20]}
-										/>
-									</div>
-									<div className="min-w-0 flex-1 text-xs">
-										<div className="flex justify-between">
-											<span className="text-muted">Date</span>
-											<span className="text-fg">
-												{attempt.date || formatDate(attempt.attempt_datetime)}
-											</span>
+							{attempts.map((attempt) => {
+								const key = attempt.uuid || attempt.id;
+								const { score, total, accuracy, complete } = getAttemptStats(attempt);
+								const tone = complete ? accuracyTone(accuracy) : 'primary';
+								const when = attempt.attempt_datetime;
+
+								return (
+									<Card key={key} className="flex items-center gap-3 p-4">
+										{complete ? (
+											<ProgressRing
+												value={accuracy}
+												size={56}
+												stroke={5}
+												tone={tone}
+												label={`${Math.round(accuracy)}`}
+											/>
+										) : (
+											<div className="bg-surface-2 text-muted flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-xs font-medium">
+												—
+											</div>
+										)}
+										<div className="min-w-0 flex-1 space-y-1 text-xs">
+											<div className="flex justify-between gap-2">
+												<span className="text-muted">When</span>
+												<span
+													className="text-fg truncate"
+													title={formatDate(when, 'MMM d, yyyy · h:mm a')}
+												>
+													{when ? fromNow(when) : '—'}
+												</span>
+											</div>
+											<div className="flex justify-between gap-2">
+												<span className="text-muted">Score</span>
+												<span className="text-fg font-medium">
+													{complete ? `${score} / ${total}` : 'Incomplete'}
+												</span>
+											</div>
+											<div className="flex justify-between gap-2">
+												<span className="text-muted">Duration</span>
+												<span className="text-fg">
+													{formatDurationSeconds(Number(attempt.duration) || 0)}
+												</span>
+											</div>
 										</div>
-										<div className="flex justify-between">
-											<span className="text-muted">Score</span>
-											<span className="text-fg">{attempt.ratio || attempt.score || '—'}</span>
-										</div>
-										<div className="flex justify-between">
-											<span className="text-muted">Accuracy</span>
-											<span className="text-fg">
-												{attempt.percentage || attempt.accuracy || '—'}
-											</span>
-										</div>
-									</div>
-								</Card>
-							))}
+									</Card>
+								);
+							})}
 						</div>
 					)}
 				</aside>
