@@ -9,6 +9,23 @@ const QUESTION_TYPE_LABELS = {
 	COM: 'Computational'
 };
 
+let sectionKeyCounter = 0;
+
+export function createSectionKey() {
+	sectionKeyCounter += 1;
+	return `sec-${Date.now()}-${sectionKeyCounter}`;
+}
+
+export function createSection(overrides = {}) {
+	return {
+		clientKey: createSectionKey(),
+		id: null,
+		title: 'New section',
+		order: 0,
+		...overrides
+	};
+}
+
 export function getChoiceData(choice) {
 	if (typeof choice === 'object' && choice !== null) {
 		return { text: choice.text || choice, image: choice.image ?? null, id: choice.id };
@@ -26,6 +43,11 @@ export function isIdentification(questionType) {
 
 export function questionTypeLabel(questionType) {
 	return QUESTION_TYPE_LABELS[questionType] || questionType || 'Question';
+}
+
+export function questionTypeFromFlags({ mathematical, identification }) {
+	if (mathematical) return identification ? 'IDE-COM' : 'MUL-COM';
+	return identification ? 'IDE' : 'MUL';
 }
 
 export function accuracyTone(accuracy) {
@@ -60,7 +82,8 @@ export function getAttemptStats(attempt) {
 				: total > 0
 					? Math.round((score / total) * 10000) / 100
 					: 0;
-		return { score, total, accuracy, complete: true };
+		const sectionScores = Array.isArray(sa.section_scores) ? sa.section_scores : [];
+		return { score, total, accuracy, complete: true, sectionScores };
 	}
 
 	const score = Number(attempt?.score) || 0;
@@ -78,8 +101,17 @@ export function getAttemptStats(attempt) {
 		score,
 		total,
 		accuracy,
-		complete: Boolean(attempt?.score_accuracy || attempt?.score != null)
+		complete: Boolean(attempt?.score_accuracy || attempt?.score != null),
+		sectionScores: []
 	};
+}
+
+export function attemptScopeLabel(attempt) {
+	if (!attempt) return 'All';
+	if (attempt.full_quiz !== false) return 'All';
+	const sections = Array.isArray(attempt.sections) ? attempt.sections : [];
+	if (sections.length === 0) return 'All';
+	return sections.map((s) => s.title || `Section ${s.id}`).join(', ');
 }
 
 export function attemptQuizMeta(attempt) {
@@ -90,6 +122,42 @@ export function attemptQuizMeta(attempt) {
 		(typeof quiz === 'object' ? quiz.uuid || quiz.quiz_id : null) ||
 		(typeof attempt?.quiz === 'string' || typeof attempt?.quiz === 'number' ? attempt.quiz : null);
 	return { title, id };
+}
+
+/** Normalize sections from quiz API payload into authoring shape. */
+export function normalizeQuizSections(quizOrSections) {
+	const raw = Array.isArray(quizOrSections) ? quizOrSections : quizOrSections?.sections || [];
+	if (!Array.isArray(raw) || raw.length === 0) return [];
+	return raw
+		.slice()
+		.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || (a.id ?? 0) - (b.id ?? 0))
+		.map((sec, index) =>
+			createSection({
+				id: sec.id ?? null,
+				title: sec.title || `Section ${index + 1}`,
+				order: sec.order ?? index
+			})
+		);
+}
+
+export function questionsGroupedBySection(questions, sections) {
+	if (!sections?.length) {
+		return [{ section: null, questions: questions || [] }];
+	}
+	const byKey = new Map(sections.map((s) => [s.clientKey, []]));
+	const orphan = [];
+	for (const q of questions || []) {
+		if (q.sectionKey && byKey.has(q.sectionKey)) byKey.get(q.sectionKey).push(q);
+		else orphan.push(q);
+	}
+	const groups = sections.map((section) => ({
+		section,
+		questions: byKey.get(section.clientKey) || []
+	}));
+	if (orphan.length) {
+		groups.push({ section: null, questions: orphan });
+	}
+	return groups;
 }
 
 export function buildAnswerRecords(questions) {
@@ -112,4 +180,23 @@ export function answersById(answers) {
 		map.set(answer.id, answer);
 	}
 	return map;
+}
+
+export function buildAttemptQuery({ fullQuiz, sectionIds }) {
+	if (fullQuiz || !sectionIds?.length) return '?full=1';
+	return `?sections=${sectionIds.join(',')}`;
+}
+
+export function parseAttemptScopeFromSearch(search) {
+	const params = new URLSearchParams(search || '');
+	const full = params.get('full') === '1' || params.get('full') === 'true';
+	const sectionsRaw = params.get('sections') || '';
+	const sectionIds = sectionsRaw
+		.split(',')
+		.map((p) => Number.parseInt(p.trim(), 10))
+		.filter((n) => Number.isFinite(n));
+	return {
+		fullQuiz: full || sectionIds.length === 0,
+		sectionIds
+	};
 }

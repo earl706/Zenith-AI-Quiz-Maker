@@ -9,10 +9,12 @@ import { invalidateQuizQueries, normalizeQuizList } from '../lib/resources';
 import { toast } from '../stores/toastStore';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Button, Card, Badge, Modal, EmptyState, LoadingScreen } from '../components/ui';
+import { useAttemptLauncher } from '../components/quiz/useAttemptLauncher';
 
 export default function QuizzesPage() {
 	const navigate = useNavigate();
 	const [deleteTarget, setDeleteTarget] = useState(null);
+	const { launchAttempt, attemptModal } = useAttemptLauncher();
 
 	const { data, isLoading } = useQuery({
 		queryKey: ['quizzes', 'list'],
@@ -37,6 +39,7 @@ export default function QuizzesPage() {
 
 	return (
 		<div>
+			{attemptModal}
 			<PageHeader
 				title="My Quizzes"
 				icon={BookOpen}
@@ -82,6 +85,11 @@ export default function QuizzesPage() {
 
 								<div className="mb-4 flex flex-wrap gap-1.5">
 									<Badge tone="primary">{quiz.questions?.length ?? 0} Qs</Badge>
+									{(quiz.sections?.length ?? 0) > 0 && (
+										<Badge tone="neutral">
+											{quiz.sections.length} section{quiz.sections.length === 1 ? '' : 's'}
+										</Badge>
+									)}
 									{quiz.flashcard_quiz || quiz.quizType === 'flashcard' ? (
 										<Badge tone="accent">Flashcard</Badge>
 									) : (
@@ -116,7 +124,7 @@ export default function QuizzesPage() {
 										<Trash2 size={14} />
 									</Button>
 									<div className="flex-1" />
-									<Button size="sm" onClick={() => navigate(`/quizzes/attempt/${id}`)}>
+									<Button size="sm" onClick={() => launchAttempt(quiz)}>
 										<Play size={14} /> Attempt
 									</Button>
 								</div>

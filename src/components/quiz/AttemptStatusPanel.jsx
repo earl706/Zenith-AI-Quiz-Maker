@@ -10,7 +10,8 @@ export default function AttemptStatusPanel({
 	totalQuestions,
 	showResults,
 	score,
-	accuracy
+	accuracy,
+	sectionScores = []
 }) {
 	const progressPct = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0;
 	const tone = accuracyTone(accuracy);
@@ -56,6 +57,24 @@ export default function AttemptStatusPanel({
 							<Badge tone={tone}>{accuracy}%</Badge>
 						</div>
 					</div>
+					{sectionScores.length > 0 && (
+						<div className="border-line space-y-2 border-t pt-4 text-left">
+							<p className="text-muted text-xs font-medium tracking-wide uppercase">By section</p>
+							<ul className="space-y-1.5">
+								{sectionScores.map((ss) => (
+									<li
+										key={`${ss.section ?? 'x'}-${ss.section_title}`}
+										className="flex items-center justify-between gap-2 text-xs"
+									>
+										<span className="text-fg truncate">{ss.section_title}</span>
+										<span className="text-muted shrink-0">
+											{ss.score}/{ss.total_score} · {Math.round(ss.accuracy)}%
+										</span>
+									</li>
+								))}
+							</ul>
+						</div>
+					)}
 				</Card>
 			)}
 		</aside>

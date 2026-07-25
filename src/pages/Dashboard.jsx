@@ -8,6 +8,7 @@ import { normalizeQuizList } from '../lib/resources';
 import { useAuthStore } from '../stores/authStore';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Button, Card, CardBody, CardHeader, StatCard, EmptyState } from '../components/ui';
+import { useAttemptLauncher } from '../components/quiz/useAttemptLauncher';
 
 function greeting() {
 	const hour = new Date().getHours();
@@ -20,6 +21,7 @@ export default function DashboardPage() {
 	const user = useAuthStore((s) => s.user);
 	const name = user?.full_name?.split(' ')[0] || 'there';
 	const navigate = useNavigate();
+	const { launchAttempt, attemptModal } = useAttemptLauncher();
 
 	const { data: quizzes, isLoading } = useQuery({
 		queryKey: ['dashboard', 'quizzes'],
@@ -62,6 +64,7 @@ export default function DashboardPage() {
 
 	return (
 		<div>
+			{attemptModal}
 			<PageHeader
 				title={`${greeting()}, ${name}`}
 				icon={LayoutDashboard}
@@ -123,7 +126,7 @@ export default function DashboardPage() {
 										size="sm"
 										onClick={(e) => {
 											e.stopPropagation();
-											navigate(`/quizzes/attempt/${quiz.uuid || quiz.quiz_id}`);
+											launchAttempt(quiz);
 										}}
 									>
 										Attempt

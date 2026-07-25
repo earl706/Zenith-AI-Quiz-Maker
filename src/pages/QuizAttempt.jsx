@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Target } from 'lucide-react';
 
 import { api } from '../lib/api';
@@ -10,7 +10,12 @@ import QuestionCard from '../components/quiz/QuestionCard';
 import FlashcardAttempt from '../components/quiz/FlashcardAttempt';
 import QuizResultReview from '../components/quiz/QuizResultReview';
 import AttemptStatusPanel from '../components/quiz/AttemptStatusPanel';
-import { answersById, buildAnswerRecords, countAnswered } from '../components/quiz/quizHelpers';
+import {
+	answersById,
+	buildAnswerRecords,
+	countAnswered,
+	parseAttemptScopeFromSearch
+} from '../components/quiz/quizHelpers';
 
 function parseQuizPayload(data) {
 	const quizData = data.data || data;
@@ -21,6 +26,8 @@ function parseQuizPayload(data) {
 export default function QuizAttempt() {
 	const { id } = useParams();
 	const navigate = useNavigate();
+	const location = useLocation();
+	const scope = useMemo(() => parseAttemptScopeFromSearch(location.search), [location.search]);
 
 	const [time, setTime] = useState(0);
 	const [isRunning, setIsRunning] = useState(true);
@@ -30,6 +37,7 @@ export default function QuizAttempt() {
 	const [questions, setQuestions] = useState([]);
 	const [score, setScore] = useState(0);
 	const [accuracy, setAccuracy] = useState(0);
+	const [sectionScores, setSectionScores] = useState([]);
 	const [quizResults, setQuizResults] = useState(false);
 	const [answers, setAnswers] = useState([]);
 	const [quizData, setQuizData] = useState({
@@ -51,18 +59,27 @@ export default function QuizAttempt() {
 
 	const startAttempt = useCallback(async () => {
 		try {
-			await api.post(`/quizzes/quiz/attempt/${id}/`);
+			await api.post(`/quizzes/quiz/attempt/${id}/`, {
+				full_quiz: scope.fullQuiz,
+				section_ids: scope.fullQuiz ? [] : scope.sectionIds
+			});
 		} catch {
 			// Attempt start is best-effort; scoring still uses submit payload.
 		}
-	}, [id]);
+	}, [id, scope.fullQuiz, scope.sectionIds]);
 
 	const loadQuiz = useCallback(async () => {
 		setLoading(true);
 		try {
+			const sectionQuery =
+				!scope.fullQuiz && scope.sectionIds.length ? `&sections=${scope.sectionIds.join(',')}` : '';
 			const response = await api
-				.get(`/quizzes/quiz/${id}/?randomize=true`)
-				.catch(() => api.get(`/quizzes/quiz/${id}/`));
+				.get(`/quizzes/quiz/${id}/?randomize=true${sectionQuery}`)
+				.catch(() =>
+					api.get(
+						`/quizzes/quiz/${id}/${sectionQuery ? `?sections=${scope.sectionIds.join(',')}` : ''}`
+					)
+				);
 			const { quizData: nextQuiz, questions: nextQuestions } = parseQuizPayload(response.data);
 
 			setQuizData(nextQuiz);
@@ -71,6 +88,7 @@ export default function QuizAttempt() {
 			setSubmittedAnswers([]);
 			setScore(0);
 			setAccuracy(0);
+			setSectionScores([]);
 			setQuizResults(false);
 			setTime(0);
 			setIsRunning(true);
@@ -81,9 +99,11 @@ export default function QuizAttempt() {
 		} finally {
 			setLoading(false);
 		}
-	}, [id, navigate, startAttempt]);
+	}, [id, navigate, scope.fullQuiz, scope.sectionIds, startAttempt]);
 
 	useEffect(() => {
+		// Initial load / scope change — loadQuiz owns loading state.
+		// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional fetch-on-mount
 		loadQuiz();
 	}, [loadQuiz]);
 
@@ -104,6 +124,7 @@ export default function QuizAttempt() {
 			setSubmittedAnswers(Array.from(response.data.answers || []));
 			setScore(response.data.score);
 			setAccuracy(response.data.accuracy);
+			setSectionScores(response.data.section_scores || []);
 			setQuizResults(true);
 			setIsRunning(false);
 		} catch {
@@ -120,6 +141,9 @@ export default function QuizAttempt() {
 	if (loading) return <LoadingScreen />;
 
 	const modeLabel = quizData.flashcard_quiz ? 'Flashcard' : 'List';
+	const scopeLabel = scope.fullQuiz
+		? 'All sections'
+		: `${scope.sectionIds.length} section${scope.sectionIds.length === 1 ? '' : 's'}`;
 
 	return (
 		<div>
@@ -127,7 +151,14 @@ export default function QuizAttempt() {
 				title={quizData.quiz_title || 'Quiz attempt'}
 				icon={Target}
 				description={quizResults ? 'Review your answers' : 'Answer each question, then submit'}
-				actions={<Badge tone="primary">{modeLabel}</Badge>}
+				actions={
+					<div className="flex flex-wrap gap-1.5">
+						<Badge tone="primary">{modeLabel}</Badge>
+						{(quizData.sections?.length > 0 || !scope.fullQuiz) && (
+							<Badge tone="accent">{scopeLabel}</Badge>
+						)}
+					</div>
+				}
 			/>
 
 			{quizData.quiz_image && (
@@ -149,6 +180,7 @@ export default function QuizAttempt() {
 							score={score}
 							accuracy={accuracy}
 							time={time}
+							sectionScores={sectionScores}
 							onRetake={handleRetake}
 							onBackToList={() => navigate('/quizzes')}
 						/>
@@ -197,6 +229,7 @@ export default function QuizAttempt() {
 					showResults={quizResults}
 					score={score}
 					accuracy={accuracy}
+					sectionScores={sectionScores}
 				/>
 			</div>
 		</div>

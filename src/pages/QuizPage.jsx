@@ -26,11 +26,13 @@ import {
 import MathRenderer from '../components/quiz/MathRenderer';
 import {
 	accuracyTone,
+	attemptScopeLabel,
 	getAttemptStats,
 	getChoiceData,
 	isMathematical,
 	questionTypeLabel
 } from '../components/quiz/quizHelpers';
+import { useAttemptLauncher } from '../components/quiz/useAttemptLauncher';
 
 function parseQuizSummary(payload) {
 	if (!payload || typeof payload !== 'object') {
@@ -59,6 +61,7 @@ function parseQuizSummary(payload) {
 export default function QuizPage() {
 	const { id } = useParams();
 	const navigate = useNavigate();
+	const { launchAttempt, attemptModal } = useAttemptLauncher();
 
 	const { data, isLoading, isError } = useQuery({
 		queryKey: ['quizzes', 'summary', id],
@@ -81,6 +84,7 @@ export default function QuizPage() {
 	if (isError || !quiz) {
 		return (
 			<div>
+				{attemptModal}
 				<PageHeader title="Quiz" icon={BookOpen} />
 				<EmptyState
 					icon={BookOpen}
@@ -117,6 +121,7 @@ export default function QuizPage() {
 
 	return (
 		<div>
+			{attemptModal}
 			<PageHeader
 				title={
 					<span className="inline-flex items-center gap-2.5">
@@ -141,7 +146,7 @@ export default function QuizPage() {
 						<Button variant="secondary" onClick={() => navigate(`/quizzes/edit/${id}`)}>
 							<Pencil size={14} /> Edit
 						</Button>
-						<Button onClick={() => navigate(`/quizzes/attempt/${id}`)}>
+						<Button onClick={() => launchAttempt(quiz)}>
 							<Play size={14} /> Attempt
 						</Button>
 					</div>
@@ -170,8 +175,14 @@ export default function QuizPage() {
 
 			{(meta.multipleChoice != null ||
 				meta.identification != null ||
-				meta.computational != null) && (
+				meta.computational != null ||
+				(quiz.sections?.length ?? 0) > 0) && (
 				<div className="mb-8 flex flex-wrap gap-2">
+					{(quiz.sections?.length ?? 0) > 0 && (
+						<Badge tone="neutral">
+							{quiz.sections.length} section{quiz.sections.length === 1 ? '' : 's'}
+						</Badge>
+					)}
 					{meta.multipleChoice > 0 && (
 						<Badge tone="primary">{meta.multipleChoice} multiple choice</Badge>
 					)}
@@ -239,7 +250,7 @@ export default function QuizPage() {
 													return (
 														<div
 															key={choiceId ?? ci}
-															className="bg-surface-2 flex min-w-30 max-w-56 flex-col items-center gap-2 rounded-md px-3 py-2.5"
+															className="bg-surface-2 flex max-w-56 min-w-30 flex-col items-center gap-2 rounded-md px-3 py-2.5"
 														>
 															{choiceImage && (
 																<img
@@ -274,7 +285,7 @@ export default function QuizPage() {
 					{attempts.length === 0 ? (
 						<Card className="p-6 text-center">
 							<p className="text-muted text-sm">No attempts yet.</p>
-							<Button size="sm" className="mt-3" onClick={() => navigate(`/quizzes/attempt/${id}`)}>
+							<Button size="sm" className="mt-3" onClick={() => launchAttempt(quiz)}>
 								<Play size={14} /> Start one
 							</Button>
 						</Card>
@@ -282,48 +293,73 @@ export default function QuizPage() {
 						<div className="space-y-3">
 							{attempts.map((attempt) => {
 								const key = attempt.uuid || attempt.id;
-								const { score, total, accuracy, complete } = getAttemptStats(attempt);
+								const { score, total, accuracy, complete, sectionScores } =
+									getAttemptStats(attempt);
 								const tone = complete ? accuracyTone(accuracy) : 'primary';
 								const when = attempt.attempt_datetime;
+								const scope = attemptScopeLabel(attempt);
 
 								return (
-									<Card key={key} className="flex items-center gap-3 p-4">
-										{complete ? (
-											<ProgressRing
-												value={accuracy}
-												size={56}
-												stroke={5}
-												tone={tone}
-												label={`${Math.round(accuracy)}`}
-											/>
-										) : (
-											<div className="bg-surface-2 text-muted flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-xs font-medium">
-												—
-											</div>
-										)}
-										<div className="min-w-0 flex-1 space-y-1 text-xs">
-											<div className="flex justify-between gap-2">
-												<span className="text-muted">When</span>
-												<span
-													className="text-fg truncate"
-													title={formatDate(when, 'MMM d, yyyy · h:mm a')}
-												>
-													{when ? fromNow(when) : '—'}
-												</span>
-											</div>
-											<div className="flex justify-between gap-2">
-												<span className="text-muted">Score</span>
-												<span className="text-fg font-medium">
-													{complete ? `${score} / ${total}` : 'Incomplete'}
-												</span>
-											</div>
-											<div className="flex justify-between gap-2">
-												<span className="text-muted">Duration</span>
-												<span className="text-fg">
-													{formatDurationSeconds(Number(attempt.duration) || 0)}
-												</span>
+									<Card key={key} className="flex flex-col gap-3 p-4">
+										<div className="flex items-center gap-3">
+											{complete ? (
+												<ProgressRing
+													value={accuracy}
+													size={56}
+													stroke={5}
+													tone={tone}
+													label={`${Math.round(accuracy)}`}
+												/>
+											) : (
+												<div className="bg-surface-2 text-muted flex h-14 w-14 shrink-0 items-center justify-center rounded-full text-xs font-medium">
+													—
+												</div>
+											)}
+											<div className="min-w-0 flex-1 space-y-1 text-xs">
+												<div className="flex justify-between gap-2">
+													<span className="text-muted">When</span>
+													<span
+														className="text-fg truncate"
+														title={formatDate(when, 'MMM d, yyyy · h:mm a')}
+													>
+														{when ? fromNow(when) : '—'}
+													</span>
+												</div>
+												<div className="flex justify-between gap-2">
+													<span className="text-muted">Score</span>
+													<span className="text-fg font-medium">
+														{complete ? `${score} / ${total}` : 'Incomplete'}
+													</span>
+												</div>
+												<div className="flex justify-between gap-2">
+													<span className="text-muted">Scope</span>
+													<span className="text-fg truncate" title={scope}>
+														{scope}
+													</span>
+												</div>
+												<div className="flex justify-between gap-2">
+													<span className="text-muted">Duration</span>
+													<span className="text-fg">
+														{formatDurationSeconds(Number(attempt.duration) || 0)}
+													</span>
+												</div>
 											</div>
 										</div>
+										{sectionScores.length > 0 && (
+											<ul className="border-line space-y-1 border-t pt-2 text-[0.7rem]">
+												{sectionScores.map((ss) => (
+													<li
+														key={`${ss.section ?? ss.section_title}-${ss.id ?? ss.section_title}`}
+														className="text-muted flex justify-between gap-2"
+													>
+														<span className="truncate">{ss.section_title}</span>
+														<span className="text-fg shrink-0">
+															{ss.score}/{ss.total_score} · {Math.round(ss.accuracy)}%
+														</span>
+													</li>
+												))}
+											</ul>
+										)}
 									</Card>
 								);
 							})}

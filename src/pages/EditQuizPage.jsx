@@ -8,6 +8,12 @@ import { toast } from '../stores/toastStore';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Button, Card, CardBody, CardHeader, Input, LoadingScreen } from '../components/ui';
 import MathInput from '../components/quiz/MathInput';
+import {
+	createSection,
+	normalizeQuizSections,
+	questionTypeFromFlags,
+	questionsGroupedBySection
+} from '../components/quiz/quizHelpers';
 
 const colors = [
 	{ name: 'Red', hex: '#EF4444' },
@@ -34,7 +40,6 @@ export default function EditQuizPage() {
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [randomQuestionOrder, setRandomQuestionOrder] = useState(false);
-	const [randomQuestionChoices, setRandomQuestionChoices] = useState(false);
 	const [quizType, setQuizType] = useState('list');
 	const [quizTitle, setQuizTitle] = useState('');
 	const [selectedColor, setSelectedColor] = useState(colors[0].hex);
@@ -42,6 +47,7 @@ export default function EditQuizPage() {
 	const [quizImagePreview, setQuizImagePreview] = useState(null);
 	const [originalQuizImage, setOriginalQuizImage] = useState(null);
 	const [questions, setQuestions] = useState([]);
+	const [sections, setSections] = useState([]);
 	const [isPublic, setIsPublic] = useState(false);
 
 	useEffect(() => {
@@ -60,8 +66,14 @@ export default function EditQuizPage() {
 				setOriginalQuizImage(quizData.quiz_image);
 				setQuizImagePreview(quizData.quiz_image);
 
+				const loadedSections = normalizeQuizSections(quizData);
+				setSections(loadedSections);
+				const sectionKeyById = new Map(
+					loadedSections.filter((s) => s.id != null).map((s) => [s.id, s.clientKey])
+				);
+
 				const transformedQuestions = questionsData.map((question, index) => {
-					const transformedChoices = question.choices.map((choice) =>
+					const transformedChoices = (question.choices || []).map((choice) =>
 						typeof choice === 'object' && choice !== null ? choice.text || choice : choice
 					);
 					const correctAnswerIndex = transformedChoices.findIndex(
@@ -71,9 +83,9 @@ export default function EditQuizPage() {
 					return {
 						id: question.id || index + 1,
 						title: question.question,
-						choices: transformedChoices,
-						choiceImages: Array(transformedChoices.length).fill(null),
-						choiceImagePreviews: Array(transformedChoices.length).fill(null),
+						choices: transformedChoices.length ? transformedChoices : ['', '', '', ''],
+						choiceImages: Array(Math.max(transformedChoices.length, 4)).fill(null),
+						choiceImagePreviews: Array(Math.max(transformedChoices.length, 4)).fill(null),
 						correctAnswerIndex: correctAnswerIndex >= 0 ? correctAnswerIndex : 0,
 						mathematical: question.question_type === 'MUL-COM' || question.question_type === 'COM',
 						identification:
@@ -81,7 +93,8 @@ export default function EditQuizPage() {
 						randomChoices: question.random_choices || false,
 						hasChoiceImages: false,
 						question_image: null,
-						question_image_preview: question.question_image
+						question_image_preview: question.question_image,
+						sectionKey: sectionKeyById.get(question.section) || null
 					};
 				});
 
@@ -142,11 +155,13 @@ export default function EditQuizPage() {
 		);
 	};
 
-	const addQuestion = () => {
+	const addQuestion = (sectionKey = null) => {
+		const key =
+			sectionKey ?? (sections.length > 0 ? sections[sections.length - 1].clientKey : null);
 		setQuestions((qs) => [
 			...qs,
 			{
-				id: qs.length + 1,
+				id: `new-${Date.now()}`,
 				title: '',
 				choices: ['', '', '', ''],
 				choiceImages: [null, null, null, null],
@@ -157,9 +172,48 @@ export default function EditQuizPage() {
 				randomChoices: false,
 				hasChoiceImages: false,
 				question_image: null,
-				question_image_preview: null
+				question_image_preview: null,
+				sectionKey: key
 			}
 		]);
+	};
+
+	const addSection = () => {
+		const next = createSection({
+			title: `Section ${sections.length + 1}`,
+			order: sections.length
+		});
+		setSections((prev) => {
+			if (prev.length === 0) {
+				setQuestions((qs) => qs.map((q) => ({ ...q, sectionKey: next.clientKey })));
+			}
+			return [...prev, next];
+		});
+	};
+
+	const updateSectionTitle = (clientKey, title) => {
+		setSections((prev) => prev.map((s) => (s.clientKey === clientKey ? { ...s, title } : s)));
+	};
+
+	const removeSection = (clientKey) => {
+		const remaining = sections.filter((s) => s.clientKey !== clientKey);
+		setSections(remaining);
+		const fallback = remaining[0]?.clientKey ?? null;
+		setQuestions((qs) =>
+			qs.map((q) => (q.sectionKey === clientKey ? { ...q, sectionKey: fallback } : q))
+		);
+	};
+
+	const moveSection = (clientKey, direction) => {
+		setSections((prev) => {
+			const idx = prev.findIndex((s) => s.clientKey === clientKey);
+			if (idx < 0) return prev;
+			const swapWith = idx + direction;
+			if (swapWith < 0 || swapWith >= prev.length) return prev;
+			const next = [...prev];
+			[next[idx], next[swapWith]] = [next[swapWith], next[idx]];
+			return next.map((s, order) => ({ ...s, order }));
+		});
 	};
 
 	const handleQuizImageUpload = (event) => {
@@ -204,9 +258,14 @@ export default function EditQuizPage() {
 			const quizData = {
 				quiz_title: quizTitle,
 				public: isPublic,
-				randomQuestions: randomQuestionOrder,
+				random_question_order: randomQuestionOrder,
 				tag_color: selectedColor,
-				quizType: quizType === 'flashcard' ? 'flashcard' : 'quiz'
+				flashcard_quiz: quizType === 'flashcard',
+				sections: sections.map((section, si) => ({
+					...(section.id ? { id: section.id } : {}),
+					title: section.title || `Section ${si + 1}`,
+					order: section.order ?? si
+				}))
 			};
 
 			if (quizImage) {
@@ -217,15 +276,31 @@ export default function EditQuizPage() {
 
 			quizData.questions = await Promise.all(
 				questions.map(async (question) => {
+					const choices = question.choices || [];
+					const correctIndex = Math.max(
+						0,
+						Math.min(question.correctAnswerIndex || 0, Math.max(choices.length - 1, 0))
+					);
 					const qData = {
-						title: question.title,
-						correctAnswerIndex: question.correctAnswerIndex,
-						randomChoices: question.randomChoices,
-						identification: question.identification,
-						mathematical: question.mathematical,
-						hasChoiceImages: question.hasChoiceImages,
-						choices: question.choices
+						...(typeof question.id === 'number' ? { id: question.id } : {}),
+						question: question.title,
+						question_type: questionTypeFromFlags(question),
+						choices_array: choices,
+						correct_answer: choices[correctIndex] || '',
+						correct_answer_index: correctIndex,
+						random_choices: !!question.randomChoices,
+						has_choice_images: !!question.hasChoiceImages
 					};
+					if (sections.length > 0 && question.sectionKey) {
+						const sectionIndex = sections.findIndex((s) => s.clientKey === question.sectionKey);
+						if (sectionIndex >= 0) {
+							qData.section_index = sectionIndex;
+							const sec = sections[sectionIndex];
+							if (sec.id) qData.section = sec.id;
+						}
+					} else {
+						qData.section = null;
+					}
 					if (question.question_image) {
 						qData.question_image = await fileToBase64(question.question_image);
 					} else if (question.question_image_preview) {
@@ -265,154 +340,233 @@ export default function EditQuizPage() {
 
 			<div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
 				<div className="flex flex-1 flex-col gap-4">
-					{questions.map((question, index) => (
-						<Card key={question.id}>
-							<CardHeader
-								title={`Question ${index + 1}`}
-								action={
-									<Button variant="ghost" size="icon" onClick={() => removeQuestion(question.id)}>
-										<X size={16} />
-									</Button>
-								}
-							/>
-							<CardBody className="space-y-4">
-								<Input
-									value={question.title}
-									onChange={(e) => handleInputChange(question.id, 'title', e.target.value)}
-									placeholder="Enter question text"
-								/>
+					<div className="flex flex-wrap items-center gap-2">
+						<Button type="button" variant="secondary" size="sm" onClick={addSection}>
+							<Plus size={14} /> Add section
+						</Button>
+						{sections.length > 0 && (
+							<p className="text-muted text-xs">
+								{sections.length} section{sections.length === 1 ? '' : 's'}
+							</p>
+						)}
+					</div>
 
-								{question.question_image_preview ? (
-									<div className="relative">
-										<img
-											src={question.question_image_preview}
-											alt="Question"
-											className="h-36 w-full rounded-md object-cover"
+					{questionsGroupedBySection(questions, sections).map(
+						({ section, questions: groupQuestions }) => (
+							<div key={section?.clientKey || 'ungrouped'} className="space-y-4">
+								{section && (
+									<div className="border-line bg-surface-2 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2">
+										<Input
+											value={section.title}
+											onChange={(e) => updateSectionTitle(section.clientKey, e.target.value)}
+											placeholder="Section title"
+											className="min-w-[10rem] flex-1"
 										/>
-										<button
-											onClick={() =>
-												setQuestions((qs) =>
-													qs.map((q) =>
-														q.id === question.id
-															? { ...q, question_image: null, question_image_preview: null }
-															: q
-													)
-												)
-											}
-											className="bg-danger absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full text-white"
-										>
-											<X size={12} />
-										</button>
-									</div>
-								) : (
-									<label className="border-line hover:border-primary/40 flex h-20 w-full cursor-pointer items-center justify-center rounded-md border-2 border-dashed transition">
-										<input
-											type="file"
-											accept="image/*"
-											onChange={(e) => handleQuestionImageUpload(question.id, e)}
-											className="hidden"
-										/>
-										<div className="text-muted flex flex-col items-center text-xs">
-											<Plus size={16} />
-											<span>Add Image</span>
-										</div>
-									</label>
-								)}
-
-								<div className="flex flex-wrap gap-2">
-									{[
-										{ key: 'mathematical', label: 'Mathematical' },
-										{ key: 'identification', label: 'Identification' }
-									].map(({ key, label }) => (
-										<button
-											key={key}
+										<Button
 											type="button"
-											className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition ${question[key] ? 'bg-primary text-primary-fg' : 'bg-surface-2 text-fg hover:bg-line'}`}
-											onClick={() => handleInputChange(question.id, key, !question[key])}
+											variant="ghost"
+											size="sm"
+											onClick={() => moveSection(section.clientKey, -1)}
 										>
-											<Check size={12} className={question[key] ? '' : 'opacity-0'} />
-											{label}
-										</button>
-									))}
-								</div>
-
-								<div className="space-y-2">
-									{question.mathematical ? (
-										<MathInput
-											handleChoicesChange={handleChoicesChange}
-											handleInputChange={handleInputChange}
-											question={question}
-											removeChoice={removeChoice}
-										/>
-									) : question.identification ? (
-										<div className="flex items-center gap-3">
-											<button
-												type="button"
-												className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition ${question.correctAnswerIndex === 0 ? 'border-primary bg-primary' : 'border-line bg-surface'}`}
-												onClick={() => handleInputChange(question.id, 'correctAnswerIndex', 0)}
-											>
-												{question.correctAnswerIndex === 0 && (
-													<Check size={12} className="text-primary-fg" />
-												)}
-											</button>
-											<input
-												type="text"
-												value={question.choices[0] || ''}
-												onChange={(e) => handleChoicesChange(question.id, 0, e.target.value)}
-												placeholder="Answer"
-												className="border-line bg-surface text-fg focus:border-primary flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none"
-											/>
-										</div>
-									) : (
-										question.choices.map((choice, ci) => (
-											<div className="flex items-center gap-3" key={ci}>
-												<button
-													type="button"
-													className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition ${question.correctAnswerIndex === ci ? 'border-primary bg-primary' : 'border-line bg-surface'}`}
-													onClick={() => handleInputChange(question.id, 'correctAnswerIndex', ci)}
-												>
-													{question.correctAnswerIndex === ci && (
-														<Check size={12} className="text-primary-fg" />
-													)}
-												</button>
-												<input
-													type="text"
-													value={choice}
-													onChange={(e) => handleChoicesChange(question.id, ci, e.target.value)}
-													placeholder={`Choice ${ci + 1}`}
-													className="border-line bg-surface text-fg focus:border-primary flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none"
-												/>
-												{question.choices.length > 2 && (
+											Up
+										</Button>
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											onClick={() => moveSection(section.clientKey, 1)}
+										>
+											Down
+										</Button>
+										<Button
+											type="button"
+											variant="ghost"
+											size="icon"
+											onClick={() => removeSection(section.clientKey)}
+											aria-label="Remove section"
+										>
+											<X size={15} />
+										</Button>
+									</div>
+								)}
+								{groupQuestions.map((question) => {
+									const index = questions.findIndex((q) => q.id === question.id);
+									return (
+										<Card key={question.id}>
+											<CardHeader
+												title={`Question ${index + 1}`}
+												action={
 													<Button
 														variant="ghost"
 														size="icon"
-														onClick={() => removeChoice(question.id, ci)}
+														onClick={() => removeQuestion(question.id)}
 													>
-														<X size={14} className="text-danger" />
+														<X size={16} />
+													</Button>
+												}
+											/>
+											<CardBody className="space-y-4">
+												<Input
+													value={question.title}
+													onChange={(e) => handleInputChange(question.id, 'title', e.target.value)}
+													placeholder="Enter question text"
+												/>
+
+												{question.question_image_preview ? (
+													<div className="relative">
+														<img
+															src={question.question_image_preview}
+															alt="Question"
+															className="h-36 w-full rounded-md object-cover"
+														/>
+														<button
+															onClick={() =>
+																setQuestions((qs) =>
+																	qs.map((q) =>
+																		q.id === question.id
+																			? { ...q, question_image: null, question_image_preview: null }
+																			: q
+																	)
+																)
+															}
+															className="bg-danger absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full text-white"
+														>
+															<X size={12} />
+														</button>
+													</div>
+												) : (
+													<label className="border-line hover:border-primary/40 flex h-20 w-full cursor-pointer items-center justify-center rounded-md border-2 border-dashed transition">
+														<input
+															type="file"
+															accept="image/*"
+															onChange={(e) => handleQuestionImageUpload(question.id, e)}
+															className="hidden"
+														/>
+														<div className="text-muted flex flex-col items-center text-xs">
+															<Plus size={16} />
+															<span>Add Image</span>
+														</div>
+													</label>
+												)}
+
+												<div className="flex flex-wrap gap-2">
+													{[
+														{ key: 'mathematical', label: 'Mathematical' },
+														{ key: 'identification', label: 'Identification' }
+													].map(({ key, label }) => (
+														<button
+															key={key}
+															type="button"
+															className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition ${question[key] ? 'bg-primary text-primary-fg' : 'bg-surface-2 text-fg hover:bg-line'}`}
+															onClick={() => handleInputChange(question.id, key, !question[key])}
+														>
+															<Check size={12} className={question[key] ? '' : 'opacity-0'} />
+															{label}
+														</button>
+													))}
+												</div>
+
+												<div className="space-y-2">
+													{question.mathematical ? (
+														<MathInput
+															handleChoicesChange={handleChoicesChange}
+															handleInputChange={handleInputChange}
+															question={question}
+															removeChoice={removeChoice}
+														/>
+													) : question.identification ? (
+														<div className="flex items-center gap-3">
+															<button
+																type="button"
+																className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition ${question.correctAnswerIndex === 0 ? 'border-primary bg-primary' : 'border-line bg-surface'}`}
+																onClick={() =>
+																	handleInputChange(question.id, 'correctAnswerIndex', 0)
+																}
+															>
+																{question.correctAnswerIndex === 0 && (
+																	<Check size={12} className="text-primary-fg" />
+																)}
+															</button>
+															<input
+																type="text"
+																value={question.choices[0] || ''}
+																onChange={(e) =>
+																	handleChoicesChange(question.id, 0, e.target.value)
+																}
+																placeholder="Answer"
+																className="border-line bg-surface text-fg focus:border-primary flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none"
+															/>
+														</div>
+													) : (
+														question.choices.map((choice, ci) => (
+															<div className="flex items-center gap-3" key={ci}>
+																<button
+																	type="button"
+																	className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition ${question.correctAnswerIndex === ci ? 'border-primary bg-primary' : 'border-line bg-surface'}`}
+																	onClick={() =>
+																		handleInputChange(question.id, 'correctAnswerIndex', ci)
+																	}
+																>
+																	{question.correctAnswerIndex === ci && (
+																		<Check size={12} className="text-primary-fg" />
+																	)}
+																</button>
+																<input
+																	type="text"
+																	value={choice}
+																	onChange={(e) =>
+																		handleChoicesChange(question.id, ci, e.target.value)
+																	}
+																	placeholder={`Choice ${ci + 1}`}
+																	className="border-line bg-surface text-fg focus:border-primary flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none"
+																/>
+																{question.choices.length > 2 && (
+																	<Button
+																		variant="ghost"
+																		size="icon"
+																		onClick={() => removeChoice(question.id, ci)}
+																	>
+																		<X size={14} className="text-danger" />
+																	</Button>
+																)}
+															</div>
+														))
+													)}
+												</div>
+
+												{!question.identification && (
+													<Button
+														variant="secondary"
+														size="sm"
+														className="w-full"
+														onClick={() => addChoice(question.id)}
+													>
+														<Plus size={14} /> Add Choice
 													</Button>
 												)}
-											</div>
-										))
-									)}
-								</div>
-
-								{!question.identification && (
+											</CardBody>
+										</Card>
+									);
+								})}
+								{section && (
 									<Button
-										variant="secondary"
-										size="sm"
+										type="button"
+										variant="ghost"
 										className="w-full"
-										onClick={() => addChoice(question.id)}
+										onClick={() => addQuestion(section.clientKey)}
 									>
-										<Plus size={14} /> Add Choice
+										<Plus size={14} /> Add question to section
 									</Button>
 								)}
-							</CardBody>
-						</Card>
-					))}
+							</div>
+						)
+					)}
 
-					<Button variant="secondary" className="w-full" onClick={addQuestion}>
-						<Plus size={16} /> Add Question
-					</Button>
+					{sections.length === 0 && (
+						<Button variant="secondary" className="w-full" onClick={() => addQuestion()}>
+							<Plus size={16} /> Add Question
+						</Button>
+					)}
 
 					<Button className="w-full" loading={saving} onClick={handleUpdateQuiz}>
 						<Save size={16} /> Save Changes

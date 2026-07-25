@@ -9,6 +9,7 @@ import { Badge, Card, EmptyState, LoadingScreen, ProgressRing } from '../compone
 import {
 	accuracyTone,
 	attemptQuizMeta,
+	attemptScopeLabel,
 	getAttemptStats,
 	normalizeAttemptList
 } from '../components/quiz/quizHelpers';
@@ -46,9 +47,10 @@ export default function AttemptsPage() {
 					{attempts.map((attempt) => {
 						const key = attempt.uuid || attempt.id;
 						const { title, id: quizId } = attemptQuizMeta(attempt);
-						const { score, total, accuracy, complete } = getAttemptStats(attempt);
+						const { score, total, accuracy, complete, sectionScores } = getAttemptStats(attempt);
 						const tone = complete ? accuracyTone(accuracy) : 'primary';
 						const when = attempt.attempt_datetime;
+						const scope = attemptScopeLabel(attempt);
 
 						return (
 							<Card
@@ -103,12 +105,34 @@ export default function AttemptsPage() {
 												<span className="text-muted">—</span>
 											)}
 										</div>
+										<div className="flex items-center justify-between gap-2">
+											<span className="text-muted">Scope</span>
+											<span className="text-fg truncate text-xs" title={scope}>
+												{scope}
+											</span>
+										</div>
 										<div className="text-muted flex items-center gap-1.5 text-xs">
 											<Clock size={12} />
 											{formatDurationSeconds(Number(attempt.duration) || 0)}
 										</div>
 									</div>
 								</div>
+
+								{sectionScores.length > 0 && (
+									<ul className="border-line space-y-1 border-t pt-3 text-xs">
+										{sectionScores.map((ss) => (
+											<li
+												key={`${ss.section ?? 'x'}-${ss.section_title}`}
+												className="text-muted flex justify-between gap-2"
+											>
+												<span className="truncate">{ss.section_title}</span>
+												<span className="text-fg shrink-0">
+													{ss.score}/{ss.total_score} · {Math.round(ss.accuracy)}%
+												</span>
+											</li>
+										))}
+									</ul>
+								)}
 							</Card>
 						);
 					})}

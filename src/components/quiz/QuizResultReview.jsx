@@ -31,7 +31,7 @@ function SummaryStat({ label, value, mono = false }) {
 	);
 }
 
-function ResultSummary({ score, accuracy, time, correctCount, total }) {
+function ResultSummary({ score, accuracy, time, correctCount, total, sectionScores = [] }) {
 	return (
 		<Card className="overflow-hidden">
 			<div className="from-primary/8 via-surface to-surface bg-linear-to-br p-5">
@@ -43,6 +43,21 @@ function ResultSummary({ score, accuracy, time, correctCount, total }) {
 				<p className="text-muted mt-4 text-center text-xs">
 					{correctCount} correct · {total - correctCount} incorrect
 				</p>
+				{sectionScores.length > 0 && (
+					<ul className="border-line mt-4 space-y-1.5 border-t pt-3 text-left text-xs">
+						{sectionScores.map((ss) => (
+							<li
+								key={`${ss.section ?? 'x'}-${ss.section_title}`}
+								className="flex justify-between gap-2"
+							>
+								<span className="text-fg truncate">{ss.section_title}</span>
+								<span className="text-muted shrink-0">
+									{ss.score}/{ss.total_score} · {Math.round(ss.accuracy)}%
+								</span>
+							</li>
+						))}
+					</ul>
+				)}
 			</div>
 		</Card>
 	);
@@ -160,6 +175,7 @@ export default function QuizResultReview({
 	score,
 	accuracy,
 	time,
+	sectionScores = [],
 	onRetake,
 	onBackToList
 }) {
@@ -192,6 +208,7 @@ export default function QuizResultReview({
 				time={time}
 				correctCount={correctCount}
 				total={total}
+				sectionScores={sectionScores}
 			/>
 
 			{total === 0 ? (
