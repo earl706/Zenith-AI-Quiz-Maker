@@ -26,6 +26,55 @@ export function createSection(overrides = {}) {
 	};
 }
 
+/**
+ * Apply AI generate payload sections onto authoring state shapes.
+ * Returns { sections, questions } ready for setState.
+ * mapQuestion(q, index) must return a question object (may omit sectionKey).
+ */
+export function applyGeneratedSections(quizData, mapQuestion) {
+	const questionsRaw = Array.isArray(quizData?.questions) ? quizData.questions : [];
+	const sectionsRaw = Array.isArray(quizData?.sections) ? quizData.sections : [];
+
+	if (!questionsRaw.length) {
+		return { sections: [], questions: [] };
+	}
+
+	if (!sectionsRaw.length) {
+		return {
+			sections: [],
+			questions: questionsRaw.map((q, i) => {
+				const mapped = mapQuestion(q, i);
+				return { ...mapped, sectionKey: null };
+			})
+		};
+	}
+
+	const sections = sectionsRaw.map((sec, index) =>
+		createSection({
+			title: sec.title || `Section ${index + 1}`,
+			order: sec.order ?? index
+		})
+	);
+
+	const questions = questionsRaw.map((q, i) => {
+		const mapped = mapQuestion(q, i);
+		let idx =
+			typeof q.sectionIndex === 'number'
+				? q.sectionIndex
+				: typeof q.section_index === 'number'
+					? q.section_index
+					: -1;
+		if (idx < 0 && q.section) {
+			const key = String(q.section).toLowerCase();
+			idx = sectionsRaw.findIndex((s) => String(s.title || '').toLowerCase() === key);
+		}
+		if (idx < 0 || idx >= sections.length) idx = 0;
+		return { ...mapped, sectionKey: sections[idx].clientKey };
+	});
+
+	return { sections, questions };
+}
+
 export function getChoiceData(choice) {
 	if (typeof choice === 'object' && choice !== null) {
 		return { text: choice.text || choice, image: choice.image ?? null, id: choice.id };

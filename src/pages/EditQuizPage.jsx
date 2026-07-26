@@ -1,12 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Check, Plus, X, Save, ArrowLeft, Pencil } from 'lucide-react';
+import {
+	Check,
+	Plus,
+	X,
+	Save,
+	ArrowLeft,
+	Pencil,
+	SlidersHorizontal,
+	WandSparkles
+} from 'lucide-react';
 
 import { api } from '../lib/api';
+import { cn } from '../lib/format';
 import { invalidateQuizQueries } from '../lib/resources';
 import { toast } from '../stores/toastStore';
 import { PageHeader } from '../components/layout/PageHeader';
-import { Button, Card, CardBody, CardHeader, Input, LoadingScreen } from '../components/ui';
+import { Button, Card, CardBody, CardHeader, Input, LoadingScreen, Modal } from '../components/ui';
 import MathInput from '../components/quiz/MathInput';
 import {
 	createSection,
@@ -14,24 +24,37 @@ import {
 	questionTypeFromFlags,
 	questionsGroupedBySection
 } from '../components/quiz/quizHelpers';
+import {
+	QUIZ_TAG_COLORS,
+	ToggleChip,
+	ImageDropzone,
+	ChoiceImageControl
+} from '../components/quiz/quizAuthoringUi';
+import { useQuizAiProposal } from '../components/quiz/useQuizAiProposal';
+import QuizAiInstructionModal from '../components/quiz/QuizAiInstructionModal';
+import QuizAiReviewBar, { QuizAiChangeControls } from '../components/quiz/QuizAiReviewBar';
+import { reviewCardClassName } from '../components/quiz/quizAiDiff';
 
-const colors = [
-	{ name: 'Red', hex: '#EF4444' },
-	{ name: 'Green', hex: '#10B981' },
-	{ name: 'Blue', hex: '#3B82F6' },
-	{ name: 'Yellow', hex: '#FACC15' },
-	{ name: 'Purple', hex: '#A855F7' },
-	{ name: 'Orange', hex: '#F97316' },
-	{ name: 'Teal', hex: '#14B8A6' },
-	{ name: 'Pink', hex: '#EC4899' },
-	{ name: 'Indigo', hex: '#6366F1' },
-	{ name: 'Lime', hex: '#84CC16' },
-	{ name: 'Cyan', hex: '#06B6D4' },
-	{ name: 'Amber', hex: '#F59E0B' },
-	{ name: 'Rose', hex: '#F43F5E' },
-	{ name: 'Sky', hex: '#0EA5E9' },
-	{ name: 'Emerald', hex: '#50C878' }
-];
+const colors = QUIZ_TAG_COLORS;
+
+function getDefaultQuestion(id, randomChoices = false, sectionKey = null) {
+	return {
+		id,
+		title: '',
+		choices: ['', '', '', ''],
+		choiceImages: [null, null, null, null],
+		choiceImagePreviews: [null, null, null, null],
+		correctAnswerIndex: 0,
+		mathematical: false,
+		identification: false,
+		randomChoices,
+		hasChoiceImages: false,
+		showChoiceImages: false,
+		question_image: null,
+		question_image_preview: null,
+		sectionKey
+	};
+}
 
 export default function EditQuizPage() {
 	const navigate = useNavigate();
@@ -40,6 +63,7 @@ export default function EditQuizPage() {
 	const [loading, setLoading] = useState(true);
 	const [saving, setSaving] = useState(false);
 	const [randomQuestionOrder, setRandomQuestionOrder] = useState(false);
+	const [randomQuestionChoices, setRandomQuestionChoices] = useState(false);
 	const [quizType, setQuizType] = useState('list');
 	const [quizTitle, setQuizTitle] = useState('');
 	const [selectedColor, setSelectedColor] = useState(colors[0].hex);
@@ -49,6 +73,41 @@ export default function EditQuizPage() {
 	const [questions, setQuestions] = useState([]);
 	const [sections, setSections] = useState([]);
 	const [isPublic, setIsPublic] = useState(false);
+	const [imagePreview, setImagePreview] = useState(null);
+	const [settingsOpen, setSettingsOpen] = useState(false);
+	const [reviseOpen, setReviseOpen] = useState(false);
+
+	const getDraft = useCallback(
+		() => ({
+			questions,
+			sections,
+			quizTitle,
+			randomChoices: randomQuestionChoices
+		}),
+		[questions, sections, quizTitle, randomQuestionChoices]
+	);
+
+	const aiProposal = useQuizAiProposal({
+		getDraft,
+		onCommit: ({ questions: nextQuestions, sections: nextSections }) => {
+			setQuestions(nextQuestions);
+			setSections(nextSections);
+		},
+		onQuizTitle: (title) => {
+			if (title?.trim()) setQuizTitle(title.trim());
+		}
+	});
+
+	const reviewing = aiProposal.isReviewing;
+	const authoringQuestions = reviewing ? aiProposal.displayQuestions || [] : questions;
+	const authoringSections = reviewing ? aiProposal.displaySections || [] : sections;
+
+	const openImagePreview = (src, title = 'Image preview') => {
+		if (!src) return;
+		setImagePreview({ src, title });
+	};
+
+	const closeImagePreview = () => setImagePreview(null);
 
 	useEffect(() => {
 		const loadQuizData = async () => {
@@ -60,8 +119,8 @@ export default function EditQuizPage() {
 
 				setQuizTitle(quizData.quiz_title);
 				setSelectedColor(quizData.tag_color);
-				setRandomQuestionOrder(quizData.random_question_order);
-				setIsPublic(quizData.public);
+				setRandomQuestionOrder(!!quizData.random_question_order);
+				setIsPublic(!!quizData.public);
 				setQuizType(quizData.flashcard_quiz ? 'flashcard' : 'list');
 				setOriginalQuizImage(quizData.quiz_image);
 				setQuizImagePreview(quizData.quiz_image);
@@ -73,25 +132,38 @@ export default function EditQuizPage() {
 				);
 
 				const transformedQuestions = questionsData.map((question, index) => {
-					const transformedChoices = (question.choices || []).map((choice) =>
-						typeof choice === 'object' && choice !== null ? choice.text || choice : choice
+					const rawChoices = question.choices || [];
+					const transformedChoices = rawChoices.map((choice) =>
+						typeof choice === 'object' && choice !== null ? choice.text || '' : choice
 					);
+					const choiceImagePreviews = rawChoices.map((choice) =>
+						typeof choice === 'object' && choice !== null ? choice.image || null : null
+					);
+					const mathematical =
+						question.question_type === 'MUL-COM' || question.question_type === 'COM';
+					const identification =
+						question.question_type === 'IDE' || question.question_type === 'IDE-COM';
+					const padTo = Math.max(transformedChoices.length, identification ? 1 : 4);
+					while (transformedChoices.length < padTo) transformedChoices.push('');
+					while (choiceImagePreviews.length < padTo) choiceImagePreviews.push(null);
+
 					const correctAnswerIndex = transformedChoices.findIndex(
 						(choice) => choice === question.correct_answer
 					);
+					const hasChoiceImages = !!question.has_choice_images || choiceImagePreviews.some(Boolean);
 
 					return {
 						id: question.id || index + 1,
 						title: question.question,
-						choices: transformedChoices.length ? transformedChoices : ['', '', '', ''],
-						choiceImages: Array(Math.max(transformedChoices.length, 4)).fill(null),
-						choiceImagePreviews: Array(Math.max(transformedChoices.length, 4)).fill(null),
+						choices: transformedChoices,
+						choiceImages: Array(padTo).fill(null),
+						choiceImagePreviews,
 						correctAnswerIndex: correctAnswerIndex >= 0 ? correctAnswerIndex : 0,
-						mathematical: question.question_type === 'MUL-COM' || question.question_type === 'COM',
-						identification:
-							question.question_type === 'IDE' || question.question_type === 'IDE-COM',
-						randomChoices: question.random_choices || false,
-						hasChoiceImages: false,
+						mathematical,
+						identification,
+						randomChoices: !!question.random_choices,
+						hasChoiceImages,
+						showChoiceImages: hasChoiceImages,
 						question_image: null,
 						question_image_preview: question.question_image,
 						sectionKey: sectionKeyById.get(question.section) || null
@@ -99,6 +171,7 @@ export default function EditQuizPage() {
 				});
 
 				setQuestions(transformedQuestions);
+				setRandomQuestionChoices(transformedQuestions.some((q) => q.randomChoices));
 				setLoading(false);
 			} catch {
 				setLoading(false);
@@ -110,7 +183,38 @@ export default function EditQuizPage() {
 	}, [id, navigate]);
 
 	const handleInputChange = (qid, field, value) => {
-		setQuestions((qs) => qs.map((q) => (q.id === qid ? { ...q, [field]: value } : q)));
+		setQuestions((qs) =>
+			qs.map((q) => {
+				if (q.id !== qid) return q;
+				const next = { ...q, [field]: value };
+				if ((field === 'identification' || field === 'mathematical') && value === true) {
+					next.showChoiceImages = false;
+					next.hasChoiceImages = false;
+					next.choiceImages = q.choiceImages.map(() => null);
+					next.choiceImagePreviews = q.choiceImagePreviews.map(() => null);
+				}
+				return next;
+			})
+		);
+	};
+
+	const toggleChoiceImages = (questionId) => {
+		setQuestions((qs) =>
+			qs.map((q) => {
+				if (q.id !== questionId) return q;
+				const next = !q.showChoiceImages;
+				if (next) {
+					return { ...q, showChoiceImages: true };
+				}
+				return {
+					...q,
+					showChoiceImages: false,
+					hasChoiceImages: false,
+					choiceImages: q.choiceImages.map(() => null),
+					choiceImagePreviews: q.choiceImagePreviews.map(() => null)
+				};
+			})
+		);
 	};
 
 	const removeQuestion = (qid) => {
@@ -160,21 +264,7 @@ export default function EditQuizPage() {
 			sectionKey ?? (sections.length > 0 ? sections[sections.length - 1].clientKey : null);
 		setQuestions((qs) => [
 			...qs,
-			{
-				id: `new-${Date.now()}`,
-				title: '',
-				choices: ['', '', '', ''],
-				choiceImages: [null, null, null, null],
-				choiceImagePreviews: [null, null, null, null],
-				correctAnswerIndex: 0,
-				mathematical: false,
-				identification: false,
-				randomChoices: false,
-				hasChoiceImages: false,
-				question_image: null,
-				question_image_preview: null,
-				sectionKey: key
-			}
+			getDefaultQuestion(`new-${Date.now()}`, randomQuestionChoices, key)
 		]);
 	};
 
@@ -226,6 +316,12 @@ export default function EditQuizPage() {
 		}
 	};
 
+	const clearQuizImage = () => {
+		setQuizImage(null);
+		setQuizImagePreview(null);
+		setOriginalQuizImage(null);
+	};
+
 	const handleQuestionImageUpload = (questionId, event) => {
 		const file = event.target.files[0];
 		if (file) {
@@ -243,6 +339,49 @@ export default function EditQuizPage() {
 		}
 	};
 
+	const handleChoiceImageUpload = (questionId, choiceIndex, event) => {
+		const file = event.target.files[0];
+		if (file) {
+			const reader = new FileReader();
+			reader.onload = (e) => {
+				setQuestions((qs) =>
+					qs.map((q) =>
+						q.id === questionId
+							? {
+									...q,
+									choiceImages: q.choiceImages.map((img, i) => (i === choiceIndex ? file : img)),
+									choiceImagePreviews: q.choiceImagePreviews.map((p, i) =>
+										i === choiceIndex ? e.target.result : p
+									),
+									hasChoiceImages: true
+								}
+							: q
+					)
+				);
+			};
+			reader.readAsDataURL(file);
+		}
+	};
+
+	const removeChoiceImage = (questionId, choiceIndex) => {
+		setQuestions((qs) =>
+			qs.map((q) =>
+				q.id === questionId
+					? {
+							...q,
+							choiceImages: q.choiceImages.map((img, i) => (i === choiceIndex ? null : img)),
+							choiceImagePreviews: q.choiceImagePreviews.map((p, i) =>
+								i === choiceIndex ? null : p
+							),
+							hasChoiceImages:
+								q.choiceImages.some((img, i) => i !== choiceIndex && img !== null) ||
+								q.choiceImagePreviews.some((p, i) => i !== choiceIndex && p !== null)
+						}
+					: q
+			)
+		);
+	};
+
 	const fileToBase64 = (file) =>
 		new Promise((resolve, reject) => {
 			const reader = new FileReader();
@@ -251,8 +390,22 @@ export default function EditQuizPage() {
 			reader.onerror = reject;
 		});
 
+	/** Normalize File, data URL, or existing media URL into a data URL for PUT. */
+	const toSaveableImage = async (value) => {
+		if (!value) return null;
+		if (typeof value !== 'string') return fileToBase64(value);
+		if (value.startsWith('data:image')) return value;
+		if (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('/')) {
+			const response = await fetch(value);
+			if (!response.ok) throw new Error('Failed to load image');
+			const blob = await response.blob();
+			return fileToBase64(blob);
+		}
+		return value;
+	};
+
 	const handleUpdateQuiz = async (e) => {
-		e.preventDefault();
+		e?.preventDefault?.();
 		try {
 			setSaving(true);
 			const quizData = {
@@ -269,9 +422,11 @@ export default function EditQuizPage() {
 			};
 
 			if (quizImage) {
-				quizData.quiz_image = await fileToBase64(quizImage);
-			} else if (originalQuizImage) {
-				quizData.quiz_image = originalQuizImage;
+				quizData.quiz_image = await toSaveableImage(quizImage);
+			} else if (originalQuizImage || quizImagePreview) {
+				quizData.quiz_image = await toSaveableImage(originalQuizImage || quizImagePreview);
+			} else {
+				quizData.quiz_image = null;
 			}
 
 			quizData.questions = await Promise.all(
@@ -281,15 +436,24 @@ export default function EditQuizPage() {
 						0,
 						Math.min(question.correctAnswerIndex || 0, Math.max(choices.length - 1, 0))
 					);
+					const choiceImages = await Promise.all(
+						(question.choiceImages || []).map(async (img, i) => {
+							if (img) return toSaveableImage(img);
+							return toSaveableImage(question.choiceImagePreviews?.[i]);
+						})
+					);
+					const hasChoiceImages = !!question.hasChoiceImages || choiceImages.some(Boolean);
+
 					const qData = {
 						...(typeof question.id === 'number' ? { id: question.id } : {}),
 						question: question.title,
 						question_type: questionTypeFromFlags(question),
 						choices_array: choices,
+						choice_images: choiceImages,
 						correct_answer: choices[correctIndex] || '',
 						correct_answer_index: correctIndex,
 						random_choices: !!question.randomChoices,
-						has_choice_images: !!question.hasChoiceImages
+						has_choice_images: hasChoiceImages
 					};
 					if (sections.length > 0 && question.sectionKey) {
 						const sectionIndex = sections.findIndex((s) => s.clientKey === question.sectionKey);
@@ -301,10 +465,12 @@ export default function EditQuizPage() {
 					} else {
 						qData.section = null;
 					}
-					if (question.question_image) {
-						qData.question_image = await fileToBase64(question.question_image);
-					} else if (question.question_image_preview) {
-						qData.question_image = question.question_image_preview;
+					if (question.question_image || question.question_image_preview) {
+						qData.question_image = await toSaveableImage(
+							question.question_image || question.question_image_preview
+						);
+					} else {
+						qData.question_image = null;
 					}
 					return qData;
 				})
@@ -326,353 +492,521 @@ export default function EditQuizPage() {
 	if (loading) return <LoadingScreen />;
 
 	return (
-		<div>
+		<div className={cn('pb-20', reviewing ? 'lg:pb-24' : 'lg:pb-0')}>
 			<PageHeader
 				title="Edit Quiz"
 				icon={Pencil}
-				description={quizTitle}
+				description={`${authoringQuestions.length} question${authoringQuestions.length === 1 ? '' : 's'}${
+					quizTitle ? ` · ${quizTitle}` : ''
+				}${reviewing ? ' · reviewing AI' : ''}`}
 				actions={
-					<Button variant="secondary" onClick={() => navigate(`/quizzes/${id}`)}>
-						<ArrowLeft size={14} /> Back
-					</Button>
+					<div className="flex items-center gap-1.5 sm:gap-2">
+						<Button
+							variant="ghost"
+							size="icon"
+							className="cursor-pointer"
+							aria-label="Back to quiz"
+							title="Back"
+							onClick={() => navigate(`/quizzes/${id}`)}
+						>
+							<ArrowLeft size={16} />
+						</Button>
+						<Button
+							variant="ghost"
+							size="icon"
+							className="cursor-pointer"
+							aria-label="Quiz settings"
+							title="Quiz settings"
+							disabled={reviewing}
+							onClick={() => setSettingsOpen(true)}
+						>
+							<SlidersHorizontal size={16} />
+						</Button>
+						<Button
+							variant="ghost"
+							size="icon"
+							className="cursor-pointer"
+							aria-label="Edit quiz with AI"
+							title="Edit quiz with AI"
+							disabled={reviewing || aiProposal.isLoading}
+							onClick={() => setReviseOpen(true)}
+						>
+							<WandSparkles size={16} />
+						</Button>
+						<Button
+							size="sm"
+							className="cursor-pointer"
+							loading={saving}
+							disabled={reviewing}
+							title={reviewing ? 'Accept or reject AI changes first' : undefined}
+							onClick={handleUpdateQuiz}
+						>
+							<Save size={14} /> Save
+						</Button>
+					</div>
 				}
 			/>
 
-			<div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
-				<div className="flex flex-1 flex-col gap-4">
-					<div className="flex flex-wrap items-center gap-2">
-						<Button type="button" variant="secondary" size="sm" onClick={addSection}>
-							<Plus size={14} /> Add section
-						</Button>
-						{sections.length > 0 && (
-							<p className="text-muted text-xs">
-								{sections.length} section{sections.length === 1 ? '' : 's'}
-							</p>
-						)}
-					</div>
+			<div className="flex min-w-0 flex-col gap-3">
+				<div className="flex flex-wrap items-center gap-2">
+					<Button
+						type="button"
+						variant="secondary"
+						size="sm"
+						disabled={reviewing}
+						onClick={addSection}
+					>
+						<Plus size={14} /> Add section
+					</Button>
+					{authoringSections.length > 0 && (
+						<p className="text-muted text-xs">Questions must belong to a section.</p>
+					)}
+				</div>
 
-					{questionsGroupedBySection(questions, sections).map(
-						({ section, questions: groupQuestions }) => (
-							<div key={section?.clientKey || 'ungrouped'} className="space-y-4">
-								{section && (
-									<div className="border-line bg-surface-2 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2">
-										<Input
-											value={section.title}
-											onChange={(e) => updateSectionTitle(section.clientKey, e.target.value)}
-											placeholder="Section title"
-											className="min-w-[10rem] flex-1"
+				{questionsGroupedBySection(authoringQuestions, authoringSections).map(
+					({ section, questions: groupQuestions }) => (
+						<div key={section?.clientKey || 'ungrouped'} className="space-y-3">
+							{section && (
+								<div
+									className={cn(
+										'border-line bg-surface-2 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2',
+										reviewCardClassName(aiProposal.metaFor(section.clientKey)),
+										section._reviewKind === 'removed' && 'line-through opacity-60'
+									)}
+								>
+									<Input
+										value={section.title}
+										onChange={(e) => updateSectionTitle(section.clientKey, e.target.value)}
+										placeholder="Section title"
+										className="min-w-[10rem] flex-1 py-1.5"
+										disabled={reviewing}
+									/>
+									{reviewing ? (
+										<QuizAiChangeControls
+											meta={aiProposal.metaFor(section.clientKey)}
+											onAccept={() => aiProposal.accept(String(section.clientKey))}
+											onReject={() => aiProposal.reject(String(section.clientKey))}
 										/>
-										<Button
-											type="button"
-											variant="ghost"
-											size="sm"
-											onClick={() => moveSection(section.clientKey, -1)}
-										>
-											Up
-										</Button>
-										<Button
-											type="button"
-											variant="ghost"
-											size="sm"
-											onClick={() => moveSection(section.clientKey, 1)}
-										>
-											Down
-										</Button>
-										<Button
-											type="button"
-											variant="ghost"
-											size="icon"
-											onClick={() => removeSection(section.clientKey)}
-											aria-label="Remove section"
-										>
-											<X size={15} />
-										</Button>
-									</div>
-								)}
-								{groupQuestions.map((question) => {
-									const index = questions.findIndex((q) => q.id === question.id);
-									return (
-										<Card key={question.id}>
-											<CardHeader
-												title={`Question ${index + 1}`}
-												action={
-													<Button
-														variant="ghost"
-														size="icon"
-														onClick={() => removeQuestion(question.id)}
-													>
-														<X size={16} />
-													</Button>
-												}
-											/>
-											<CardBody className="space-y-4">
-												<Input
-													value={question.title}
-													onChange={(e) => handleInputChange(question.id, 'title', e.target.value)}
-													placeholder="Enter question text"
-												/>
-
-												{question.question_image_preview ? (
-													<div className="relative">
-														<img
-															src={question.question_image_preview}
-															alt="Question"
-															className="h-36 w-full rounded-md object-cover"
+									) : (
+										<>
+											<Button
+												type="button"
+												variant="ghost"
+												size="sm"
+												onClick={() => moveSection(section.clientKey, -1)}
+											>
+												Up
+											</Button>
+											<Button
+												type="button"
+												variant="ghost"
+												size="sm"
+												onClick={() => moveSection(section.clientKey, 1)}
+											>
+												Down
+											</Button>
+											<Button
+												type="button"
+												variant="ghost"
+												size="icon"
+												onClick={() => removeSection(section.clientKey)}
+												aria-label="Remove section"
+											>
+												<X size={15} />
+											</Button>
+										</>
+									)}
+								</div>
+							)}
+							{groupQuestions.map((question) => {
+								const index = authoringQuestions.findIndex((q) => q.id === question.id);
+								const reviewMeta = aiProposal.metaFor(question.id);
+								const isRemoved = question._reviewKind === 'removed';
+								return (
+									<Card
+										key={question.id}
+										className={cn('overflow-hidden', reviewCardClassName(reviewMeta))}
+									>
+										<CardHeader
+											className="px-4 py-3"
+											title={`Q${index + 1}`}
+											action={
+												<div className="flex items-center gap-1.5">
+													{reviewing ? (
+														<QuizAiChangeControls
+															meta={reviewMeta}
+															onAccept={() => aiProposal.accept(String(question.id))}
+															onReject={() => aiProposal.reject(String(question.id))}
 														/>
-														<button
-															onClick={() =>
-																setQuestions((qs) =>
-																	qs.map((q) =>
-																		q.id === question.id
-																			? { ...q, question_image: null, question_image_preview: null }
-																			: q
-																	)
-																)
-															}
-															className="bg-danger absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full text-white"
-														>
-															<X size={12} />
-														</button>
-													</div>
-												) : (
-													<label className="border-line hover:border-primary/40 flex h-20 w-full cursor-pointer items-center justify-center rounded-md border-2 border-dashed transition">
-														<input
-															type="file"
-															accept="image/*"
-															onChange={(e) => handleQuestionImageUpload(question.id, e)}
-															className="hidden"
-														/>
-														<div className="text-muted flex flex-col items-center text-xs">
-															<Plus size={16} />
-															<span>Add Image</span>
-														</div>
-													</label>
-												)}
-
-												<div className="flex flex-wrap gap-2">
-													{[
-														{ key: 'mathematical', label: 'Mathematical' },
-														{ key: 'identification', label: 'Identification' }
-													].map(({ key, label }) => (
-														<button
-															key={key}
-															type="button"
-															className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition ${question[key] ? 'bg-primary text-primary-fg' : 'bg-surface-2 text-fg hover:bg-line'}`}
-															onClick={() => handleInputChange(question.id, key, !question[key])}
-														>
-															<Check size={12} className={question[key] ? '' : 'opacity-0'} />
-															{label}
-														</button>
-													))}
-												</div>
-
-												<div className="space-y-2">
-													{question.mathematical ? (
-														<MathInput
-															handleChoicesChange={handleChoicesChange}
-															handleInputChange={handleInputChange}
-															question={question}
-															removeChoice={removeChoice}
-														/>
-													) : question.identification ? (
-														<div className="flex items-center gap-3">
-															<button
-																type="button"
-																className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition ${question.correctAnswerIndex === 0 ? 'border-primary bg-primary' : 'border-line bg-surface'}`}
+													) : (
+														<>
+															<ToggleChip
+																active={question.mathematical}
 																onClick={() =>
-																	handleInputChange(question.id, 'correctAnswerIndex', 0)
+																	handleInputChange(
+																		question.id,
+																		'mathematical',
+																		!question.mathematical
+																	)
 																}
 															>
-																{question.correctAnswerIndex === 0 && (
-																	<Check size={12} className="text-primary-fg" />
-																)}
-															</button>
-															<input
-																type="text"
-																value={question.choices[0] || ''}
-																onChange={(e) =>
-																	handleChoicesChange(question.id, 0, e.target.value)
+																Math
+															</ToggleChip>
+															<ToggleChip
+																active={question.identification}
+																onClick={() =>
+																	handleInputChange(
+																		question.id,
+																		'identification',
+																		!question.identification
+																	)
 																}
-																placeholder="Answer"
-																className="border-line bg-surface text-fg focus:border-primary flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none"
+															>
+																ID
+															</ToggleChip>
+															{!question.identification && !question.mathematical && (
+																<ToggleChip
+																	active={question.showChoiceImages}
+																	onClick={() => toggleChoiceImages(question.id)}
+																>
+																	Images
+																</ToggleChip>
+															)}
+															<Button
+																variant="ghost"
+																size="icon"
+																className="cursor-pointer"
+																aria-label={`Remove question ${index + 1}`}
+																onClick={() => removeQuestion(question.id)}
+															>
+																<X size={15} />
+															</Button>
+														</>
+													)}
+												</div>
+											}
+										/>
+										<CardBody
+											className={cn('space-y-3 px-4 pb-4', isRemoved && 'pointer-events-none')}
+										>
+											{question._priorTitle && question._reviewKind === 'modified' && (
+												<p className="text-muted text-[0.65rem]">Was: {question._priorTitle}</p>
+											)}
+											<Input
+												value={question.title}
+												onChange={(e) => handleInputChange(question.id, 'title', e.target.value)}
+												placeholder="Question text"
+												className={cn('py-1.5', isRemoved && 'line-through')}
+												disabled={reviewing}
+											/>
+
+											{!isRemoved && (
+												<>
+													<ImageDropzone
+														preview={question.question_image_preview}
+														compact
+														label="Question image"
+														onPreview={openImagePreview}
+														onClear={() =>
+															!reviewing &&
+															setQuestions((qs) =>
+																qs.map((q) =>
+																	q.id === question.id
+																		? {
+																				...q,
+																				question_image: null,
+																				question_image_preview: null
+																			}
+																		: q
+																)
+															)
+														}
+														onChange={(e) =>
+															!reviewing && handleQuestionImageUpload(question.id, e)
+														}
+													/>
+
+													<div className="space-y-1.5">
+														{question.mathematical ? (
+															<MathInput
+																handleChoicesChange={handleChoicesChange}
+																handleInputChange={handleInputChange}
+																question={question}
+																removeChoice={removeChoice}
 															/>
-														</div>
-													) : (
-														question.choices.map((choice, ci) => (
-															<div className="flex items-center gap-3" key={ci}>
+														) : question.identification ? (
+															<div className="flex items-center gap-2">
 																<button
 																	type="button"
-																	className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition ${question.correctAnswerIndex === ci ? 'border-primary bg-primary' : 'border-line bg-surface'}`}
+																	aria-label="Mark as correct"
+																	disabled={reviewing}
+																	className={cn(
+																		'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition',
+																		question.correctAnswerIndex === 0
+																			? 'border-primary bg-primary'
+																			: 'border-line bg-surface'
+																	)}
 																	onClick={() =>
-																		handleInputChange(question.id, 'correctAnswerIndex', ci)
+																		handleInputChange(question.id, 'correctAnswerIndex', 0)
 																	}
 																>
-																	{question.correctAnswerIndex === ci && (
-																		<Check size={12} className="text-primary-fg" />
+																	{question.correctAnswerIndex === 0 && (
+																		<Check size={10} className="text-primary-fg" />
 																	)}
 																</button>
 																<input
 																	type="text"
-																	value={choice}
+																	value={question.choices[0] || ''}
 																	onChange={(e) =>
-																		handleChoicesChange(question.id, ci, e.target.value)
+																		handleChoicesChange(question.id, 0, e.target.value)
 																	}
-																	placeholder={`Choice ${ci + 1}`}
-																	className="border-line bg-surface text-fg focus:border-primary flex-1 rounded-md border px-3 py-2 text-sm focus:outline-none"
+																	placeholder="Answer"
+																	className="border-line bg-surface text-fg focus:border-primary flex-1 rounded-md border px-2.5 py-1.5 text-sm focus:outline-none"
+																	required
+																	disabled={reviewing}
 																/>
-																{question.choices.length > 2 && (
-																	<Button
-																		variant="ghost"
-																		size="icon"
-																		onClick={() => removeChoice(question.id, ci)}
-																	>
-																		<X size={14} className="text-danger" />
-																	</Button>
-																)}
 															</div>
-														))
+														) : (
+															question.choices.map((choice, ci) => (
+																<div className="flex items-center gap-1.5" key={ci}>
+																	<button
+																		type="button"
+																		aria-label={`Mark choice ${ci + 1} correct`}
+																		disabled={reviewing}
+																		className={cn(
+																			'flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 transition',
+																			question.correctAnswerIndex === ci
+																				? 'border-primary bg-primary'
+																				: 'border-line bg-surface'
+																		)}
+																		onClick={() =>
+																			handleInputChange(question.id, 'correctAnswerIndex', ci)
+																		}
+																	>
+																		{question.correctAnswerIndex === ci && (
+																			<Check size={10} className="text-primary-fg" />
+																		)}
+																	</button>
+																	<input
+																		type="text"
+																		value={choice}
+																		onChange={(e) =>
+																			handleChoicesChange(question.id, ci, e.target.value)
+																		}
+																		placeholder={`Choice ${ci + 1}`}
+																		className="border-line bg-surface text-fg focus:border-primary min-w-0 flex-1 rounded-md border px-2.5 py-1.5 text-sm focus:outline-none"
+																		required
+																		disabled={reviewing}
+																	/>
+																	{question.showChoiceImages && (
+																		<ChoiceImageControl
+																			preview={question.choiceImagePreviews[ci]}
+																			onPreview={openImagePreview}
+																			onChange={(e) =>
+																				!reviewing && handleChoiceImageUpload(question.id, ci, e)
+																			}
+																			onClear={() =>
+																				!reviewing && removeChoiceImage(question.id, ci)
+																			}
+																		/>
+																	)}
+																	{!reviewing && (
+																		<Button
+																			variant="ghost"
+																			size="icon"
+																			className="h-7 w-7 shrink-0 cursor-pointer"
+																			aria-label={`Remove choice ${ci + 1}`}
+																			onClick={() => removeChoice(question.id, ci)}
+																		>
+																			<X size={13} className="text-danger" />
+																		</Button>
+																	)}
+																</div>
+															))
+														)}
+													</div>
+
+													{!question.identification && !reviewing && (
+														<Button
+															variant="ghost"
+															size="sm"
+															className="w-full"
+															onClick={() => addChoice(question.id)}
+														>
+															<Plus size={13} /> Add choice
+														</Button>
 													)}
-												</div>
+												</>
+											)}
+										</CardBody>
+									</Card>
+								);
+							})}
+							{section && !reviewing && (
+								<Button
+									type="button"
+									variant="ghost"
+									size="sm"
+									className="w-full"
+									onClick={() => addQuestion(section.clientKey)}
+								>
+									<Plus size={14} /> Add question to section
+								</Button>
+							)}
+						</div>
+					)
+				)}
 
-												{!question.identification && (
-													<Button
-														variant="secondary"
-														size="sm"
-														className="w-full"
-														onClick={() => addChoice(question.id)}
-													>
-														<Plus size={14} /> Add Choice
-													</Button>
-												)}
-											</CardBody>
-										</Card>
-									);
-								})}
-								{section && (
-									<Button
-										type="button"
-										variant="ghost"
-										className="w-full"
-										onClick={() => addQuestion(section.clientKey)}
-									>
-										<Plus size={14} /> Add question to section
-									</Button>
-								)}
-							</div>
-						)
-					)}
+				{authoringSections.length === 0 && !reviewing && (
+					<Button
+						variant="secondary"
+						size="sm"
+						className="w-full cursor-pointer"
+						onClick={() => addQuestion()}
+					>
+						<Plus size={14} /> Add question
+					</Button>
+				)}
+			</div>
 
-					{sections.length === 0 && (
-						<Button variant="secondary" className="w-full" onClick={() => addQuestion()}>
-							<Plus size={16} /> Add Question
-						</Button>
-					)}
-
-					<Button className="w-full" loading={saving} onClick={handleUpdateQuiz}>
-						<Save size={16} /> Save Changes
+			{!reviewing && (
+				<div className="border-line bg-bg/95 fixed inset-x-0 bottom-0 z-20 border-t p-3 backdrop-blur lg:hidden">
+					<Button className="w-full cursor-pointer" loading={saving} onClick={handleUpdateQuiz}>
+						Save changes
 					</Button>
 				</div>
+			)}
 
-				<div className="flex w-full shrink-0 flex-col gap-4 lg:w-80">
-					<Card>
-						<CardHeader title="Quiz Settings" />
-						<CardBody className="space-y-4">
-							<Input
-								label="Quiz Title"
-								value={quizTitle}
-								onChange={(e) => setQuizTitle(e.target.value)}
-							/>
+			{reviewing && (
+				<QuizAiReviewBar
+					summaryLabel={aiProposal.summaryLabel}
+					instruction={aiProposal.instruction}
+					pendingCount={aiProposal.pendingCount}
+					onAcceptAll={aiProposal.acceptAll}
+					onRejectAll={aiProposal.rejectAll}
+					onDone={aiProposal.done}
+				/>
+			)}
 
-							{quizImagePreview ? (
-								<div className="relative">
-									<img
-										src={quizImagePreview}
-										alt="Quiz"
-										className="h-28 w-full rounded-md object-cover"
-									/>
-									<button
-										onClick={() => {
-											setQuizImage(null);
-											setQuizImagePreview(null);
-										}}
-										className="bg-danger absolute top-2 right-2 flex h-6 w-6 items-center justify-center rounded-full text-white"
-									>
-										<X size={12} />
-									</button>
-								</div>
-							) : (
-								<label className="border-line hover:border-primary/40 flex h-20 w-full cursor-pointer items-center justify-center rounded-md border-2 border-dashed transition">
-									<input
-										type="file"
-										accept="image/*"
-										onChange={handleQuizImageUpload}
-										className="hidden"
-									/>
-									<div className="text-muted flex flex-col items-center text-xs">
-										<Plus size={16} />
-										<span>Quiz Image</span>
-									</div>
-								</label>
-							)}
+			<QuizAiInstructionModal
+				open={reviseOpen}
+				onClose={() => setReviseOpen(false)}
+				loading={aiProposal.isLoading}
+				onSubmit={(instruction, model) => aiProposal.runRevise(instruction, model)}
+			/>
 
-							<div>
-								<span className="text-fg mb-1.5 block text-sm font-medium">Quiz Type</span>
-								<div className="flex gap-2">
-									{['list', 'flashcard'].map((t) => (
-										<button
-											key={t}
-											type="button"
-											className={`flex-1 rounded-md px-3 py-2 text-xs font-medium capitalize transition ${quizType === t ? 'bg-primary text-primary-fg' : 'bg-surface-2 text-fg hover:bg-line'}`}
-											onClick={() => setQuizType(t)}
-										>
-											{t}
-										</button>
-									))}
-								</div>
-							</div>
+			<Modal
+				open={settingsOpen}
+				onClose={() => setSettingsOpen(false)}
+				title="Quiz settings"
+				size="md"
+				footer={
+					<Button
+						className="w-full cursor-pointer sm:w-auto"
+						loading={saving}
+						disabled={reviewing}
+						onClick={handleUpdateQuiz}
+					>
+						Save changes
+					</Button>
+				}
+			>
+				<div className="space-y-3">
+					<Input
+						label="Title"
+						value={quizTitle}
+						onChange={(e) => setQuizTitle(e.target.value)}
+						className="py-1.5"
+					/>
 
-							<div>
-								<span className="text-fg mb-1.5 block text-sm font-medium">Tag Color</span>
-								<div className="grid grid-cols-5 gap-2">
-									{colors.map((color) => (
-										<button
-											key={color.hex}
-											type="button"
-											onClick={() => setSelectedColor(color.hex)}
-											className={`flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border-2 transition ${selectedColor === color.hex ? 'border-primary ring-primary/30 ring-2' : 'border-line'}`}
-											style={{ backgroundColor: color.hex }}
-										/>
-									))}
-								</div>
-							</div>
-						</CardBody>
-					</Card>
+					<ImageDropzone
+						preview={quizImagePreview}
+						compact
+						label="Cover image"
+						onPreview={openImagePreview}
+						onClear={clearQuizImage}
+						onChange={handleQuizImageUpload}
+					/>
 
-					<Card>
-						<CardHeader title="Preview" />
-						<CardBody className="space-y-2 text-sm">
-							<div className="flex justify-between">
-								<span className="text-muted">Questions</span>
-								<span className="text-fg font-medium">{questions.length}</span>
-							</div>
-							<div className="flex justify-between">
-								<span className="text-muted">Type</span>
-								<span className="text-fg font-medium capitalize">{quizType}</span>
-							</div>
-							<div className="flex justify-between">
-								<span className="text-muted">Visibility</span>
-								<span className="text-fg font-medium">{isPublic ? 'Public' : 'Private'}</span>
-							</div>
-							<div className="flex justify-between">
-								<span className="text-muted">Sequence</span>
-								<span className="text-fg font-medium">
-									{randomQuestionOrder ? 'Random' : 'Ordered'}
-								</span>
-							</div>
-						</CardBody>
-					</Card>
+					<div>
+						<p className="text-fg mb-1.5 text-xs font-medium">Type</p>
+						<div className="flex gap-1.5">
+							{['list', 'flashcard'].map((t) => (
+								<button
+									key={t}
+									type="button"
+									className={cn(
+										'flex-1 cursor-pointer rounded-md px-2 py-1.5 text-xs font-medium capitalize transition',
+										quizType === t
+											? 'bg-primary text-primary-fg'
+											: 'bg-surface-2 text-fg hover:bg-line'
+									)}
+									onClick={() => setQuizType(t)}
+								>
+									{t}
+								</button>
+							))}
+						</div>
+					</div>
+
+					<div className="flex flex-col flex-nowrap gap-1.5">
+						<ToggleChip
+							active={randomQuestionOrder}
+							onClick={() => setRandomQuestionOrder(!randomQuestionOrder)}
+						>
+							Shuffle questions
+						</ToggleChip>
+						<ToggleChip
+							active={randomQuestionChoices}
+							onClick={() => {
+								setRandomQuestionChoices(!randomQuestionChoices);
+								setQuestions((qs) =>
+									qs.map((q) => ({ ...q, randomChoices: !randomQuestionChoices }))
+								);
+							}}
+						>
+							Shuffle choices
+						</ToggleChip>
+					</div>
+
+					<div>
+						<p className="text-fg mb-1.5 text-xs font-medium">Tag</p>
+						<div className="grid grid-cols-8 gap-1.5">
+							{colors.map((color) => (
+								<button
+									key={color.hex}
+									type="button"
+									title={color.name}
+									aria-label={color.name}
+									onClick={() => setSelectedColor(color.hex)}
+									className={cn(
+										'h-5 w-5 cursor-pointer rounded-full border transition',
+										selectedColor === color.hex
+											? 'border-fg ring-primary/40 scale-110 ring-2'
+											: 'border-line hover:scale-105'
+									)}
+									style={{ backgroundColor: color.hex }}
+								/>
+							))}
+						</div>
+					</div>
 				</div>
-			</div>
+			</Modal>
+
+			<Modal
+				open={!!imagePreview}
+				onClose={closeImagePreview}
+				title={imagePreview?.title || 'Image preview'}
+				size="lg"
+			>
+				{imagePreview?.src && (
+					<img
+						src={imagePreview.src}
+						alt=""
+						className="max-h-[70vh] w-full rounded-md object-contain"
+					/>
+				)}
+			</Modal>
 		</div>
 	);
 }

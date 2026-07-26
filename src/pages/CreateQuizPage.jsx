@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
 	Check,
@@ -9,7 +9,7 @@ import {
 	SlidersHorizontal,
 	Sparkles,
 	FileUp,
-	Image as ImageIcon
+	WandSparkles
 } from 'lucide-react';
 
 import { api } from '../lib/api';
@@ -20,25 +20,18 @@ import { PageHeader } from '../components/layout/PageHeader';
 import { Badge, Button, Card, CardBody, CardHeader, Input, Modal, Select } from '../components/ui';
 import MathInput from '../components/quiz/MathInput';
 import { createSection, questionsGroupedBySection } from '../components/quiz/quizHelpers';
+import {
+	QUIZ_TAG_COLORS,
+	ToggleChip,
+	ImageDropzone,
+	ChoiceImageControl
+} from '../components/quiz/quizAuthoringUi';
+import { useQuizAiProposal } from '../components/quiz/useQuizAiProposal';
+import QuizAiInstructionModal from '../components/quiz/QuizAiInstructionModal';
+import QuizAiReviewBar, { QuizAiChangeControls } from '../components/quiz/QuizAiReviewBar';
+import { reviewCardClassName } from '../components/quiz/quizAiDiff';
 
-const colors = [
-	{ name: 'Red', hex: '#EF4444' },
-	{ name: 'Green', hex: '#10B981' },
-	{ name: 'Blue', hex: '#3B82F6' },
-	{ name: 'Yellow', hex: '#FACC15' },
-	{ name: 'Purple', hex: '#A855F7' },
-	{ name: 'Orange', hex: '#F97316' },
-	{ name: 'Teal', hex: '#14B8A6' },
-	{ name: 'Pink', hex: '#EC4899' },
-	{ name: 'Indigo', hex: '#6366F1' },
-	{ name: 'Lime', hex: '#84CC16' },
-	{ name: 'Cyan', hex: '#06B6D4' },
-	{ name: 'Amber', hex: '#F59E0B' },
-	{ name: 'Rose', hex: '#F43F5E' },
-	{ name: 'Sky', hex: '#0EA5E9' },
-	{ name: 'Emerald', hex: '#50C878' }
-];
-
+const colors = QUIZ_TAG_COLORS;
 const AI_TYPE_MIX_OPTIONS = [
 	{ value: 'mostly_mc', label: 'Mostly MC' },
 	{ value: 'balanced', label: 'Balanced' },
@@ -85,122 +78,6 @@ function getDefaultQuestion(id, randomChoices = false, sectionKey = null) {
 	};
 }
 
-function ToggleChip({ active, onClick, children, className }) {
-	return (
-		<button
-			type="button"
-			onClick={onClick}
-			aria-pressed={active}
-			className={cn(
-				'inline-flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-[0.7rem] font-medium whitespace-nowrap transition',
-				'focus-visible:outline-primary focus-visible:outline-2 focus-visible:outline-offset-2',
-				active
-					? 'border-primary/40 bg-primary/12 text-primary shadow-primary/10 shadow-sm'
-					: 'border-line bg-surface text-muted hover:border-primary/25 hover:bg-surface-2 hover:text-fg',
-				className
-			)}
-		>
-			<span
-				aria-hidden
-				className={cn(
-					'flex h-3.5 w-3.5 items-center justify-center rounded-full border transition',
-					active ? 'border-primary bg-primary text-primary-fg' : 'border-line bg-transparent'
-				)}
-			>
-				{active && <Check size={9} strokeWidth={3} />}
-			</span>
-			{children}
-		</button>
-	);
-}
-
-function ImageDropzone({ preview, onClear, onChange, onPreview, label, compact = false }) {
-	if (preview) {
-		return (
-			<div className="relative">
-				<button
-					type="button"
-					onClick={() => onPreview?.(preview, label || 'Image preview')}
-					className="block w-full cursor-pointer overflow-hidden rounded-md text-left"
-					aria-label={`Preview ${label || 'image'}`}
-				>
-					<img
-						src={preview}
-						alt=""
-						className={cn(
-							'w-full object-cover transition hover:opacity-90',
-							compact ? 'h-16' : 'h-24'
-						)}
-					/>
-				</button>
-				<button
-					type="button"
-					onClick={(e) => {
-						e.stopPropagation();
-						onClear?.();
-					}}
-					aria-label="Remove image"
-					className="bg-danger absolute top-1 right-1 z-10 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full text-white"
-				>
-					<X size={11} />
-				</button>
-			</div>
-		);
-	}
-
-	return (
-		<label
-			className={cn(
-				'border-line hover:border-primary/40 text-muted flex w-full cursor-pointer flex-col items-center justify-center rounded-md border border-dashed text-xs transition',
-				compact ? 'h-12 gap-0.5' : 'h-16 gap-1'
-			)}
-		>
-			<input type="file" accept="image/*" onChange={onChange} className="hidden" />
-			<Plus size={compact ? 14 : 16} />
-			<span>{label}</span>
-		</label>
-	);
-}
-
-/** Compact choice image control: icon button empty, tiny thumb when set. */
-function ChoiceImageControl({ preview, onChange, onClear, onPreview }) {
-	if (preview) {
-		return (
-			<div className="relative shrink-0">
-				<button
-					type="button"
-					onClick={() => onPreview?.(preview, 'Choice image')}
-					className="block cursor-pointer overflow-hidden rounded"
-					aria-label="Preview choice image"
-				>
-					<img src={preview} alt="" className="h-7 w-7 object-cover transition hover:opacity-90" />
-				</button>
-				<button
-					type="button"
-					aria-label="Remove choice image"
-					onClick={(e) => {
-						e.stopPropagation();
-						onClear?.();
-					}}
-					className="bg-danger absolute -top-1 -right-1 z-10 flex h-3.5 w-3.5 cursor-pointer items-center justify-center rounded-full text-white"
-				>
-					<X size={7} />
-				</button>
-			</div>
-		);
-	}
-
-	return (
-		<label
-			className="text-muted hover:bg-surface-2 hover:text-fg flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md transition"
-			title="Add image"
-		>
-			<input type="file" accept="image/*" onChange={onChange} className="hidden" />
-			<ImageIcon size={14} />
-		</label>
-	);
-}
-
 export default function CreateQuizPage() {
 	const navigate = useNavigate();
 	const [topic, setTopic] = useState('');
@@ -234,6 +111,29 @@ export default function CreateQuizPage() {
 	const [imagePreview, setImagePreview] = useState(null);
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [aiOpen, setAiOpen] = useState(false);
+	const [reviseOpen, setReviseOpen] = useState(false);
+
+	const getDraft = useCallback(
+		() => ({
+			questions,
+			sections,
+			quizTitle,
+			randomChoices: randomQuestionChoices
+		}),
+		[questions, sections, quizTitle, randomQuestionChoices]
+	);
+
+	const aiProposal = useQuizAiProposal({
+		getDraft,
+		onCommit: ({ questions: nextQuestions, sections: nextSections }) => {
+			setQuestions(nextQuestions);
+			setSections(nextSections);
+		}
+	});
+
+	const reviewing = aiProposal.isReviewing;
+	const authoringQuestions = reviewing ? aiProposal.displayQuestions || [] : questions;
+	const authoringSections = reviewing ? aiProposal.displaySections || [] : sections;
 
 	const openImagePreview = (src, title = 'Image preview') => {
 		if (!src) return;
@@ -601,42 +501,6 @@ export default function CreateQuizPage() {
 		return Math.min(MAX_AI_QUESTIONS, Math.max(1, parsed));
 	};
 
-	const mapAiQuestion = (question, index) => {
-		const identification = !!question?.identification;
-		const rawChoices = Array.isArray(question?.choices) ? question.choices : [];
-		let choices = rawChoices.map((choice) => String(choice));
-		let correctAnswerIndex =
-			typeof question?.correctAnswerIndex === 'number' ? question.correctAnswerIndex : 0;
-
-		if (identification) {
-			const answer = choices[correctAnswerIndex] ?? question?.correctAnswer ?? choices[0] ?? '';
-			choices = [String(answer)];
-			correctAnswerIndex = 0;
-		} else {
-			if (choices.length === 0) choices = ['', '', '', ''];
-			while (choices.length < 4) choices.push('');
-			choices = choices.slice(0, 4);
-			correctAnswerIndex = Math.max(0, Math.min(correctAnswerIndex, choices.length - 1));
-		}
-
-		return {
-			id: index + 1,
-			title: question?.title || '',
-			choices,
-			choiceImages: new Array(choices.length).fill(null),
-			choiceImagePreviews: new Array(choices.length).fill(null),
-			correctAnswerIndex,
-			mathematical: !!question?.mathematical,
-			identification,
-			randomChoices: question?.randomChoices ?? randomQuestionChoices,
-			hasChoiceImages: false,
-			showChoiceImages: false,
-			question_image: null,
-			question_image_preview: null,
-			sectionKey: null
-		};
-	};
-
 	const getGenerateErrorMessage = (error) => {
 		const apiError = error?.response?.data?.error || error?.response?.data?.detail;
 		if (apiError) return apiError;
@@ -762,8 +626,6 @@ export default function CreateQuizPage() {
 				return;
 			}
 
-			setSections([]);
-			setQuestions(questionsPayload.map(mapAiQuestion));
 			const resolvedCount =
 				typeof response.data?.questionNumber === 'number'
 					? response.data.questionNumber
@@ -777,11 +639,14 @@ export default function CreateQuizPage() {
 			} else {
 				toast.success(
 					response.data?.autoQuestionCount
-						? `Auto-generated ${questionsPayload.length} questions with Ollama.`
-						: `Generated ${questionsPayload.length} questions with Ollama.`
+						? `Auto-generated ${questionsPayload.length} questions — review to accept.`
+						: `Generated ${questionsPayload.length} questions — review to accept.`
 				);
 			}
 			setAiOpen(false);
+			aiProposal.runGenerateAsProposal(response.data.quiz_data, {
+				instructionText: trimmedTopic ? `Generate: ${trimmedTopic}` : 'Generate from reference'
+			});
 		} catch (error) {
 			toast.error(getGenerateErrorMessage(error));
 		} finally {
@@ -790,11 +655,13 @@ export default function CreateQuizPage() {
 	};
 
 	return (
-		<div className="pb-20 lg:pb-0">
+		<div className={cn('pb-20', reviewing ? 'lg:pb-24' : 'lg:pb-0')}>
 			<PageHeader
 				title="Create Quiz"
 				icon={ListChecks}
-				description={`${questions.length} question${questions.length === 1 ? '' : 's'}`}
+				description={`${authoringQuestions.length} question${authoringQuestions.length === 1 ? '' : 's'}${
+					reviewing ? ' · reviewing AI' : ''
+				}`}
 				actions={
 					<div className="flex items-center gap-1.5 sm:gap-2">
 						<input
@@ -810,6 +677,7 @@ export default function CreateQuizPage() {
 							className="cursor-pointer"
 							aria-label="Quiz settings"
 							title="Quiz settings"
+							disabled={reviewing}
 							onClick={() => setSettingsOpen(true)}
 						>
 							<SlidersHorizontal size={16} />
@@ -820,14 +688,27 @@ export default function CreateQuizPage() {
 							className="cursor-pointer"
 							aria-label="AI quiz generation"
 							title="AI quiz generation"
+							disabled={reviewing || aiProposal.isLoading}
 							onClick={() => setAiOpen(true)}
 						>
 							<Sparkles size={16} />
 						</Button>
 						<Button
+							variant="ghost"
+							size="icon"
+							className="cursor-pointer"
+							aria-label="Edit quiz with AI"
+							title="Edit quiz with AI"
+							disabled={reviewing || aiProposal.isLoading}
+							onClick={() => setReviseOpen(true)}
+						>
+							<WandSparkles size={16} />
+						</Button>
+						<Button
 							variant="secondary"
 							size="sm"
 							className="cursor-pointer"
+							disabled={reviewing}
 							onClick={() => {
 								fileInputRef.current.value = '';
 								fileInputRef.current.click();
@@ -839,6 +720,8 @@ export default function CreateQuizPage() {
 							size="sm"
 							className="cursor-pointer"
 							loading={creating}
+							disabled={reviewing}
+							title={reviewing ? 'Accept or reject AI changes first' : undefined}
 							onClick={handleCreateQuiz}
 						>
 							Create
@@ -850,229 +733,292 @@ export default function CreateQuizPage() {
 
 			<div className="flex min-w-0 flex-col gap-3">
 				<div className="flex flex-wrap items-center gap-2">
-					<Button type="button" variant="secondary" size="sm" onClick={addSection}>
+					<Button
+						type="button"
+						variant="secondary"
+						size="sm"
+						disabled={reviewing}
+						onClick={addSection}
+					>
 						<Plus size={14} /> Add section
 					</Button>
-					{sections.length > 0 && (
+					{authoringSections.length > 0 && (
 						<p className="text-muted text-xs">Questions must belong to a section.</p>
 					)}
 				</div>
 
-				{questionsGroupedBySection(questions, sections).map(
+				{questionsGroupedBySection(authoringQuestions, authoringSections).map(
 					({ section, questions: groupQuestions }) => (
 						<div key={section?.clientKey || 'ungrouped'} className="space-y-3">
 							{section && (
-								<div className="border-line bg-surface-2 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2">
+								<div
+									className={cn(
+										'border-line bg-surface-2 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2',
+										reviewCardClassName(aiProposal.metaFor(section.clientKey)),
+										section._reviewKind === 'removed' && 'line-through opacity-60'
+									)}
+								>
 									<Input
 										value={section.title}
 										onChange={(e) => updateSectionTitle(section.clientKey, e.target.value)}
 										placeholder="Section title"
 										className="min-w-[10rem] flex-1 py-1.5"
+										disabled={reviewing}
 									/>
-									<Button
-										type="button"
-										variant="ghost"
-										size="sm"
-										onClick={() => moveSection(section.clientKey, -1)}
-									>
-										Up
-									</Button>
-									<Button
-										type="button"
-										variant="ghost"
-										size="sm"
-										onClick={() => moveSection(section.clientKey, 1)}
-									>
-										Down
-									</Button>
-									<Button
-										type="button"
-										variant="ghost"
-										size="icon"
-										onClick={() => removeSection(section.clientKey)}
-										aria-label="Remove section"
-									>
-										<X size={15} />
-									</Button>
+									{reviewing ? (
+										<QuizAiChangeControls
+											meta={aiProposal.metaFor(section.clientKey)}
+											onAccept={() => aiProposal.accept(String(section.clientKey))}
+											onReject={() => aiProposal.reject(String(section.clientKey))}
+										/>
+									) : (
+										<>
+											<Button
+												type="button"
+												variant="ghost"
+												size="sm"
+												onClick={() => moveSection(section.clientKey, -1)}
+											>
+												Up
+											</Button>
+											<Button
+												type="button"
+												variant="ghost"
+												size="sm"
+												onClick={() => moveSection(section.clientKey, 1)}
+											>
+												Down
+											</Button>
+											<Button
+												type="button"
+												variant="ghost"
+												size="icon"
+												onClick={() => removeSection(section.clientKey)}
+												aria-label="Remove section"
+											>
+												<X size={15} />
+											</Button>
+										</>
+									)}
 								</div>
 							)}
 							{groupQuestions.map((question) => {
-								const index = questions.findIndex((q) => q.id === question.id);
+								const index = authoringQuestions.findIndex((q) => q.id === question.id);
+								const reviewMeta = aiProposal.metaFor(question.id);
+								const isRemoved = question._reviewKind === 'removed';
 								return (
-									<Card key={question.id} className="overflow-hidden">
+									<Card
+										key={question.id}
+										className={cn('overflow-hidden', reviewCardClassName(reviewMeta))}
+									>
 										<CardHeader
 											className="px-4 py-3"
 											title={`Q${index + 1}`}
 											action={
 												<div className="flex items-center gap-1.5">
-													<ToggleChip
-														active={question.mathematical}
-														onClick={() =>
-															handleInputChange(question.id, 'mathematical', !question.mathematical)
-														}
-													>
-														Math
-													</ToggleChip>
-													<ToggleChip
-														active={question.identification}
-														onClick={() =>
-															handleInputChange(
-																question.id,
-																'identification',
-																!question.identification
-															)
-														}
-													>
-														ID
-													</ToggleChip>
-													{!question.identification && !question.mathematical && (
-														<ToggleChip
-															active={question.showChoiceImages}
-															onClick={() => toggleChoiceImages(question.id)}
-														>
-															Images
-														</ToggleChip>
-													)}
-													<Button
-														variant="ghost"
-														size="icon"
-														className="cursor-pointer"
-														aria-label={`Remove question ${index + 1}`}
-														onClick={() => removeQuestion(question.id)}
-													>
-														<X size={15} />
-													</Button>
-												</div>
-											}
-										/>
-										<CardBody className="space-y-3 px-4 pb-4">
-											<Input
-												value={question.title}
-												onChange={(e) => handleInputChange(question.id, 'title', e.target.value)}
-												placeholder="Question text"
-												className="py-1.5"
-											/>
-
-											<ImageDropzone
-												preview={question.question_image_preview}
-												compact
-												label="Question image"
-												onPreview={openImagePreview}
-												onClear={() =>
-													setQuestions((qs) =>
-														qs.map((q) =>
-															q.id === question.id
-																? { ...q, question_image: null, question_image_preview: null }
-																: q
-														)
-													)
-												}
-												onChange={(e) => handleQuestionImageUpload(question.id, e)}
-											/>
-
-											<div className="space-y-1.5">
-												{question.mathematical ? (
-													<MathInput
-														handleChoicesChange={handleChoicesChange}
-														handleInputChange={handleInputChange}
-														question={question}
-														removeChoice={removeChoice}
-													/>
-												) : question.identification ? (
-													<div className="flex items-center gap-2">
-														<button
-															type="button"
-															aria-label="Mark as correct"
-															className={cn(
-																'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition',
-																question.correctAnswerIndex === 0
-																	? 'border-primary bg-primary'
-																	: 'border-line bg-surface'
-															)}
-															onClick={() =>
-																handleInputChange(question.id, 'correctAnswerIndex', 0)
-															}
-														>
-															{question.correctAnswerIndex === 0 && (
-																<Check size={10} className="text-primary-fg" />
-															)}
-														</button>
-														<input
-															type="text"
-															value={question.choices[0]}
-															onChange={(e) => handleChoicesChange(question.id, 0, e.target.value)}
-															placeholder="Answer"
-															className="border-line bg-surface text-fg focus:border-primary flex-1 rounded-md border px-2.5 py-1.5 text-sm focus:outline-none"
-															required
+													{reviewing ? (
+														<QuizAiChangeControls
+															meta={reviewMeta}
+															onAccept={() => aiProposal.accept(String(question.id))}
+															onReject={() => aiProposal.reject(String(question.id))}
 														/>
-													</div>
-												) : (
-													question.choices.map((choice, ci) => (
-														<div className="flex items-center gap-1.5" key={ci}>
-															<button
-																type="button"
-																aria-label={`Mark choice ${ci + 1} correct`}
-																className={cn(
-																	'flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 transition',
-																	question.correctAnswerIndex === ci
-																		? 'border-primary bg-primary'
-																		: 'border-line bg-surface'
-																)}
+													) : (
+														<>
+															<ToggleChip
+																active={question.mathematical}
 																onClick={() =>
-																	handleInputChange(question.id, 'correctAnswerIndex', ci)
+																	handleInputChange(
+																		question.id,
+																		'mathematical',
+																		!question.mathematical
+																	)
 																}
 															>
-																{question.correctAnswerIndex === ci && (
-																	<Check size={10} className="text-primary-fg" />
-																)}
-															</button>
-															<input
-																type="text"
-																value={choice}
-																onChange={(e) =>
-																	handleChoicesChange(question.id, ci, e.target.value)
+																Math
+															</ToggleChip>
+															<ToggleChip
+																active={question.identification}
+																onClick={() =>
+																	handleInputChange(
+																		question.id,
+																		'identification',
+																		!question.identification
+																	)
 																}
-																placeholder={`Choice ${ci + 1}`}
-																className="border-line bg-surface text-fg focus:border-primary min-w-0 flex-1 rounded-md border px-2.5 py-1.5 text-sm focus:outline-none"
-																required
-															/>
-															{question.showChoiceImages && (
-																<ChoiceImageControl
-																	preview={question.choiceImagePreviews[ci]}
-																	onPreview={openImagePreview}
-																	onChange={(e) => handleChoiceImageUpload(question.id, ci, e)}
-																	onClear={() => removeChoiceImage(question.id, ci)}
-																/>
+															>
+																ID
+															</ToggleChip>
+															{!question.identification && !question.mathematical && (
+																<ToggleChip
+																	active={question.showChoiceImages}
+																	onClick={() => toggleChoiceImages(question.id)}
+																>
+																	Images
+																</ToggleChip>
 															)}
 															<Button
 																variant="ghost"
 																size="icon"
-																className="h-7 w-7 shrink-0 cursor-pointer"
-																aria-label={`Remove choice ${ci + 1}`}
-																onClick={() => removeChoice(question.id, ci)}
+																className="cursor-pointer"
+																aria-label={`Remove question ${index + 1}`}
+																onClick={() => removeQuestion(question.id)}
 															>
-																<X size={13} className="text-danger" />
+																<X size={15} />
 															</Button>
-														</div>
-													))
-												)}
-											</div>
+														</>
+													)}
+												</div>
+											}
+										/>
+										<CardBody
+											className={cn('space-y-3 px-4 pb-4', isRemoved && 'pointer-events-none')}
+										>
+											{question._priorTitle && question._reviewKind === 'modified' && (
+												<p className="text-muted text-[0.65rem]">Was: {question._priorTitle}</p>
+											)}
+											<Input
+												value={question.title}
+												onChange={(e) => handleInputChange(question.id, 'title', e.target.value)}
+												placeholder="Question text"
+												className={cn('py-1.5', isRemoved && 'line-through')}
+												disabled={reviewing}
+											/>
 
-											{!question.identification && (
-												<Button
-													variant="ghost"
-													size="sm"
-													className="w-full"
-													onClick={() => addChoice(question.id)}
-												>
-													<Plus size={13} /> Add choice
-												</Button>
+											{!isRemoved && (
+												<>
+													<ImageDropzone
+														preview={question.question_image_preview}
+														compact
+														label="Question image"
+														onPreview={openImagePreview}
+														onClear={() =>
+															setQuestions((qs) =>
+																qs.map((q) =>
+																	q.id === question.id
+																		? {
+																				...q,
+																				question_image: null,
+																				question_image_preview: null
+																			}
+																		: q
+																)
+															)
+														}
+														onChange={(e) => handleQuestionImageUpload(question.id, e)}
+													/>
+
+													<div className="space-y-1.5">
+														{question.mathematical ? (
+															<MathInput
+																handleChoicesChange={handleChoicesChange}
+																handleInputChange={handleInputChange}
+																question={question}
+																removeChoice={removeChoice}
+															/>
+														) : question.identification ? (
+															<div className="flex items-center gap-2">
+																<button
+																	type="button"
+																	aria-label="Mark as correct"
+																	className={cn(
+																		'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition',
+																		question.correctAnswerIndex === 0
+																			? 'border-primary bg-primary'
+																			: 'border-line bg-surface'
+																	)}
+																	onClick={() =>
+																		handleInputChange(question.id, 'correctAnswerIndex', 0)
+																	}
+																>
+																	{question.correctAnswerIndex === 0 && (
+																		<Check size={10} className="text-primary-fg" />
+																	)}
+																</button>
+																<input
+																	type="text"
+																	value={question.choices[0]}
+																	onChange={(e) =>
+																		handleChoicesChange(question.id, 0, e.target.value)
+																	}
+																	placeholder="Answer"
+																	className="border-line bg-surface text-fg focus:border-primary flex-1 rounded-md border px-2.5 py-1.5 text-sm focus:outline-none"
+																	required
+																	disabled={reviewing}
+																/>
+															</div>
+														) : (
+															question.choices.map((choice, ci) => (
+																<div className="flex items-center gap-1.5" key={ci}>
+																	<button
+																		type="button"
+																		aria-label={`Mark choice ${ci + 1} correct`}
+																		className={cn(
+																			'flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 transition',
+																			question.correctAnswerIndex === ci
+																				? 'border-primary bg-primary'
+																				: 'border-line bg-surface'
+																		)}
+																		onClick={() =>
+																			handleInputChange(question.id, 'correctAnswerIndex', ci)
+																		}
+																		disabled={reviewing}
+																	>
+																		{question.correctAnswerIndex === ci && (
+																			<Check size={10} className="text-primary-fg" />
+																		)}
+																	</button>
+																	<input
+																		type="text"
+																		value={choice}
+																		onChange={(e) =>
+																			handleChoicesChange(question.id, ci, e.target.value)
+																		}
+																		placeholder={`Choice ${ci + 1}`}
+																		className="border-line bg-surface text-fg focus:border-primary min-w-0 flex-1 rounded-md border px-2.5 py-1.5 text-sm focus:outline-none"
+																		required
+																		disabled={reviewing}
+																	/>
+																	{question.showChoiceImages && (
+																		<ChoiceImageControl
+																			preview={question.choiceImagePreviews[ci]}
+																			onPreview={openImagePreview}
+																			onChange={(e) => handleChoiceImageUpload(question.id, ci, e)}
+																			onClear={() => removeChoiceImage(question.id, ci)}
+																		/>
+																	)}
+																	{!reviewing && (
+																		<Button
+																			variant="ghost"
+																			size="icon"
+																			className="h-7 w-7 shrink-0 cursor-pointer"
+																			aria-label={`Remove choice ${ci + 1}`}
+																			onClick={() => removeChoice(question.id, ci)}
+																		>
+																			<X size={13} className="text-danger" />
+																		</Button>
+																	)}
+																</div>
+															))
+														)}
+													</div>
+
+													{!question.identification && !reviewing && (
+														<Button
+															variant="ghost"
+															size="sm"
+															className="w-full"
+															onClick={() => addChoice(question.id)}
+														>
+															<Plus size={13} /> Add choice
+														</Button>
+													)}
+												</>
 											)}
 										</CardBody>
 									</Card>
 								);
 							})}
-							{section && (
+							{section && !reviewing && (
 								<Button
 									type="button"
 									variant="ghost"
@@ -1087,7 +1033,7 @@ export default function CreateQuizPage() {
 					)
 				)}
 
-				{sections.length === 0 && (
+				{authoringSections.length === 0 && !reviewing && (
 					<Button
 						variant="secondary"
 						size="sm"
@@ -1100,11 +1046,32 @@ export default function CreateQuizPage() {
 			</div>
 
 			{/* Mobile sticky create */}
-			<div className="border-line bg-bg/95 fixed inset-x-0 bottom-0 z-20 border-t p-3 backdrop-blur lg:hidden">
-				<Button className="w-full cursor-pointer" loading={creating} onClick={handleCreateQuiz}>
-					Create quiz
-				</Button>
-			</div>
+			{!reviewing && (
+				<div className="border-line bg-bg/95 fixed inset-x-0 bottom-0 z-20 border-t p-3 backdrop-blur lg:hidden">
+					<Button className="w-full cursor-pointer" loading={creating} onClick={handleCreateQuiz}>
+						Create quiz
+					</Button>
+				</div>
+			)}
+
+			{reviewing && (
+				<QuizAiReviewBar
+					summaryLabel={aiProposal.summaryLabel}
+					instruction={aiProposal.instruction}
+					pendingCount={aiProposal.pendingCount}
+					onAcceptAll={aiProposal.acceptAll}
+					onRejectAll={aiProposal.rejectAll}
+					onDone={aiProposal.done}
+				/>
+			)}
+
+			<QuizAiInstructionModal
+				open={reviseOpen}
+				onClose={() => setReviseOpen(false)}
+				loading={aiProposal.isLoading}
+				initialModel={ollamaModel}
+				onSubmit={(instruction, model) => aiProposal.runRevise(instruction, model)}
+			/>
 
 			<Modal
 				open={settingsOpen}
