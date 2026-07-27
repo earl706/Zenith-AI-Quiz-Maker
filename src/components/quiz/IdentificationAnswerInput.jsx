@@ -3,9 +3,17 @@ import MathFieldInput from './MathFieldInput';
 export default function IdentificationAnswerInput({
 	answer,
 	handleIdentificationAnswerChange,
-	question
+	question,
+	onEnter,
+	autoFocus = false
 }) {
 	const isMath = question.question_type === 'IDE-COM';
+
+	const handleKeyDown = (event) => {
+		if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent?.isComposing) return;
+		event.preventDefault();
+		onEnter?.();
+	};
 
 	return (
 		<div className="border-line bg-surface flex w-full flex-col items-center rounded-md border p-5">
@@ -21,6 +29,8 @@ export default function IdentificationAnswerInput({
 				<MathFieldInput
 					value={answer?.userAnswer || ''}
 					onChange={(latex) => handleIdentificationAnswerChange(answer.id, latex)}
+					onEnter={onEnter}
+					autoFocus={autoFocus}
 					placeholder="Type your answer (e.g. x^2)"
 					aria-label="Mathematical answer"
 					className="w-full"
@@ -30,6 +40,8 @@ export default function IdentificationAnswerInput({
 					type="text"
 					value={answer?.userAnswer || ''}
 					onChange={(event) => handleIdentificationAnswerChange(answer.id, event.target.value)}
+					onKeyDown={handleKeyDown}
+					autoFocus={autoFocus}
 					placeholder="Enter your answer"
 					className="border-line bg-surface-2 text-fg focus:border-primary w-full cursor-text rounded-md border px-3 py-2 text-sm font-medium transition focus:outline-none"
 				/>

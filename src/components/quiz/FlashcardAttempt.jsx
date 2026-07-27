@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { cn } from '../../lib/format';
@@ -6,6 +6,8 @@ import { Button, Card, CardBody, LoadingScreen } from '../ui';
 import IdentificationAnswerInput from './IdentificationAnswerInput';
 import MathRenderer from './MathRenderer';
 import { getChoiceData, isIdentification, isMathematical } from './quizHelpers';
+
+const AUTO_ADVANCE_MS = 220;
 
 export default function FlashcardAttempt({
 	questions,
@@ -17,16 +19,49 @@ export default function FlashcardAttempt({
 	answeredCount
 }) {
 	const [index, setIndex] = useState(0);
+	const advanceTimerRef = useRef(null);
 	const total = questions.length;
 	const currentQuestion = questions[index];
 	const answer = currentQuestion ? answersByIdMap.get(currentQuestion.id) : null;
 	const isLast = index === total - 1;
 	const math = currentQuestion ? isMathematical(currentQuestion.question_type) : false;
 
-	if (!currentQuestion) return <LoadingScreen />;
+	useEffect(() => {
+		return () => {
+			if (advanceTimerRef.current != null) {
+				window.clearTimeout(advanceTimerRef.current);
+			}
+		};
+	}, []);
 
 	const goPrev = () => setIndex((p) => (p - 1 + total) % total);
 	const goNext = () => setIndex((p) => (p + 1) % total);
+
+	const advanceToNext = useCallback(() => {
+		if (submitting || total <= 1) return;
+		setIndex((p) => (p >= total - 1 ? p : p + 1));
+	}, [submitting, total]);
+
+	const scheduleAdvance = useCallback(() => {
+		if (advanceTimerRef.current != null) {
+			window.clearTimeout(advanceTimerRef.current);
+		}
+		advanceTimerRef.current = window.setTimeout(() => {
+			advanceTimerRef.current = null;
+			advanceToNext();
+		}, AUTO_ADVANCE_MS);
+	}, [advanceToNext]);
+
+	const handleChoiceSelect = (questionId, choiceText) => {
+		onAnswerChange(questionId, 'userAnswer', choiceText);
+		if (!isLast) scheduleAdvance();
+	};
+
+	const handleIdentificationEnter = () => {
+		if (!isLast) advanceToNext();
+	};
+
+	if (!currentQuestion) return <LoadingScreen />;
 
 	return (
 		<div className="space-y-4">
@@ -68,9 +103,12 @@ export default function FlashcardAttempt({
 
 			{isIdentification(currentQuestion.question_type) ? (
 				<IdentificationAnswerInput
+					key={currentQuestion.id}
 					answer={answer}
 					question={currentQuestion}
 					handleIdentificationAnswerChange={onIdentificationChange}
+					onEnter={handleIdentificationEnter}
+					autoFocus
 				/>
 			) : (
 				<Card>
@@ -95,9 +133,7 @@ export default function FlashcardAttempt({
 									<button
 										key={choiceData.id ?? choiceIndex}
 										type="button"
-										onClick={() =>
-											onAnswerChange(currentQuestion.id, 'userAnswer', choiceData.text)
-										}
+										onClick={() => handleChoiceSelect(currentQuestion.id, choiceData.text)}
 										className={cn(
 											'w-full cursor-pointer rounded-md px-4 py-3 text-center font-semibold transition',
 											selected

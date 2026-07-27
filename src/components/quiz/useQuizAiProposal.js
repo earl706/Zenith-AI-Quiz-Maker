@@ -167,14 +167,45 @@ export function useQuizAiProposal({ getDraft, onCommit, onQuizTitle }) {
 					})
 				};
 				if (model) body.model = model;
+				// Large add-only batches (e.g. +70) need generous client timeout.
 				const { data } = await api.post('/quizzes/quiz/ai/revise/', body, {
-					timeout: 600_000
+					timeout: 2_700_000
 				});
 				const quizData = data?.quiz_data;
 				if (!quizData?.questions?.length) {
 					setStatus('idle');
 					toast.error('AI returned an empty quiz.');
 					return false;
+				}
+				if (data?.warning) {
+					toast.info(data.warning);
+				} else if (data?.mode === 'add') {
+					const added = data.addedCount ?? 0;
+					const requested = data.requestedCount ?? added;
+					toast.success(
+						added === requested
+							? `Prepared ${added} new questions for review.`
+							: `Prepared ${added} of ${requested} requested questions for review.`
+					);
+				} else if (data?.mode === 'dedupe') {
+					const replaced = data.replacedCount ?? 0;
+					const removed = data.removedCount ?? 0;
+					const duplicates = data.duplicateCount ?? 0;
+					if (data.dedupeMode === 'remove') {
+						toast.success(
+							removed
+								? `Prepared removal of ${removed} duplicate question${removed === 1 ? '' : 's'} for review.`
+								: 'No duplicate questions to remove.'
+						);
+					} else if (duplicates === 0) {
+						toast.info('No repeated or near-duplicate questions found.');
+					} else {
+						toast.success(
+							replaced === duplicates
+								? `Prepared ${replaced} unique replacement${replaced === 1 ? '' : 's'} for review.`
+								: `Prepared ${replaced} of ${duplicates} unique replacements for review.`
+						);
+					}
 				}
 				const started = startProposal(quizData, { instructionText: text });
 				if (!started) setStatus('idle');
