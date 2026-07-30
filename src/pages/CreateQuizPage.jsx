@@ -9,11 +9,13 @@ import {
 	SlidersHorizontal,
 	Sparkles,
 	FileUp,
-	WandSparkles
+	WandSparkles,
+	LayoutTemplate
 } from 'lucide-react';
 
 import { api } from '../lib/api';
 import { cn } from '../lib/format';
+import { resolveQuizImageSrc } from '../lib/quizImages';
 import { invalidateQuizQueries } from '../lib/resources';
 import { toast } from '../stores/toastStore';
 import { PageHeader } from '../components/layout/PageHeader';
@@ -66,6 +68,7 @@ function getDefaultQuestion(id, randomChoices = false, sectionKey = null) {
 		choices: ['', '', '', ''],
 		choiceImages: [null, null, null, null],
 		choiceImagePreviews: [null, null, null, null],
+		choiceImageUrls: ['', '', '', ''],
 		correctAnswerIndex: 0,
 		mathematical: false,
 		identification: false,
@@ -74,7 +77,16 @@ function getDefaultQuestion(id, randomChoices = false, sectionKey = null) {
 		showChoiceImages: false,
 		question_image: null,
 		question_image_preview: null,
+		question_image_url: '',
 		sectionKey
+	};
+}
+
+function flagsFromQuestionType(questionType) {
+	const t = String(questionType || 'MUL');
+	return {
+		mathematical: t === 'MUL-COM' || t === 'IDE-COM' || t === 'COM',
+		identification: t === 'IDE' || t === 'IDE-COM'
 	};
 }
 
@@ -112,6 +124,12 @@ export default function CreateQuizPage() {
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [aiOpen, setAiOpen] = useState(false);
 	const [reviseOpen, setReviseOpen] = useState(false);
+	const [templatesOpen, setTemplatesOpen] = useState(false);
+	const [templates, setTemplates] = useState([]);
+	const [templatesLoading, setTemplatesLoading] = useState(false);
+	const [templateLoadingSlug, setTemplateLoadingSlug] = useState('');
+	const [aiTemplateSlug, setAiTemplateSlug] = useState('');
+	const [quizImageUrl, setQuizImageUrl] = useState('');
 
 	const getDraft = useCallback(
 		() => ({
@@ -137,10 +155,95 @@ export default function CreateQuizPage() {
 
 	const openImagePreview = (src, title = 'Image preview') => {
 		if (!src) return;
-		setImagePreview({ src, title });
+		setImagePreview({ src: resolveQuizImageSrc(src) || src, title });
 	};
 
 	const closeImagePreview = () => setImagePreview(null);
+
+	const loadTemplateCatalog = useCallback(async () => {
+		setTemplatesLoading(true);
+		try {
+			const { data } = await api.get('/quizzes/templates/');
+			setTemplates(Array.isArray(data?.templates) ? data.templates : []);
+		} catch {
+			toast.error('Could not load templates.');
+			setTemplates([]);
+		} finally {
+			setTemplatesLoading(false);
+		}
+	}, []);
+
+	const applyTemplate = async (slug) => {
+		if (!slug) return;
+		setTemplateLoadingSlug(slug);
+		try {
+			const { data } = await api.get(`/quizzes/templates/${slug}/`);
+			const sectionList = Array.isArray(data.sections) ? data.sections : [];
+			const nextSections = sectionList.map((sec, i) =>
+				createSection({
+					title: sec.title || `Section ${i + 1}`,
+					order: sec.order ?? i
+				})
+			);
+			const questionsRaw = Array.isArray(data.questions) ? data.questions : [];
+			const mapped = questionsRaw.map((q, idx) => {
+				const flags = flagsFromQuestionType(q.question_type);
+				const rawChoices = Array.isArray(q.choices) ? q.choices : [];
+				const choices = rawChoices.map((c) =>
+					typeof c === 'object' && c !== null ? c.text || '' : String(c || '')
+				);
+				const choiceImageUrls = rawChoices.map((c) =>
+					typeof c === 'object' && c !== null ? c.image_url || '' : ''
+				);
+				while (choices.length < (flags.identification ? 1 : 4)) choices.push('');
+				while (choiceImageUrls.length < choices.length) choiceImageUrls.push('');
+				const qUrl = q.question_image_url || '';
+				const hasChoiceImages = !!q.has_choice_images || choiceImageUrls.some(Boolean);
+				const sectionIndex = typeof q.section_index === 'number' ? q.section_index : null;
+				return {
+					id: idx + 1,
+					title: q.title || '',
+					choices,
+					choiceImages: choices.map(() => null),
+					choiceImagePreviews: choiceImageUrls.map((u) => resolveQuizImageSrc(u) || u || null),
+					choiceImageUrls,
+					correctAnswerIndex:
+						typeof q.correct_answer_index === 'number' ? q.correct_answer_index : 0,
+					mathematical: flags.mathematical,
+					identification: flags.identification,
+					randomChoices: !!q.random_choices,
+					hasChoiceImages,
+					showChoiceImages: hasChoiceImages,
+					question_image: null,
+					question_image_preview: resolveQuizImageSrc(qUrl) || qUrl || null,
+					question_image_url: qUrl,
+					sectionKey:
+						sectionIndex != null && nextSections[sectionIndex]
+							? nextSections[sectionIndex].clientKey
+							: nextSections[0]?.clientKey || null
+				};
+			});
+			setQuizTitle(data.title || 'Quiz Title');
+			if (data.tag_color) setSelectedColor(data.tag_color);
+			setQuizImage(null);
+			const cover = data.cover_image_url || '';
+			setQuizImageUrl(cover);
+			setQuizImagePreview(resolveQuizImageSrc(cover) || cover || null);
+			setSections(nextSections);
+			setQuestions(
+				mapped.length
+					? mapped
+					: [getDefaultQuestion(1, randomQuestionChoices, nextSections[0]?.clientKey || null)]
+			);
+			setAiTemplateSlug(slug);
+			setTemplatesOpen(false);
+			toast.success(`Loaded template: ${data.title || slug}`);
+		} catch {
+			toast.error('Failed to load template.');
+		} finally {
+			setTemplateLoadingSlug('');
+		}
+	};
 
 	useEffect(() => {
 		let cancelled = false;
@@ -226,6 +329,7 @@ export default function CreateQuizPage() {
 						choices,
 						choiceImages: new Array(choices.length).fill(null),
 						choiceImagePreviews: new Array(choices.length).fill(null),
+						choiceImageUrls: new Array(choices.length).fill(''),
 						correctAnswerIndex: typeof q.correctAnswerIndex === 'number' ? q.correctAnswerIndex : 0,
 						mathematical: !!q.mathematical,
 						identification: !!q.identification,
@@ -234,6 +338,7 @@ export default function CreateQuizPage() {
 						showChoiceImages: !!q.hasChoiceImages,
 						question_image: null,
 						question_image_preview: null,
+						question_image_url: '',
 						sectionKey: null
 					};
 				});
@@ -257,6 +362,7 @@ export default function CreateQuizPage() {
 					next.hasChoiceImages = false;
 					next.choiceImages = q.choiceImages.map(() => null);
 					next.choiceImagePreviews = q.choiceImagePreviews.map(() => null);
+					next.choiceImageUrls = (q.choiceImageUrls || q.choices.map(() => '')).map(() => '');
 				}
 				return next;
 			})
@@ -276,7 +382,8 @@ export default function CreateQuizPage() {
 					showChoiceImages: false,
 					hasChoiceImages: false,
 					choiceImages: q.choiceImages.map(() => null),
-					choiceImagePreviews: q.choiceImagePreviews.map(() => null)
+					choiceImagePreviews: q.choiceImagePreviews.map(() => null),
+					choiceImageUrls: (q.choiceImageUrls || q.choices.map(() => '')).map(() => '')
 				};
 			})
 		);
@@ -294,7 +401,8 @@ export default function CreateQuizPage() {
 							...q,
 							choices: q.choices.filter((_, i) => i !== index),
 							choiceImages: q.choiceImages.filter((_, i) => i !== index),
-							choiceImagePreviews: q.choiceImagePreviews.filter((_, i) => i !== index)
+							choiceImagePreviews: q.choiceImagePreviews.filter((_, i) => i !== index),
+							choiceImageUrls: (q.choiceImageUrls || []).filter((_, i) => i !== index)
 						}
 					: q
 			)
@@ -309,7 +417,8 @@ export default function CreateQuizPage() {
 							...q,
 							choices: [...q.choices, ''],
 							choiceImages: [...q.choiceImages, null],
-							choiceImagePreviews: [...q.choiceImagePreviews, null]
+							choiceImagePreviews: [...q.choiceImagePreviews, null],
+							choiceImageUrls: [...(q.choiceImageUrls || []), '']
 						}
 					: q
 			)
@@ -372,10 +481,18 @@ export default function CreateQuizPage() {
 		const file = event.target.files[0];
 		if (file) {
 			setQuizImage(file);
+			setQuizImageUrl('');
 			const reader = new FileReader();
 			reader.onload = (e) => setQuizImagePreview(e.target.result);
 			reader.readAsDataURL(file);
 		}
+	};
+
+	const setQuizCoverUrl = (url) => {
+		const trimmed = String(url || '').trim();
+		setQuizImageUrl(trimmed);
+		setQuizImage(null);
+		setQuizImagePreview(resolveQuizImageSrc(trimmed) || trimmed || null);
 	};
 
 	const handleQuestionImageUpload = (questionId, event) => {
@@ -386,13 +503,34 @@ export default function CreateQuizPage() {
 				setQuestions((qs) =>
 					qs.map((q) =>
 						q.id === questionId
-							? { ...q, question_image: file, question_image_preview: e.target.result }
+							? {
+									...q,
+									question_image: file,
+									question_image_preview: e.target.result,
+									question_image_url: ''
+								}
 							: q
 					)
 				);
 			};
 			reader.readAsDataURL(file);
 		}
+	};
+
+	const setQuestionImageUrl = (questionId, url) => {
+		const trimmed = String(url || '').trim();
+		setQuestions((qs) =>
+			qs.map((q) =>
+				q.id === questionId
+					? {
+							...q,
+							question_image: null,
+							question_image_url: trimmed,
+							question_image_preview: resolveQuizImageSrc(trimmed) || trimmed || null
+						}
+					: q
+			)
+		);
 	};
 
 	const handleChoiceImageUpload = (questionId, choiceIndex, event) => {
@@ -409,6 +547,9 @@ export default function CreateQuizPage() {
 									choiceImagePreviews: q.choiceImagePreviews.map((p, i) =>
 										i === choiceIndex ? e.target.result : p
 									),
+									choiceImageUrls: (q.choiceImageUrls || q.choices.map(() => '')).map((u, i) =>
+										i === choiceIndex ? '' : u
+									),
 									hasChoiceImages: true
 								}
 							: q
@@ -417,6 +558,28 @@ export default function CreateQuizPage() {
 			};
 			reader.readAsDataURL(file);
 		}
+	};
+
+	const setChoiceImageUrl = (questionId, choiceIndex, url) => {
+		const trimmed = String(url || '').trim();
+		setQuestions((qs) =>
+			qs.map((q) => {
+				if (q.id !== questionId) return q;
+				const urls = [...(q.choiceImageUrls || q.choices.map(() => ''))];
+				while (urls.length < q.choices.length) urls.push('');
+				urls[choiceIndex] = trimmed;
+				return {
+					...q,
+					choiceImages: q.choiceImages.map((img, i) => (i === choiceIndex ? null : img)),
+					choiceImagePreviews: q.choiceImagePreviews.map((p, i) =>
+						i === choiceIndex ? resolveQuizImageSrc(trimmed) || trimmed || null : p
+					),
+					choiceImageUrls: urls,
+					hasChoiceImages:
+						urls.some(Boolean) || q.choiceImages.some((img, i) => i !== choiceIndex && img)
+				};
+			})
+		);
 	};
 
 	const removeChoiceImage = (questionId, choiceIndex) => {
@@ -429,7 +592,12 @@ export default function CreateQuizPage() {
 							choiceImagePreviews: q.choiceImagePreviews.map((p, i) =>
 								i === choiceIndex ? null : p
 							),
-							hasChoiceImages: q.choiceImages.some((img, i) => i !== choiceIndex && img !== null)
+							choiceImageUrls: (q.choiceImageUrls || q.choices.map(() => '')).map((u, i) =>
+								i === choiceIndex ? '' : u
+							),
+							hasChoiceImages:
+								q.choiceImages.some((img, i) => i !== choiceIndex && img !== null) ||
+								(q.choiceImageUrls || []).some((u, i) => i !== choiceIndex && u)
 						}
 					: q
 			)
@@ -447,6 +615,7 @@ export default function CreateQuizPage() {
 			formData.append('tag_color', selectedColor);
 			formData.append('quizType', quizType);
 			if (quizImage) formData.append('quiz_image', quizImage);
+			else if (quizImageUrl) formData.append('quiz_image_url', quizImageUrl);
 
 			questions.forEach((question, qi) => {
 				formData.append(`questions[${qi}][title]`, question.title);
@@ -454,7 +623,12 @@ export default function CreateQuizPage() {
 				formData.append(`questions[${qi}][randomChoices]`, question.randomChoices);
 				formData.append(`questions[${qi}][identification]`, question.identification);
 				formData.append(`questions[${qi}][mathematical]`, question.mathematical);
-				formData.append(`questions[${qi}][hasChoiceImages]`, question.hasChoiceImages);
+				const choiceUrls = question.choiceImageUrls || [];
+				const hasChoiceImages =
+					!!question.hasChoiceImages ||
+					question.choiceImages.some(Boolean) ||
+					choiceUrls.some(Boolean);
+				formData.append(`questions[${qi}][hasChoiceImages]`, hasChoiceImages);
 				if (sections.length > 0 && question.sectionKey) {
 					const sectionIndex = sections.findIndex((s) => s.clientKey === question.sectionKey);
 					if (sectionIndex >= 0) {
@@ -466,9 +640,17 @@ export default function CreateQuizPage() {
 				});
 				if (question.question_image) {
 					formData.append(`questions[${qi}][question_image]`, question.question_image);
+				} else if (question.question_image_url) {
+					formData.append(`questions[${qi}][question_image_url]`, question.question_image_url);
 				}
-				question.choiceImages.forEach((choiceImage, ci) => {
-					if (choiceImage) formData.append(`questions[${qi}][choice_images][${ci}]`, choiceImage);
+				question.choices.forEach((_, ci) => {
+					const choiceImage = question.choiceImages?.[ci];
+					const choiceUrl = choiceUrls[ci];
+					if (choiceImage) {
+						formData.append(`questions[${qi}][choice_images][${ci}]`, choiceImage);
+					} else if (choiceUrl) {
+						formData.append(`questions[${qi}][choice_image_urls][${ci}]`, choiceUrl);
+					}
 				});
 			});
 
@@ -578,8 +760,8 @@ export default function CreateQuizPage() {
 		if (generating) return;
 		const trimmedTopic = topic.trim();
 		const trimmedReference = referenceMarkdown.trim();
-		if (!trimmedTopic && !trimmedReference) {
-			toast.error('Enter a topic or attach a reference file before generating.');
+		if (!trimmedTopic && !trimmedReference && !aiTemplateSlug) {
+			toast.error('Enter a topic, attach a reference, or pick a base template.');
 			return;
 		}
 		if (!ollamaModel.trim()) {
@@ -615,6 +797,9 @@ export default function CreateQuizPage() {
 			}
 			if (trimmedReference) {
 				body.referenceMarkdown = referenceMarkdown;
+			}
+			if (aiTemplateSlug) {
+				body.templateSlug = aiTemplateSlug;
 			}
 			const response = await api.post('/quizzes/quiz/generate/', body, {
 				// Small batches + retries; allow ~6 minutes per batch of ~4.
@@ -671,6 +856,20 @@ export default function CreateQuizPage() {
 							onChange={handleImportQuiz}
 							className="hidden"
 						/>
+						<Button
+							variant="ghost"
+							size="icon"
+							className="cursor-pointer"
+							aria-label="Quiz templates"
+							title="Quiz templates"
+							disabled={reviewing}
+							onClick={() => {
+								setTemplatesOpen(true);
+								if (templates.length === 0) loadTemplateCatalog();
+							}}
+						>
+							<LayoutTemplate size={16} />
+						</Button>
 						<Button
 							variant="ghost"
 							size="icon"
@@ -891,6 +1090,8 @@ export default function CreateQuizPage() {
 														compact
 														label="Question image"
 														onPreview={openImagePreview}
+														urlValue={question.question_image_url || ''}
+														onUrlChange={(url) => setQuestionImageUrl(question.id, url)}
 														onClear={() =>
 															setQuestions((qs) =>
 																qs.map((q) =>
@@ -898,7 +1099,8 @@ export default function CreateQuizPage() {
 																		? {
 																				...q,
 																				question_image: null,
-																				question_image_preview: null
+																				question_image_preview: null,
+																				question_image_url: ''
 																			}
 																		: q
 																)
@@ -981,6 +1183,8 @@ export default function CreateQuizPage() {
 																	{question.showChoiceImages && (
 																		<ChoiceImageControl
 																			preview={question.choiceImagePreviews[ci]}
+																			urlValue={(question.choiceImageUrls || [])[ci] || ''}
+																			onUrlChange={(url) => setChoiceImageUrl(question.id, ci, url)}
 																			onPreview={openImagePreview}
 																			onChange={(e) => handleChoiceImageUpload(question.id, ci, e)}
 																			onClear={() => removeChoiceImage(question.id, ci)}
@@ -1101,8 +1305,11 @@ export default function CreateQuizPage() {
 						compact
 						label="Cover image"
 						onPreview={openImagePreview}
+						urlValue={quizImageUrl}
+						onUrlChange={setQuizCoverUrl}
 						onClear={() => {
 							setQuizImage(null);
+							setQuizImageUrl('');
 							setQuizImagePreview(null);
 						}}
 						onChange={handleQuizImageUpload}
@@ -1184,7 +1391,7 @@ export default function CreateQuizPage() {
 						className="w-full cursor-pointer sm:w-auto"
 						loading={generating}
 						disabled={
-							(!topic.trim() && !referenceMarkdown.trim()) ||
+							(!topic.trim() && !referenceMarkdown.trim() && !aiTemplateSlug) ||
 							!ollamaModel.trim() ||
 							generating ||
 							modelsLoading ||
@@ -1281,6 +1488,22 @@ export default function CreateQuizPage() {
 							))}
 						</Select>
 					</div>
+					<Select
+						label="Base template (optional)"
+						value={aiTemplateSlug}
+						onChange={(e) => setAiTemplateSlug(e.target.value)}
+						className="py-1.5"
+						onFocus={() => {
+							if (templates.length === 0) loadTemplateCatalog();
+						}}
+					>
+						<option value="">None</option>
+						{templates.map((t) => (
+							<option key={t.slug} value={t.slug}>
+								{t.title}
+							</option>
+						))}
+					</Select>
 					{autoQuestionCount && (
 						<p className="text-muted text-[0.65rem]">
 							Auto sizes count from the reference (or topic). Preview:{' '}
@@ -1316,6 +1539,55 @@ export default function CreateQuizPage() {
 								</button>
 							</div>
 						)}
+					</div>
+				</div>
+			</Modal>
+
+			<Modal
+				open={templatesOpen}
+				onClose={() => setTemplatesOpen(false)}
+				title="Quiz templates"
+				size="lg"
+			>
+				<div className="space-y-3">
+					<p className="text-muted text-xs">
+						Load a global template into this draft. You can edit questions and image URLs before
+						creating.
+					</p>
+					{templatesLoading && <p className="text-muted text-sm">Loading templates…</p>}
+					{!templatesLoading && templates.length === 0 && (
+						<p className="text-muted text-sm">No templates found. Run seed_quiz_templates.</p>
+					)}
+					<div className="grid max-h-[min(60vh,28rem)] gap-2 overflow-y-auto sm:grid-cols-2">
+						{templates.map((t) => (
+							<button
+								key={t.slug}
+								type="button"
+								disabled={!!templateLoadingSlug}
+								onClick={() => applyTemplate(t.slug)}
+								className="border-line bg-surface hover:border-primary/40 flex cursor-pointer flex-col items-start gap-1 rounded-md border p-3 text-left transition disabled:opacity-60"
+							>
+								<span className="text-fg flex items-center gap-2 text-sm font-semibold">
+									{t.tag_color && (
+										<span
+											className="inline-block h-2.5 w-2.5 rounded-full"
+											style={{ backgroundColor: t.tag_color }}
+											aria-hidden
+										/>
+									)}
+									{t.title}
+								</span>
+								<span className="text-muted text-[0.7rem] capitalize">
+									{String(t.topic || '').replace(/_/g, ' ')} · {t.question_count ?? 0} questions
+								</span>
+								{t.description && (
+									<span className="text-muted line-clamp-2 text-[0.65rem]">{t.description}</span>
+								)}
+								{templateLoadingSlug === t.slug && (
+									<span className="text-primary text-[0.65rem]">Loading…</span>
+								)}
+							</button>
+						))}
 					</div>
 				</div>
 			</Modal>

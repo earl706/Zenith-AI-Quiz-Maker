@@ -1,4 +1,5 @@
 import MathFieldInput from './MathFieldInput';
+import { resolveQuizImageSrc } from '../../lib/quizImages';
 
 export default function IdentificationAnswerInput({
 	answer,
@@ -8,6 +9,7 @@ export default function IdentificationAnswerInput({
 	autoFocus = false
 }) {
 	const isMath = question.question_type === 'IDE-COM';
+	const questionImage = resolveQuizImageSrc(question.question_image) || question.question_image;
 
 	const handleKeyDown = (event) => {
 		if (event.key !== 'Enter' || event.shiftKey || event.nativeEvent?.isComposing) return;
@@ -20,9 +22,9 @@ export default function IdentificationAnswerInput({
 			<p className="text-fg mb-3 w-full text-center text-base leading-snug font-semibold">
 				{question.question}
 			</p>
-			{question.question_image && (
+			{questionImage && (
 				<div className="mb-3 flex justify-center">
-					<img src={question.question_image} alt="" className="max-h-48 rounded-md object-cover" />
+					<img src={questionImage} alt="" className="max-h-48 rounded-md object-cover" />
 				</div>
 			)}
 			{isMath ? (

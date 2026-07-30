@@ -13,6 +13,7 @@ import {
 
 import { api } from '../lib/api';
 import { cn } from '../lib/format';
+import { isExternalOrStaticImageUrl, resolveQuizImageSrc } from '../lib/quizImages';
 import { invalidateQuizQueries } from '../lib/resources';
 import { toast } from '../stores/toastStore';
 import { PageHeader } from '../components/layout/PageHeader';
@@ -44,6 +45,7 @@ function getDefaultQuestion(id, randomChoices = false, sectionKey = null) {
 		choices: ['', '', '', ''],
 		choiceImages: [null, null, null, null],
 		choiceImagePreviews: [null, null, null, null],
+		choiceImageUrls: ['', '', '', ''],
 		correctAnswerIndex: 0,
 		mathematical: false,
 		identification: false,
@@ -52,6 +54,7 @@ function getDefaultQuestion(id, randomChoices = false, sectionKey = null) {
 		showChoiceImages: false,
 		question_image: null,
 		question_image_preview: null,
+		question_image_url: '',
 		sectionKey
 	};
 }
@@ -69,6 +72,7 @@ export default function EditQuizPage() {
 	const [selectedColor, setSelectedColor] = useState(colors[0].hex);
 	const [quizImage, setQuizImage] = useState(null);
 	const [quizImagePreview, setQuizImagePreview] = useState(null);
+	const [quizImageUrl, setQuizImageUrl] = useState('');
 	const [originalQuizImage, setOriginalQuizImage] = useState(null);
 	const [questions, setQuestions] = useState([]);
 	const [sections, setSections] = useState([]);
@@ -104,7 +108,7 @@ export default function EditQuizPage() {
 
 	const openImagePreview = (src, title = 'Image preview') => {
 		if (!src) return;
-		setImagePreview({ src, title });
+		setImagePreview({ src: resolveQuizImageSrc(src) || src, title });
 	};
 
 	const closeImagePreview = () => setImagePreview(null);
@@ -123,7 +127,16 @@ export default function EditQuizPage() {
 				setIsPublic(!!quizData.public);
 				setQuizType(quizData.flashcard_quiz ? 'flashcard' : 'list');
 				setOriginalQuizImage(quizData.quiz_image);
-				setQuizImagePreview(quizData.quiz_image);
+				const coverUrl = quizData.quiz_image_url || '';
+				const coverDisplay = quizData.quiz_image || coverUrl;
+				setQuizImageUrl(
+					isExternalOrStaticImageUrl(coverUrl)
+						? coverUrl
+						: isExternalOrStaticImageUrl(coverDisplay)
+							? coverDisplay
+							: ''
+				);
+				setQuizImagePreview(resolveQuizImageSrc(coverDisplay) || coverDisplay);
 
 				const loadedSections = normalizeQuizSections(quizData);
 				setSections(loadedSections);
@@ -136,9 +149,19 @@ export default function EditQuizPage() {
 					const transformedChoices = rawChoices.map((choice) =>
 						typeof choice === 'object' && choice !== null ? choice.text || '' : choice
 					);
-					const choiceImagePreviews = rawChoices.map((choice) =>
-						typeof choice === 'object' && choice !== null ? choice.image || null : null
-					);
+					const choiceImageUrls = rawChoices.map((choice) => {
+						if (typeof choice !== 'object' || choice === null) return '';
+						if (choice.image_url) return choice.image_url;
+						if (isExternalOrStaticImageUrl(choice.image)) return choice.image;
+						return '';
+					});
+					const choiceImagePreviews = rawChoices.map((choice, i) => {
+						const fromObj =
+							typeof choice === 'object' && choice !== null
+								? choice.image || choice.image_url || null
+								: null;
+						return resolveQuizImageSrc(fromObj || choiceImageUrls[i]) || fromObj || null;
+					});
 					const mathematical =
 						question.question_type === 'MUL-COM' || question.question_type === 'COM';
 					const identification =
@@ -146,11 +169,18 @@ export default function EditQuizPage() {
 					const padTo = Math.max(transformedChoices.length, identification ? 1 : 4);
 					while (transformedChoices.length < padTo) transformedChoices.push('');
 					while (choiceImagePreviews.length < padTo) choiceImagePreviews.push(null);
+					while (choiceImageUrls.length < padTo) choiceImageUrls.push('');
 
 					const correctAnswerIndex = transformedChoices.findIndex(
 						(choice) => choice === question.correct_answer
 					);
-					const hasChoiceImages = !!question.has_choice_images || choiceImagePreviews.some(Boolean);
+					const hasChoiceImages =
+						!!question.has_choice_images ||
+						choiceImagePreviews.some(Boolean) ||
+						choiceImageUrls.some(Boolean);
+					const qUrl =
+						question.question_image_url ||
+						(isExternalOrStaticImageUrl(question.question_image) ? question.question_image : '');
 
 					return {
 						id: question.id || index + 1,
@@ -158,6 +188,7 @@ export default function EditQuizPage() {
 						choices: transformedChoices,
 						choiceImages: Array(padTo).fill(null),
 						choiceImagePreviews,
+						choiceImageUrls,
 						correctAnswerIndex: correctAnswerIndex >= 0 ? correctAnswerIndex : 0,
 						mathematical,
 						identification,
@@ -165,7 +196,11 @@ export default function EditQuizPage() {
 						hasChoiceImages,
 						showChoiceImages: hasChoiceImages,
 						question_image: null,
-						question_image_preview: question.question_image,
+						question_image_preview:
+							resolveQuizImageSrc(question.question_image || qUrl) ||
+							question.question_image ||
+							null,
+						question_image_url: qUrl || '',
 						sectionKey: sectionKeyById.get(question.section) || null
 					};
 				});
@@ -192,6 +227,7 @@ export default function EditQuizPage() {
 					next.hasChoiceImages = false;
 					next.choiceImages = q.choiceImages.map(() => null);
 					next.choiceImagePreviews = q.choiceImagePreviews.map(() => null);
+					next.choiceImageUrls = (q.choiceImageUrls || q.choices.map(() => '')).map(() => '');
 				}
 				return next;
 			})
@@ -211,7 +247,8 @@ export default function EditQuizPage() {
 					showChoiceImages: false,
 					hasChoiceImages: false,
 					choiceImages: q.choiceImages.map(() => null),
-					choiceImagePreviews: q.choiceImagePreviews.map(() => null)
+					choiceImagePreviews: q.choiceImagePreviews.map(() => null),
+					choiceImageUrls: (q.choiceImageUrls || q.choices.map(() => '')).map(() => '')
 				};
 			})
 		);
@@ -229,7 +266,8 @@ export default function EditQuizPage() {
 							...q,
 							choices: q.choices.filter((_, i) => i !== index),
 							choiceImages: q.choiceImages.filter((_, i) => i !== index),
-							choiceImagePreviews: q.choiceImagePreviews.filter((_, i) => i !== index)
+							choiceImagePreviews: q.choiceImagePreviews.filter((_, i) => i !== index),
+							choiceImageUrls: (q.choiceImageUrls || []).filter((_, i) => i !== index)
 						}
 					: q
 			)
@@ -244,7 +282,8 @@ export default function EditQuizPage() {
 							...q,
 							choices: [...q.choices, ''],
 							choiceImages: [...q.choiceImages, null],
-							choiceImagePreviews: [...q.choiceImagePreviews, null]
+							choiceImagePreviews: [...q.choiceImagePreviews, null],
+							choiceImageUrls: [...(q.choiceImageUrls || []), '']
 						}
 					: q
 			)
@@ -310,15 +349,25 @@ export default function EditQuizPage() {
 		const file = event.target.files[0];
 		if (file) {
 			setQuizImage(file);
+			setQuizImageUrl('');
 			const reader = new FileReader();
 			reader.onload = (e) => setQuizImagePreview(e.target.result);
 			reader.readAsDataURL(file);
 		}
 	};
 
+	const setQuizCoverUrl = (url) => {
+		const trimmed = String(url || '').trim();
+		setQuizImageUrl(trimmed);
+		setQuizImage(null);
+		setOriginalQuizImage(null);
+		setQuizImagePreview(resolveQuizImageSrc(trimmed) || trimmed || null);
+	};
+
 	const clearQuizImage = () => {
 		setQuizImage(null);
 		setQuizImagePreview(null);
+		setQuizImageUrl('');
 		setOriginalQuizImage(null);
 	};
 
@@ -330,13 +379,34 @@ export default function EditQuizPage() {
 				setQuestions((qs) =>
 					qs.map((q) =>
 						q.id === questionId
-							? { ...q, question_image: file, question_image_preview: e.target.result }
+							? {
+									...q,
+									question_image: file,
+									question_image_preview: e.target.result,
+									question_image_url: ''
+								}
 							: q
 					)
 				);
 			};
 			reader.readAsDataURL(file);
 		}
+	};
+
+	const setQuestionImageUrl = (questionId, url) => {
+		const trimmed = String(url || '').trim();
+		setQuestions((qs) =>
+			qs.map((q) =>
+				q.id === questionId
+					? {
+							...q,
+							question_image: null,
+							question_image_url: trimmed,
+							question_image_preview: resolveQuizImageSrc(trimmed) || trimmed || null
+						}
+					: q
+			)
+		);
 	};
 
 	const handleChoiceImageUpload = (questionId, choiceIndex, event) => {
@@ -353,6 +423,9 @@ export default function EditQuizPage() {
 									choiceImagePreviews: q.choiceImagePreviews.map((p, i) =>
 										i === choiceIndex ? e.target.result : p
 									),
+									choiceImageUrls: (q.choiceImageUrls || q.choices.map(() => '')).map((u, i) =>
+										i === choiceIndex ? '' : u
+									),
 									hasChoiceImages: true
 								}
 							: q
@@ -361,6 +434,28 @@ export default function EditQuizPage() {
 			};
 			reader.readAsDataURL(file);
 		}
+	};
+
+	const setChoiceImageUrl = (questionId, choiceIndex, url) => {
+		const trimmed = String(url || '').trim();
+		setQuestions((qs) =>
+			qs.map((q) => {
+				if (q.id !== questionId) return q;
+				const urls = [...(q.choiceImageUrls || q.choices.map(() => ''))];
+				while (urls.length < q.choices.length) urls.push('');
+				urls[choiceIndex] = trimmed;
+				return {
+					...q,
+					choiceImages: q.choiceImages.map((img, i) => (i === choiceIndex ? null : img)),
+					choiceImagePreviews: q.choiceImagePreviews.map((p, i) =>
+						i === choiceIndex ? resolveQuizImageSrc(trimmed) || trimmed || null : p
+					),
+					choiceImageUrls: urls,
+					hasChoiceImages:
+						urls.some(Boolean) || q.choiceImages.some((img, i) => i !== choiceIndex && img)
+				};
+			})
+		);
 	};
 
 	const removeChoiceImage = (questionId, choiceIndex) => {
@@ -373,8 +468,12 @@ export default function EditQuizPage() {
 							choiceImagePreviews: q.choiceImagePreviews.map((p, i) =>
 								i === choiceIndex ? null : p
 							),
+							choiceImageUrls: (q.choiceImageUrls || q.choices.map(() => '')).map((u, i) =>
+								i === choiceIndex ? '' : u
+							),
 							hasChoiceImages:
 								q.choiceImages.some((img, i) => i !== choiceIndex && img !== null) ||
+								(q.choiceImageUrls || []).some((u, i) => i !== choiceIndex && u) ||
 								q.choiceImagePreviews.some((p, i) => i !== choiceIndex && p !== null)
 						}
 					: q
@@ -390,18 +489,21 @@ export default function EditQuizPage() {
 			reader.onerror = reject;
 		});
 
-	/** Normalize File, data URL, or existing media URL into a data URL for PUT. */
+	/** Keep URL strings as URLs; only convert Files / data URLs for upload fields. */
 	const toSaveableImage = async (value) => {
 		if (!value) return null;
-		if (typeof value !== 'string') return fileToBase64(value);
-		if (value.startsWith('data:image')) return value;
-		if (value.startsWith('http://') || value.startsWith('https://') || value.startsWith('/')) {
-			const response = await fetch(value);
-			if (!response.ok) throw new Error('Failed to load image');
-			const blob = await response.blob();
-			return fileToBase64(blob);
+		if (typeof value === 'string') {
+			if (value.startsWith('data:image')) return value;
+			if (isExternalOrStaticImageUrl(value)) return null;
+			return null;
 		}
-		return value;
+		return fileToBase64(value);
+	};
+
+	const resolveStoredUrl = (fileOrNull, urlField, preview) => {
+		if (urlField) return urlField;
+		if (isExternalOrStaticImageUrl(preview)) return preview;
+		return '';
 	};
 
 	const handleUpdateQuiz = async (e) => {
@@ -423,10 +525,22 @@ export default function EditQuizPage() {
 
 			if (quizImage) {
 				quizData.quiz_image = await toSaveableImage(quizImage);
+				quizData.quiz_image_url = '';
+			} else if (quizImageUrl) {
+				quizData.quiz_image = null;
+				quizData.quiz_image_url = quizImageUrl;
 			} else if (originalQuizImage || quizImagePreview) {
-				quizData.quiz_image = await toSaveableImage(originalQuizImage || quizImagePreview);
+				const asUrl = resolveStoredUrl(null, '', originalQuizImage || quizImagePreview);
+				if (asUrl) {
+					quizData.quiz_image = null;
+					quizData.quiz_image_url = asUrl;
+				} else {
+					quizData.quiz_image = await toSaveableImage(originalQuizImage || quizImagePreview);
+					quizData.quiz_image_url = '';
+				}
 			} else {
 				quizData.quiz_image = null;
+				quizData.quiz_image_url = '';
 			}
 
 			quizData.questions = await Promise.all(
@@ -436,13 +550,25 @@ export default function EditQuizPage() {
 						0,
 						Math.min(question.correctAnswerIndex || 0, Math.max(choices.length - 1, 0))
 					);
+					const choiceImageUrls = [];
 					const choiceImages = await Promise.all(
-						(question.choiceImages || []).map(async (img, i) => {
-							if (img) return toSaveableImage(img);
-							return toSaveableImage(question.choiceImagePreviews?.[i]);
+						choices.map(async (_c, i) => {
+							const file = question.choiceImages?.[i];
+							const url = question.choiceImageUrls?.[i] || '';
+							const preview = question.choiceImagePreviews?.[i];
+							if (file) {
+								choiceImageUrls.push('');
+								return toSaveableImage(file);
+							}
+							const stored = resolveStoredUrl(null, url, preview);
+							choiceImageUrls.push(stored);
+							return null;
 						})
 					);
-					const hasChoiceImages = !!question.hasChoiceImages || choiceImages.some(Boolean);
+					const hasChoiceImages =
+						!!question.hasChoiceImages ||
+						choiceImages.some(Boolean) ||
+						choiceImageUrls.some(Boolean);
 
 					const qData = {
 						...(typeof question.id === 'number' ? { id: question.id } : {}),
@@ -450,6 +576,7 @@ export default function EditQuizPage() {
 						question_type: questionTypeFromFlags(question),
 						choices_array: choices,
 						choice_images: choiceImages,
+						choice_image_urls: choiceImageUrls,
 						correct_answer: choices[correctIndex] || '',
 						correct_answer_index: correctIndex,
 						random_choices: !!question.randomChoices,
@@ -465,12 +592,17 @@ export default function EditQuizPage() {
 					} else {
 						qData.section = null;
 					}
-					if (question.question_image || question.question_image_preview) {
-						qData.question_image = await toSaveableImage(
-							question.question_image || question.question_image_preview
-						);
+					if (question.question_image) {
+						qData.question_image = await toSaveableImage(question.question_image);
+						qData.question_image_url = '';
 					} else {
+						const stored = resolveStoredUrl(
+							null,
+							question.question_image_url,
+							question.question_image_preview
+						);
 						qData.question_image = null;
+						qData.question_image_url = stored || '';
 					}
 					return qData;
 				})
@@ -707,6 +839,8 @@ export default function EditQuizPage() {
 														compact
 														label="Question image"
 														onPreview={openImagePreview}
+														urlValue={question.question_image_url || ''}
+														onUrlChange={(url) => setQuestionImageUrl(question.id, url)}
 														onClear={() =>
 															!reviewing &&
 															setQuestions((qs) =>
@@ -715,7 +849,8 @@ export default function EditQuizPage() {
 																		? {
 																				...q,
 																				question_image: null,
-																				question_image_preview: null
+																				question_image_preview: null,
+																				question_image_url: ''
 																			}
 																		: q
 																)
@@ -801,6 +936,10 @@ export default function EditQuizPage() {
 																	{question.showChoiceImages && (
 																		<ChoiceImageControl
 																			preview={question.choiceImagePreviews[ci]}
+																			urlValue={(question.choiceImageUrls || [])[ci] || ''}
+																			onUrlChange={(url) =>
+																				!reviewing && setChoiceImageUrl(question.id, ci, url)
+																			}
 																			onPreview={openImagePreview}
 																			onChange={(e) =>
 																				!reviewing && handleChoiceImageUpload(question.id, ci, e)
@@ -924,6 +1063,8 @@ export default function EditQuizPage() {
 						compact
 						label="Cover image"
 						onPreview={openImagePreview}
+						urlValue={quizImageUrl}
+						onUrlChange={setQuizCoverUrl}
 						onClear={clearQuizImage}
 						onChange={handleQuizImageUpload}
 					/>

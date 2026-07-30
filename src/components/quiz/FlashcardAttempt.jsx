@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { cn } from '../../lib/format';
+import { resolveQuizImageSrc } from '../../lib/quizImages';
 import { Button, Card, CardBody, LoadingScreen } from '../ui';
 import IdentificationAnswerInput from './IdentificationAnswerInput';
 import MathRenderer from './MathRenderer';
@@ -119,7 +120,10 @@ export default function FlashcardAttempt({
 						{currentQuestion.question_image && (
 							<div className="flex justify-center">
 								<img
-									src={currentQuestion.question_image}
+									src={
+										resolveQuizImageSrc(currentQuestion.question_image) ||
+										currentQuestion.question_image
+									}
 									alt=""
 									className="max-h-48 rounded-md object-cover"
 								/>
@@ -129,6 +133,7 @@ export default function FlashcardAttempt({
 							{(currentQuestion.choices || []).map((choice, choiceIndex) => {
 								const choiceData = getChoiceData(choice);
 								const selected = answer?.userAnswer === choiceData.text;
+								const choiceImage = resolveQuizImageSrc(choiceData.image) || choiceData.image;
 								return (
 									<button
 										key={choiceData.id ?? choiceIndex}
@@ -142,9 +147,9 @@ export default function FlashcardAttempt({
 										)}
 									>
 										<div className="flex flex-col items-center gap-2">
-											{choiceData.image && (
+											{choiceImage && (
 												<img
-													src={choiceData.image}
+													src={choiceImage}
 													alt=""
 													className="max-h-24 rounded-md object-cover"
 												/>

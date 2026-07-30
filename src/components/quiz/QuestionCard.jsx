@@ -1,5 +1,6 @@
 import IdentificationAnswerInput from './IdentificationAnswerInput';
 import MathRenderer from './MathRenderer';
+import { resolveQuizImageSrc } from '../../lib/quizImages';
 
 export default function QuestionCard({
 	question,
@@ -8,6 +9,7 @@ export default function QuestionCard({
 	handleIdentificationAnswerChange
 }) {
 	const answer = answers.find((a) => a.id === question.id);
+	const questionImage = resolveQuizImageSrc(question.question_image) || question.question_image;
 
 	return (
 		<>
@@ -21,10 +23,10 @@ export default function QuestionCard({
 				<div className="border-line bg-surface flex w-full flex-col items-center rounded-md border p-6">
 					<p className="text-fg mb-3 text-lg font-semibold">{question.question}</p>
 
-					{question.question_image && (
+					{questionImage && (
 						<div className="mb-4 flex justify-center">
 							<img
-								src={question.question_image}
+								src={questionImage}
 								alt="Question"
 								className="max-h-[200px] rounded-md object-cover"
 							/>
@@ -34,7 +36,7 @@ export default function QuestionCard({
 					<div className="flex w-full flex-col gap-2">
 						{question.choices.map((choice, index) => {
 							const choiceText = choice.text || choice;
-							const choiceImage = choice.image;
+							const choiceImage = resolveQuizImageSrc(choice.image) || choice.image;
 							const choiceId = choice.id || index;
 
 							return (

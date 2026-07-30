@@ -13,6 +13,7 @@ import {
 
 import { get } from '../lib/api';
 import { formatDate, formatDurationSeconds, fromNow } from '../lib/format';
+import { resolveQuizImageSrc } from '../lib/quizImages';
 import { PageHeader } from '../components/layout/PageHeader';
 import {
 	Badge,
@@ -155,7 +156,11 @@ export default function QuizPage() {
 
 			{quiz.quiz_image && (
 				<div className="border-line bg-surface mb-6 overflow-hidden rounded-md border">
-					<img src={quiz.quiz_image} alt="" className="max-h-56 w-full object-cover" />
+					<img
+						src={resolveQuizImageSrc(quiz.quiz_image) || quiz.quiz_image}
+						alt=""
+						className="max-h-56 w-full object-cover"
+					/>
 				</div>
 			)}
 
@@ -230,7 +235,9 @@ export default function QuizPage() {
 										{question.question_image && (
 											<div className="flex justify-center">
 												<img
-													src={question.question_image}
+													src={
+														resolveQuizImageSrc(question.question_image) || question.question_image
+													}
 													alt=""
 													className="max-h-40 rounded-md object-cover"
 												/>
@@ -254,7 +261,7 @@ export default function QuizPage() {
 														>
 															{choiceImage && (
 																<img
-																	src={choiceImage}
+																	src={resolveQuizImageSrc(choiceImage) || choiceImage}
 																	alt=""
 																	className="max-h-20 rounded-md object-cover"
 																/>

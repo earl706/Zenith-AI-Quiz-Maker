@@ -1,6 +1,7 @@
 import { Check, Plus, X, Image as ImageIcon } from 'lucide-react';
 
 import { cn } from '../../lib/format';
+import { resolveQuizImageSrc } from '../../lib/quizImages';
 
 export const QUIZ_TAG_COLORS = [
 	{ name: 'Red', hex: '#EF4444' },
@@ -49,89 +50,155 @@ export function ToggleChip({ active, onClick, children, className }) {
 	);
 }
 
-export function ImageDropzone({ preview, onClear, onChange, onPreview, label, compact = false }) {
-	if (preview) {
+export function ImageDropzone({
+	preview,
+	onClear,
+	onChange,
+	onPreview,
+	label,
+	compact = false,
+	urlValue = '',
+	onUrlChange
+}) {
+	const src = resolveQuizImageSrc(preview) || preview;
+
+	if (src) {
 		return (
-			<div className="relative">
-				<button
-					type="button"
-					onClick={() => onPreview?.(preview, label || 'Image preview')}
-					className="block w-full cursor-pointer overflow-hidden rounded-md text-left"
-					aria-label={`Preview ${label || 'image'}`}
-				>
-					<img
-						src={preview}
-						alt=""
-						className={cn(
-							'w-full object-cover transition hover:opacity-90',
-							compact ? 'h-16' : 'h-24'
-						)}
+			<div className="space-y-1.5">
+				<div className="relative">
+					<button
+						type="button"
+						onClick={() => onPreview?.(src, label || 'Image preview')}
+						className="block w-full cursor-pointer overflow-hidden rounded-md text-left"
+						aria-label={`Preview ${label || 'image'}`}
+					>
+						<img
+							src={src}
+							alt=""
+							className={cn(
+								'w-full object-cover transition hover:opacity-90',
+								compact ? 'h-16' : 'h-24'
+							)}
+						/>
+					</button>
+					<button
+						type="button"
+						onClick={(e) => {
+							e.stopPropagation();
+							onClear?.();
+						}}
+						aria-label="Remove image"
+						className="bg-danger absolute top-1 right-1 z-10 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full text-white"
+					>
+						<X size={11} />
+					</button>
+				</div>
+				{onUrlChange && (
+					<input
+						type="url"
+						value={urlValue}
+						onChange={(e) => onUrlChange(e.target.value)}
+						placeholder="Or paste image URL"
+						className="border-line bg-surface text-fg focus:border-primary w-full rounded-md border px-2 py-1 text-[0.7rem] focus:outline-none"
 					/>
-				</button>
-				<button
-					type="button"
-					onClick={(e) => {
-						e.stopPropagation();
-						onClear?.();
-					}}
-					aria-label="Remove image"
-					className="bg-danger absolute top-1 right-1 z-10 flex h-5 w-5 cursor-pointer items-center justify-center rounded-full text-white"
-				>
-					<X size={11} />
-				</button>
+				)}
 			</div>
 		);
 	}
 
 	return (
-		<label
-			className={cn(
-				'border-line hover:border-primary/40 text-muted flex w-full cursor-pointer flex-col items-center justify-center rounded-md border border-dashed text-xs transition',
-				compact ? 'h-12 gap-0.5' : 'h-16 gap-1'
+		<div className="space-y-1.5">
+			<label
+				className={cn(
+					'border-line hover:border-primary/40 text-muted flex w-full cursor-pointer flex-col items-center justify-center rounded-md border border-dashed text-xs transition',
+					compact ? 'h-12 gap-0.5' : 'h-16 gap-1'
+				)}
+			>
+				<input type="file" accept="image/*" onChange={onChange} className="hidden" />
+				<Plus size={compact ? 14 : 16} />
+				<span>{label}</span>
+			</label>
+			{onUrlChange && (
+				<input
+					type="url"
+					value={urlValue}
+					onChange={(e) => onUrlChange(e.target.value)}
+					placeholder="Or paste image URL"
+					className="border-line bg-surface text-fg focus:border-primary w-full rounded-md border px-2 py-1 text-[0.7rem] focus:outline-none"
+				/>
 			)}
-		>
-			<input type="file" accept="image/*" onChange={onChange} className="hidden" />
-			<Plus size={compact ? 14 : 16} />
-			<span>{label}</span>
-		</label>
+		</div>
 	);
 }
 
 /** Compact choice image control: icon button empty, tiny thumb when set. */
-export function ChoiceImageControl({ preview, onChange, onClear, onPreview }) {
-	if (preview) {
+export function ChoiceImageControl({
+	preview,
+	onChange,
+	onClear,
+	onPreview,
+	urlValue,
+	onUrlChange
+}) {
+	const src = resolveQuizImageSrc(preview) || preview;
+
+	if (src) {
 		return (
-			<div className="relative shrink-0">
-				<button
-					type="button"
-					onClick={() => onPreview?.(preview, 'Choice image')}
-					className="block cursor-pointer overflow-hidden rounded"
-					aria-label="Preview choice image"
-				>
-					<img src={preview} alt="" className="h-7 w-7 object-cover transition hover:opacity-90" />
-				</button>
-				<button
-					type="button"
-					aria-label="Remove choice image"
-					onClick={(e) => {
-						e.stopPropagation();
-						onClear?.();
-					}}
-					className="bg-danger absolute -top-1 -right-1 z-10 flex h-3.5 w-3.5 cursor-pointer items-center justify-center rounded-full text-white"
-				>
-					<X size={7} />
-				</button>
+			<div className="flex shrink-0 items-center gap-1">
+				<div className="relative">
+					<button
+						type="button"
+						onClick={() => onPreview?.(src, 'Choice image')}
+						className="block cursor-pointer overflow-hidden rounded"
+						aria-label="Preview choice image"
+					>
+						<img src={src} alt="" className="h-7 w-7 object-cover transition hover:opacity-90" />
+					</button>
+					<button
+						type="button"
+						aria-label="Remove choice image"
+						onClick={(e) => {
+							e.stopPropagation();
+							onClear?.();
+						}}
+						className="bg-danger absolute -top-1 -right-1 z-10 flex h-3.5 w-3.5 cursor-pointer items-center justify-center rounded-full text-white"
+					>
+						<X size={7} />
+					</button>
+				</div>
+				{onUrlChange && (
+					<input
+						type="url"
+						value={urlValue || ''}
+						onChange={(e) => onUrlChange(e.target.value)}
+						placeholder="URL"
+						className="border-line bg-surface text-fg focus:border-primary hidden w-24 rounded border px-1 py-0.5 text-[0.65rem] focus:outline-none sm:block"
+						title="Paste choice image URL"
+					/>
+				)}
 			</div>
 		);
 	}
 
 	return (
-		<label
-			className="text-muted hover:bg-surface-2 hover:text-fg flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md transition"
-			title="Add image"
-		>
-			<input type="file" accept="image/*" onChange={onChange} className="hidden" />
-			<ImageIcon size={14} />
-		</label>
+		<div className="flex shrink-0 items-center gap-1">
+			<label
+				className="text-muted hover:bg-surface-2 hover:text-fg flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md transition"
+				title="Add image"
+			>
+				<input type="file" accept="image/*" onChange={onChange} className="hidden" />
+				<ImageIcon size={14} />
+			</label>
+			{onUrlChange && (
+				<input
+					type="url"
+					value={urlValue || ''}
+					onChange={(e) => onUrlChange(e.target.value)}
+					placeholder="URL"
+					className="border-line bg-surface text-fg focus:border-primary hidden w-24 rounded border px-1 py-0.5 text-[0.65rem] focus:outline-none sm:block"
+					title="Paste choice image URL"
+				/>
+			)}
+		</div>
 	);
 }
