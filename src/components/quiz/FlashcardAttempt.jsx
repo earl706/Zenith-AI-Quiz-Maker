@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { cn } from '../../lib/format';
@@ -6,9 +6,8 @@ import { resolveQuizImageSrc } from '../../lib/quizImages';
 import { Button, Card, CardBody, LoadingScreen } from '../ui';
 import IdentificationAnswerInput from './IdentificationAnswerInput';
 import MathRenderer from './MathRenderer';
+import QuestionStudyFeedback from './QuestionStudyFeedback';
 import { getChoiceData, isIdentification, isMathematical } from './quizHelpers';
-
-const AUTO_ADVANCE_MS = 220;
 
 export default function FlashcardAttempt({
 	questions,
@@ -20,46 +19,28 @@ export default function FlashcardAttempt({
 	answeredCount
 }) {
 	const [index, setIndex] = useState(0);
-	const advanceTimerRef = useRef(null);
+	const [revealedIds, setRevealedIds] = useState(() => new Set());
 	const total = questions.length;
 	const currentQuestion = questions[index];
 	const answer = currentQuestion ? answersByIdMap.get(currentQuestion.id) : null;
 	const isLast = index === total - 1;
 	const math = currentQuestion ? isMathematical(currentQuestion.question_type) : false;
-
-	useEffect(() => {
-		return () => {
-			if (advanceTimerRef.current != null) {
-				window.clearTimeout(advanceTimerRef.current);
-			}
-		};
-	}, []);
+	const revealed = currentQuestion ? revealedIds.has(currentQuestion.id) : false;
+	const hasAnswer = String(answer?.userAnswer ?? '').trim() !== '';
 
 	const goPrev = () => setIndex((p) => (p - 1 + total) % total);
 	const goNext = () => setIndex((p) => (p + 1) % total);
 
-	const advanceToNext = useCallback(() => {
-		if (submitting || total <= 1) return;
-		setIndex((p) => (p >= total - 1 ? p : p + 1));
-	}, [submitting, total]);
-
-	const scheduleAdvance = useCallback(() => {
-		if (advanceTimerRef.current != null) {
-			window.clearTimeout(advanceTimerRef.current);
-		}
-		advanceTimerRef.current = window.setTimeout(() => {
-			advanceTimerRef.current = null;
-			advanceToNext();
-		}, AUTO_ADVANCE_MS);
-	}, [advanceToNext]);
-
 	const handleChoiceSelect = (questionId, choiceText) => {
+		if (revealed) return;
 		onAnswerChange(questionId, 'userAnswer', choiceText);
-		if (!isLast) scheduleAdvance();
+		setRevealedIds((previous) => new Set(previous).add(questionId));
 	};
 
 	const handleIdentificationEnter = () => {
-		if (!isLast) advanceToNext();
+		if (hasAnswer && currentQuestion) {
+			setRevealedIds((previous) => new Set(previous).add(currentQuestion.id));
+		}
 	};
 
 	if (!currentQuestion) return <LoadingScreen />;
@@ -110,6 +91,7 @@ export default function FlashcardAttempt({
 					handleIdentificationAnswerChange={onIdentificationChange}
 					onEnter={handleIdentificationEnter}
 					autoFocus
+					disabled={revealed}
 				/>
 			) : (
 				<Card>
@@ -138,6 +120,7 @@ export default function FlashcardAttempt({
 									<button
 										key={choiceData.id ?? choiceIndex}
 										type="button"
+										disabled={revealed}
 										onClick={() => handleChoiceSelect(currentQuestion.id, choiceData.text)}
 										className={cn(
 											'w-full cursor-pointer rounded-md px-4 py-3 text-center font-semibold transition',
@@ -167,6 +150,18 @@ export default function FlashcardAttempt({
 					</CardBody>
 				</Card>
 			)}
+
+			{isIdentification(currentQuestion.question_type) && !revealed && (
+				<Button
+					className="w-full"
+					variant="secondary"
+					disabled={!hasAnswer || submitting}
+					onClick={handleIdentificationEnter}
+				>
+					Check answer
+				</Button>
+			)}
+			{revealed && <QuestionStudyFeedback question={currentQuestion} answer={answer} />}
 
 			<div className="border-line space-y-2 border-t pt-4">
 				<p className="text-muted text-center text-xs">

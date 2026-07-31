@@ -209,6 +209,35 @@ export function questionsGroupedBySection(questions, sections) {
 	return groups;
 }
 
+/** Group API quiz questions by section id (attempt / detail payloads). */
+export function groupQuestionsByApiSection(questions, sections) {
+	if (!sections?.length) {
+		return [{ section: null, questions: questions || [] }];
+	}
+	const sorted = [...sections].sort(
+		(a, b) => (a.order ?? 0) - (b.order ?? 0) || (a.id ?? 0) - (b.id ?? 0)
+	);
+	const byId = new Map(sorted.map((s) => [s.id, []]));
+	const orphan = [];
+	for (const q of questions || []) {
+		const sid = q.section ?? q.section_id ?? null;
+		if (sid != null && byId.has(sid)) byId.get(sid).push(q);
+		else orphan.push(q);
+	}
+	const groups = sorted.map((section) => ({
+		section,
+		questions: byId.get(section.id) || []
+	}));
+	if (orphan.length) {
+		groups.push({ section: null, questions: orphan });
+	}
+	return groups.filter((g) => g.questions.length > 0);
+}
+
+export function canUseSectionQuestionLayout(sections) {
+	return Array.isArray(sections) && sections.length >= 2;
+}
+
 export function buildAnswerRecords(questions) {
 	return questions.map((q) => ({
 		id: q.id,

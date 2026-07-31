@@ -10,6 +10,8 @@ import QuestionCard from '../components/quiz/QuestionCard';
 import FlashcardAttempt from '../components/quiz/FlashcardAttempt';
 import QuizResultReview from '../components/quiz/QuizResultReview';
 import AttemptStatusPanel from '../components/quiz/AttemptStatusPanel';
+import QuizQuestionListLayout from '../components/quiz/QuizQuestionListLayout';
+import { useQuestionDisplayLayout } from '../components/quiz/useQuestionDisplayLayout';
 import {
 	answersById,
 	buildAnswerRecords,
@@ -48,6 +50,7 @@ export default function QuizAttempt() {
 
 	const answersMap = useMemo(() => answersById(answers), [answers]);
 	const answeredCount = useMemo(() => countAnswered(answers), [answers]);
+	const [questionLayout, setQuestionLayout] = useQuestionDisplayLayout();
 
 	const handleAnswerChange = useCallback((qid, field, value) => {
 		setAnswers((prev) => prev.map((a) => (a.id === qid ? { ...a, [field]: value } : a)));
@@ -176,6 +179,7 @@ export default function QuizAttempt() {
 					{quizResults ? (
 						<QuizResultReview
 							questions={questions}
+							sections={quizData.sections || []}
 							submittedAnswers={submittedAnswers}
 							score={score}
 							accuracy={accuracy}
@@ -195,8 +199,12 @@ export default function QuizAttempt() {
 							answeredCount={answeredCount}
 						/>
 					) : (
-						<div className="space-y-4">
-							{questions.map((question) => (
+						<QuizQuestionListLayout
+							questions={questions}
+							sections={quizData.sections || []}
+							layout={questionLayout}
+							onLayoutChange={setQuestionLayout}
+							renderQuestion={(question) => (
 								<QuestionCard
 									key={question.id}
 									question={question}
@@ -204,21 +212,23 @@ export default function QuizAttempt() {
 									handleAnswerChange={handleAnswerChange}
 									handleIdentificationAnswerChange={handleIdentificationAnswerChange}
 								/>
-							))}
-							<div className="border-line space-y-2 border-t pt-4">
-								<p className="text-muted text-center text-xs">
-									Answered {answeredCount} of {questions.length}
-								</p>
-								<Button
-									className="w-full"
-									loading={submitting}
-									disabled={questions.length === 0}
-									onClick={submitAnswers}
-								>
-									Submit quiz
-								</Button>
-							</div>
-						</div>
+							)}
+							footer={
+								<div className="border-line space-y-2 border-t pt-4">
+									<p className="text-muted text-center text-xs">
+										Answered {answeredCount} of {questions.length}
+									</p>
+									<Button
+										className="w-full"
+										loading={submitting}
+										disabled={questions.length === 0}
+										onClick={submitAnswers}
+									>
+										Submit quiz
+									</Button>
+								</div>
+							}
+						/>
 					)}
 				</div>
 

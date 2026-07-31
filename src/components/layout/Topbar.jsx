@@ -12,7 +12,7 @@ export function Topbar() {
 	const { toggleSidebar, openPalette } = useUIStore();
 
 	return (
-		<header className="border-line bg-surface/80 sticky top-0 z-30 flex h-16 items-center gap-2 border-b px-4 backdrop-blur">
+		<header className="border-line bg-surface/80 z-30 flex h-16 shrink-0 items-center gap-2 border-b px-4 backdrop-blur">
 			<Button
 				variant="ghost"
 				size="icon"

@@ -1,6 +1,10 @@
 /* MathLive field themed to Zenith semantic tokens. */
 .math-field-input {
 	display: block;
+	/* MathLive's shadow-DOM internals are absolutely positioned; without a
+	   containing block here they resolve against the page and stretch the
+	   document, adding a second scrollbar next to the app's scroll pane. */
+	position: relative;
 	width: 100%;
 	min-height: 2.5rem;
 	padding: 0.4rem 0.65rem;

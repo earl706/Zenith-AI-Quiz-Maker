@@ -6,7 +6,8 @@ export default function IdentificationAnswerInput({
 	handleIdentificationAnswerChange,
 	question,
 	onEnter,
-	autoFocus = false
+	autoFocus = false,
+	disabled = false
 }) {
 	const isMath = question.question_type === 'IDE-COM';
 	const questionImage = resolveQuizImageSrc(question.question_image) || question.question_image;
@@ -33,6 +34,7 @@ export default function IdentificationAnswerInput({
 					onChange={(latex) => handleIdentificationAnswerChange(answer.id, latex)}
 					onEnter={onEnter}
 					autoFocus={autoFocus}
+					disabled={disabled}
 					placeholder="Type your answer (e.g. x^2)"
 					aria-label="Mathematical answer"
 					className="w-full"
@@ -44,6 +46,7 @@ export default function IdentificationAnswerInput({
 					onChange={(event) => handleIdentificationAnswerChange(answer.id, event.target.value)}
 					onKeyDown={handleKeyDown}
 					autoFocus={autoFocus}
+					disabled={disabled}
 					placeholder="Enter your answer"
 					className="border-line bg-surface-2 text-fg focus:border-primary w-full cursor-text rounded-md border px-3 py-2 text-sm font-medium transition focus:outline-none"
 				/>

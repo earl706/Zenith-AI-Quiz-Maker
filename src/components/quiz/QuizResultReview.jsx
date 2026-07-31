@@ -1,11 +1,13 @@
 import { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Check, List, RotateCcw, X } from 'lucide-react';
+import { BookOpen, Check, List, RotateCcw, X } from 'lucide-react';
 
 import { cn, formatDurationSeconds } from '../../lib/format';
 import { Badge, Button, Card, CardBody } from '../ui';
 import MathRenderer from './MathRenderer';
 import { getChoiceData, isIdentification, isMathematical } from './quizHelpers';
+import QuizQuestionListLayout from './QuizQuestionListLayout';
+import { useQuestionDisplayLayout } from './useQuestionDisplayLayout';
 
 function AnswerText({ value, mathematical, displayMode = false, className }) {
 	const text = String(value ?? '').trim();
@@ -125,6 +127,37 @@ function ChoiceResult({ choices, submitted, math }) {
 	);
 }
 
+function TeachingContent({ question }) {
+	const explanation = String(question?.explanation || '').trim();
+	const workedSolution = String(question?.worked_solution || '').trim();
+	const citation = String(question?.source_citation || '').trim();
+	if (!explanation && !workedSolution && !citation) return null;
+
+	return (
+		<div className="border-primary/20 bg-primary/5 space-y-3 rounded-md border p-4 text-left">
+			<p className="text-primary flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase">
+				<BookOpen size={14} aria-hidden />
+				Study notes
+			</p>
+			{explanation && (
+				<div>
+					<p className="text-muted mb-1 text-[0.7rem] font-semibold uppercase">Explanation</p>
+					<p className="text-fg text-sm leading-relaxed whitespace-pre-wrap">{explanation}</p>
+				</div>
+			)}
+			{workedSolution && (
+				<div>
+					<p className="text-muted mb-1 text-[0.7rem] font-semibold uppercase">Worked solution</p>
+					<p className="text-fg text-sm leading-relaxed whitespace-pre-wrap">{workedSolution}</p>
+				</div>
+			)}
+			{citation && (
+				<p className="text-muted border-line border-t pt-2 text-xs">Source: {citation}</p>
+			)}
+		</div>
+	);
+}
+
 function ResultQuestionCard({ question, submitted, index }) {
 	const correct = submitted?.correctAnswer === submitted?.userAnswer;
 	const math = isMathematical(question.question_type);
@@ -164,6 +197,7 @@ function ResultQuestionCard({ question, submitted, index }) {
 				) : (
 					<ChoiceResult choices={question.choices} submitted={submitted} math={math} />
 				)}
+				<TeachingContent question={question} />
 			</CardBody>
 		</Card>
 	);
@@ -171,6 +205,7 @@ function ResultQuestionCard({ question, submitted, index }) {
 
 export default function QuizResultReview({
 	questions = [],
+	sections = [],
 	submittedAnswers = [],
 	score,
 	accuracy,
@@ -179,6 +214,8 @@ export default function QuizResultReview({
 	onRetake,
 	onBackToList
 }) {
+	const [questionLayout, setQuestionLayout] = useQuestionDisplayLayout();
+
 	const reviewItems = useMemo(
 		() =>
 			questions.map((question, index) => ({
@@ -188,6 +225,14 @@ export default function QuizResultReview({
 			})),
 		[questions, submittedAnswers]
 	);
+
+	const submittedByQuestionId = useMemo(() => {
+		const map = new Map();
+		reviewItems.forEach(({ question, submitted }) => {
+			if (question?.id != null) map.set(question.id, submitted);
+		});
+		return map;
+	}, [reviewItems]);
 
 	const correctCount = useMemo(
 		() => reviewItems.filter((item) => item.correct).length,
@@ -216,16 +261,27 @@ export default function QuizResultReview({
 					<p className="text-muted text-sm">No questions to review.</p>
 				</Card>
 			) : (
-				<div className="space-y-3">
-					{reviewItems.map(({ question, submitted }, index) => (
-						<ResultQuestionCard
-							key={question.id ?? index}
-							question={question}
-							submitted={submitted}
-							index={index}
-						/>
-					))}
-				</div>
+				<QuizQuestionListLayout
+					questions={questions}
+					sections={sections}
+					layout={questionLayout}
+					onLayoutChange={setQuestionLayout}
+					listClassName="space-y-3"
+					renderQuestion={(question, index) => {
+						const globalIndex = questions.findIndex((q) => q.id === question.id);
+						const resolvedIndex = globalIndex >= 0 ? globalIndex : index;
+						return (
+							<ResultQuestionCard
+								key={question.id ?? resolvedIndex}
+								question={question}
+								submitted={
+									submittedByQuestionId.get(question.id) ?? submittedAnswers[resolvedIndex]
+								}
+								index={resolvedIndex}
+							/>
+						);
+					}}
+				/>
 			)}
 
 			<div className="flex flex-col gap-2 sm:flex-row sm:justify-center">

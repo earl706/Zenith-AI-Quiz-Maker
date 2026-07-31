@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
 	Check,
@@ -19,9 +19,30 @@ import { resolveQuizImageSrc } from '../lib/quizImages';
 import { invalidateQuizQueries } from '../lib/resources';
 import { toast } from '../stores/toastStore';
 import { PageHeader } from '../components/layout/PageHeader';
-import { Badge, Button, Card, CardBody, CardHeader, Input, Modal, Select } from '../components/ui';
+import {
+	Badge,
+	Button,
+	Card,
+	CardBody,
+	CardHeader,
+	Input,
+	Modal,
+	Select,
+	Textarea
+} from '../components/ui';
 import MathInput from '../components/quiz/MathInput';
-import { createSection, questionsGroupedBySection } from '../components/quiz/quizHelpers';
+import {
+	canUseSectionQuestionLayout,
+	createSection,
+	questionsGroupedBySection
+} from '../components/quiz/quizHelpers';
+import {
+	QUESTION_LAYOUT_SECTION,
+	useQuestionDisplayLayout,
+	useSectionPageIndex
+} from '../components/quiz/useQuestionDisplayLayout';
+import QuestionDisplayLayoutToggle from '../components/quiz/QuestionDisplayLayoutToggle';
+import SectionQuestionNavigator from '../components/quiz/SectionQuestionNavigator';
 import {
 	QUIZ_TAG_COLORS,
 	ToggleChip,
@@ -78,6 +99,9 @@ function getDefaultQuestion(id, randomChoices = false, sectionKey = null) {
 		question_image: null,
 		question_image_preview: null,
 		question_image_url: '',
+		explanation: '',
+		workedSolution: '',
+		sourceCitation: '',
 		sectionKey
 	};
 }
@@ -152,6 +176,24 @@ export default function CreateQuizPage() {
 	const reviewing = aiProposal.isReviewing;
 	const authoringQuestions = reviewing ? aiProposal.displayQuestions || [] : questions;
 	const authoringSections = reviewing ? aiProposal.displaySections || [] : sections;
+	const [questionLayout, setQuestionLayout] = useQuestionDisplayLayout();
+
+	const sectionGroups = useMemo(
+		() => questionsGroupedBySection(authoringQuestions, authoringSections),
+		[authoringQuestions, authoringSections]
+	);
+	const sectionLayoutAvailable = canUseSectionQuestionLayout(authoringSections);
+	const effectiveQuestionLayout =
+		questionLayout === QUESTION_LAYOUT_SECTION && sectionLayoutAvailable
+			? QUESTION_LAYOUT_SECTION
+			: 'scroll';
+	const [sectionPage, setSectionPage, setActiveSectionKey] = useSectionPageIndex(sectionGroups);
+	const visibleSectionGroups =
+		effectiveQuestionLayout === QUESTION_LAYOUT_SECTION
+			? sectionGroups[sectionPage]
+				? [sectionGroups[sectionPage]]
+				: []
+			: sectionGroups;
 
 	const openImagePreview = (src, title = 'Image preview') => {
 		if (!src) return;
@@ -217,6 +259,9 @@ export default function CreateQuizPage() {
 					question_image: null,
 					question_image_preview: resolveQuizImageSrc(qUrl) || qUrl || null,
 					question_image_url: qUrl,
+					explanation: q.explanation || '',
+					workedSolution: q.worked_solution || '',
+					sourceCitation: q.source_citation || '',
 					sectionKey:
 						sectionIndex != null && nextSections[sectionIndex]
 							? nextSections[sectionIndex].clientKey
@@ -339,6 +384,9 @@ export default function CreateQuizPage() {
 						question_image: null,
 						question_image_preview: null,
 						question_image_url: '',
+						explanation: q.explanation || '',
+						workedSolution: q.workedSolution || q.worked_solution || '',
+						sourceCitation: q.sourceCitation || q.source_citation || '',
 						sectionKey: null
 					};
 				});
@@ -450,6 +498,7 @@ export default function CreateQuizPage() {
 			}
 			return [...prev, next];
 		});
+		setActiveSectionKey(next.clientKey);
 	};
 
 	const updateSectionTitle = (clientKey, title) => {
@@ -623,6 +672,9 @@ export default function CreateQuizPage() {
 				formData.append(`questions[${qi}][randomChoices]`, question.randomChoices);
 				formData.append(`questions[${qi}][identification]`, question.identification);
 				formData.append(`questions[${qi}][mathematical]`, question.mathematical);
+				formData.append(`questions[${qi}][explanation]`, question.explanation || '');
+				formData.append(`questions[${qi}][worked_solution]`, question.workedSolution || '');
+				formData.append(`questions[${qi}][source_citation]`, question.sourceCitation || '');
 				const choiceUrls = question.choiceImageUrls || [];
 				const hasChoiceImages =
 					!!question.hasChoiceImages ||
@@ -944,298 +996,345 @@ export default function CreateQuizPage() {
 					{authoringSections.length > 0 && (
 						<p className="text-muted text-xs">Questions must belong to a section.</p>
 					)}
+					{sectionLayoutAvailable && (
+						<QuestionDisplayLayoutToggle
+							layout={questionLayout}
+							onLayoutChange={setQuestionLayout}
+							className="ml-auto"
+						/>
+					)}
 				</div>
 
-				{questionsGroupedBySection(authoringQuestions, authoringSections).map(
-					({ section, questions: groupQuestions }) => (
-						<div key={section?.clientKey || 'ungrouped'} className="space-y-3">
-							{section && (
-								<div
-									className={cn(
-										'border-line bg-surface-2 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2',
-										reviewCardClassName(aiProposal.metaFor(section.clientKey)),
-										section._reviewKind === 'removed' && 'line-through opacity-60'
-									)}
-								>
-									<Input
-										value={section.title}
-										onChange={(e) => updateSectionTitle(section.clientKey, e.target.value)}
-										placeholder="Section title"
-										className="min-w-[10rem] flex-1 py-1.5"
-										disabled={reviewing}
+				{effectiveQuestionLayout === QUESTION_LAYOUT_SECTION && sectionLayoutAvailable && (
+					<SectionQuestionNavigator
+						groups={sectionGroups}
+						sectionPage={sectionPage}
+						onSectionPageChange={setSectionPage}
+					/>
+				)}
+
+				{visibleSectionGroups.map(({ section, questions: groupQuestions }) => (
+					<div key={section?.clientKey || 'ungrouped'} className="space-y-3">
+						{section && (
+							<div
+								className={cn(
+									'border-line bg-surface-2 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2',
+									reviewCardClassName(aiProposal.metaFor(section.clientKey)),
+									section._reviewKind === 'removed' && 'line-through opacity-60'
+								)}
+							>
+								<Input
+									value={section.title}
+									onChange={(e) => updateSectionTitle(section.clientKey, e.target.value)}
+									placeholder="Section title"
+									className="min-w-[10rem] flex-1 py-1.5"
+									disabled={reviewing}
+								/>
+								{reviewing ? (
+									<QuizAiChangeControls
+										meta={aiProposal.metaFor(section.clientKey)}
+										onAccept={() => aiProposal.accept(String(section.clientKey))}
+										onReject={() => aiProposal.reject(String(section.clientKey))}
 									/>
-									{reviewing ? (
-										<QuizAiChangeControls
-											meta={aiProposal.metaFor(section.clientKey)}
-											onAccept={() => aiProposal.accept(String(section.clientKey))}
-											onReject={() => aiProposal.reject(String(section.clientKey))}
-										/>
-									) : (
-										<>
-											<Button
-												type="button"
-												variant="ghost"
-												size="sm"
-												onClick={() => moveSection(section.clientKey, -1)}
-											>
-												Up
-											</Button>
-											<Button
-												type="button"
-												variant="ghost"
-												size="sm"
-												onClick={() => moveSection(section.clientKey, 1)}
-											>
-												Down
-											</Button>
-											<Button
-												type="button"
-												variant="ghost"
-												size="icon"
-												onClick={() => removeSection(section.clientKey)}
-												aria-label="Remove section"
-											>
-												<X size={15} />
-											</Button>
-										</>
-									)}
-								</div>
-							)}
-							{groupQuestions.map((question) => {
-								const index = authoringQuestions.findIndex((q) => q.id === question.id);
-								const reviewMeta = aiProposal.metaFor(question.id);
-								const isRemoved = question._reviewKind === 'removed';
-								return (
-									<Card
-										key={question.id}
-										className={cn('overflow-hidden', reviewCardClassName(reviewMeta))}
-									>
-										<CardHeader
-											className="px-4 py-3"
-											title={`Q${index + 1}`}
-											action={
-												<div className="flex items-center gap-1.5">
-													{reviewing ? (
-														<QuizAiChangeControls
-															meta={reviewMeta}
-															onAccept={() => aiProposal.accept(String(question.id))}
-															onReject={() => aiProposal.reject(String(question.id))}
-														/>
-													) : (
-														<>
-															<ToggleChip
-																active={question.mathematical}
-																onClick={() =>
-																	handleInputChange(
-																		question.id,
-																		'mathematical',
-																		!question.mathematical
-																	)
-																}
-															>
-																Math
-															</ToggleChip>
-															<ToggleChip
-																active={question.identification}
-																onClick={() =>
-																	handleInputChange(
-																		question.id,
-																		'identification',
-																		!question.identification
-																	)
-																}
-															>
-																ID
-															</ToggleChip>
-															{!question.identification && !question.mathematical && (
-																<ToggleChip
-																	active={question.showChoiceImages}
-																	onClick={() => toggleChoiceImages(question.id)}
-																>
-																	Images
-																</ToggleChip>
-															)}
-															<Button
-																variant="ghost"
-																size="icon"
-																className="cursor-pointer"
-																aria-label={`Remove question ${index + 1}`}
-																onClick={() => removeQuestion(question.id)}
-															>
-																<X size={15} />
-															</Button>
-														</>
-													)}
-												</div>
-											}
-										/>
-										<CardBody
-											className={cn('space-y-3 px-4 pb-4', isRemoved && 'pointer-events-none')}
+								) : (
+									<>
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											onClick={() => moveSection(section.clientKey, -1)}
 										>
-											{question._priorTitle && question._reviewKind === 'modified' && (
-												<p className="text-muted text-[0.65rem]">Was: {question._priorTitle}</p>
-											)}
-											<Input
-												value={question.title}
-												onChange={(e) => handleInputChange(question.id, 'title', e.target.value)}
-												placeholder="Question text"
-												className={cn('py-1.5', isRemoved && 'line-through')}
-												disabled={reviewing}
-											/>
-
-											{!isRemoved && (
-												<>
-													<ImageDropzone
-														preview={question.question_image_preview}
-														compact
-														label="Question image"
-														onPreview={openImagePreview}
-														urlValue={question.question_image_url || ''}
-														onUrlChange={(url) => setQuestionImageUrl(question.id, url)}
-														onClear={() =>
-															setQuestions((qs) =>
-																qs.map((q) =>
-																	q.id === question.id
-																		? {
-																				...q,
-																				question_image: null,
-																				question_image_preview: null,
-																				question_image_url: ''
-																			}
-																		: q
-																)
-															)
-														}
-														onChange={(e) => handleQuestionImageUpload(question.id, e)}
+											Up
+										</Button>
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											onClick={() => moveSection(section.clientKey, 1)}
+										>
+											Down
+										</Button>
+										<Button
+											type="button"
+											variant="ghost"
+											size="icon"
+											onClick={() => removeSection(section.clientKey)}
+											aria-label="Remove section"
+										>
+											<X size={15} />
+										</Button>
+									</>
+								)}
+							</div>
+						)}
+						{groupQuestions.map((question) => {
+							const index = authoringQuestions.findIndex((q) => q.id === question.id);
+							const reviewMeta = aiProposal.metaFor(question.id);
+							const isRemoved = question._reviewKind === 'removed';
+							return (
+								<Card
+									key={question.id}
+									className={cn('overflow-hidden', reviewCardClassName(reviewMeta))}
+								>
+									<CardHeader
+										className="px-4 py-3"
+										title={`Q${index + 1}`}
+										action={
+											<div className="flex items-center gap-1.5">
+												{reviewing ? (
+													<QuizAiChangeControls
+														meta={reviewMeta}
+														onAccept={() => aiProposal.accept(String(question.id))}
+														onReject={() => aiProposal.reject(String(question.id))}
 													/>
+												) : (
+													<>
+														<ToggleChip
+															active={question.mathematical}
+															onClick={() =>
+																handleInputChange(
+																	question.id,
+																	'mathematical',
+																	!question.mathematical
+																)
+															}
+														>
+															Math
+														</ToggleChip>
+														<ToggleChip
+															active={question.identification}
+															onClick={() =>
+																handleInputChange(
+																	question.id,
+																	'identification',
+																	!question.identification
+																)
+															}
+														>
+															ID
+														</ToggleChip>
+														{!question.identification && !question.mathematical && (
+															<ToggleChip
+																active={question.showChoiceImages}
+																onClick={() => toggleChoiceImages(question.id)}
+															>
+																Images
+															</ToggleChip>
+														)}
+														<Button
+															variant="ghost"
+															size="icon"
+															className="cursor-pointer"
+															aria-label={`Remove question ${index + 1}`}
+															onClick={() => removeQuestion(question.id)}
+														>
+															<X size={15} />
+														</Button>
+													</>
+												)}
+											</div>
+										}
+									/>
+									<CardBody
+										className={cn('space-y-3 px-4 pb-4', isRemoved && 'pointer-events-none')}
+									>
+										{question._priorTitle && question._reviewKind === 'modified' && (
+											<p className="text-muted text-[0.65rem]">Was: {question._priorTitle}</p>
+										)}
+										<Input
+											value={question.title}
+											onChange={(e) => handleInputChange(question.id, 'title', e.target.value)}
+											placeholder="Question text"
+											className={cn('py-1.5', isRemoved && 'line-through')}
+											disabled={reviewing}
+										/>
 
-													<div className="space-y-1.5">
-														{question.mathematical ? (
-															<MathInput
-																handleChoicesChange={handleChoicesChange}
-																handleInputChange={handleInputChange}
-																question={question}
-																removeChoice={removeChoice}
+										{!isRemoved && (
+											<>
+												<ImageDropzone
+													preview={question.question_image_preview}
+													compact
+													aspectRatio="3/2"
+													label="Question image"
+													onPreview={openImagePreview}
+													urlValue={question.question_image_url || ''}
+													onUrlChange={(url) => setQuestionImageUrl(question.id, url)}
+													onClear={() =>
+														setQuestions((qs) =>
+															qs.map((q) =>
+																q.id === question.id
+																	? {
+																			...q,
+																			question_image: null,
+																			question_image_preview: null,
+																			question_image_url: ''
+																		}
+																	: q
+															)
+														)
+													}
+													onChange={(e) => handleQuestionImageUpload(question.id, e)}
+												/>
+
+												<div className="space-y-1.5">
+													{question.mathematical ? (
+														<MathInput
+															handleChoicesChange={handleChoicesChange}
+															handleInputChange={handleInputChange}
+															question={question}
+															removeChoice={removeChoice}
+														/>
+													) : question.identification ? (
+														<div className="flex items-center gap-2">
+															<button
+																type="button"
+																aria-label="Mark as correct"
+																className={cn(
+																	'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition',
+																	question.correctAnswerIndex === 0
+																		? 'border-primary bg-primary'
+																		: 'border-line bg-surface'
+																)}
+																onClick={() =>
+																	handleInputChange(question.id, 'correctAnswerIndex', 0)
+																}
+															>
+																{question.correctAnswerIndex === 0 && (
+																	<Check size={10} className="text-primary-fg" />
+																)}
+															</button>
+															<input
+																type="text"
+																value={question.choices[0]}
+																onChange={(e) =>
+																	handleChoicesChange(question.id, 0, e.target.value)
+																}
+																placeholder="Answer"
+																className="border-line bg-surface text-fg focus:border-primary flex-1 rounded-md border px-2.5 py-1.5 text-sm focus:outline-none"
+																required
+																disabled={reviewing}
 															/>
-														) : question.identification ? (
-															<div className="flex items-center gap-2">
+														</div>
+													) : (
+														question.choices.map((choice, ci) => (
+															<div className="flex items-center gap-1.5" key={ci}>
 																<button
 																	type="button"
-																	aria-label="Mark as correct"
+																	aria-label={`Mark choice ${ci + 1} correct`}
 																	className={cn(
-																		'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition',
-																		question.correctAnswerIndex === 0
+																		'flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 transition',
+																		question.correctAnswerIndex === ci
 																			? 'border-primary bg-primary'
 																			: 'border-line bg-surface'
 																	)}
 																	onClick={() =>
-																		handleInputChange(question.id, 'correctAnswerIndex', 0)
+																		handleInputChange(question.id, 'correctAnswerIndex', ci)
 																	}
+																	disabled={reviewing}
 																>
-																	{question.correctAnswerIndex === 0 && (
+																	{question.correctAnswerIndex === ci && (
 																		<Check size={10} className="text-primary-fg" />
 																	)}
 																</button>
 																<input
 																	type="text"
-																	value={question.choices[0]}
+																	value={choice}
 																	onChange={(e) =>
-																		handleChoicesChange(question.id, 0, e.target.value)
+																		handleChoicesChange(question.id, ci, e.target.value)
 																	}
-																	placeholder="Answer"
-																	className="border-line bg-surface text-fg focus:border-primary flex-1 rounded-md border px-2.5 py-1.5 text-sm focus:outline-none"
+																	placeholder={`Choice ${ci + 1}`}
+																	className="border-line bg-surface text-fg focus:border-primary min-w-0 flex-1 rounded-md border px-2.5 py-1.5 text-sm focus:outline-none"
 																	required
 																	disabled={reviewing}
 																/>
-															</div>
-														) : (
-															question.choices.map((choice, ci) => (
-																<div className="flex items-center gap-1.5" key={ci}>
-																	<button
-																		type="button"
-																		aria-label={`Mark choice ${ci + 1} correct`}
-																		className={cn(
-																			'flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 transition',
-																			question.correctAnswerIndex === ci
-																				? 'border-primary bg-primary'
-																				: 'border-line bg-surface'
-																		)}
-																		onClick={() =>
-																			handleInputChange(question.id, 'correctAnswerIndex', ci)
-																		}
-																		disabled={reviewing}
-																	>
-																		{question.correctAnswerIndex === ci && (
-																			<Check size={10} className="text-primary-fg" />
-																		)}
-																	</button>
-																	<input
-																		type="text"
-																		value={choice}
-																		onChange={(e) =>
-																			handleChoicesChange(question.id, ci, e.target.value)
-																		}
-																		placeholder={`Choice ${ci + 1}`}
-																		className="border-line bg-surface text-fg focus:border-primary min-w-0 flex-1 rounded-md border px-2.5 py-1.5 text-sm focus:outline-none"
-																		required
-																		disabled={reviewing}
+																{question.showChoiceImages && (
+																	<ChoiceImageControl
+																		preview={question.choiceImagePreviews[ci]}
+																		urlValue={(question.choiceImageUrls || [])[ci] || ''}
+																		onUrlChange={(url) => setChoiceImageUrl(question.id, ci, url)}
+																		onPreview={openImagePreview}
+																		onChange={(e) => handleChoiceImageUpload(question.id, ci, e)}
+																		onClear={() => removeChoiceImage(question.id, ci)}
 																	/>
-																	{question.showChoiceImages && (
-																		<ChoiceImageControl
-																			preview={question.choiceImagePreviews[ci]}
-																			urlValue={(question.choiceImageUrls || [])[ci] || ''}
-																			onUrlChange={(url) => setChoiceImageUrl(question.id, ci, url)}
-																			onPreview={openImagePreview}
-																			onChange={(e) => handleChoiceImageUpload(question.id, ci, e)}
-																			onClear={() => removeChoiceImage(question.id, ci)}
-																		/>
-																	)}
-																	{!reviewing && (
-																		<Button
-																			variant="ghost"
-																			size="icon"
-																			className="h-7 w-7 shrink-0 cursor-pointer"
-																			aria-label={`Remove choice ${ci + 1}`}
-																			onClick={() => removeChoice(question.id, ci)}
-																		>
-																			<X size={13} className="text-danger" />
-																		</Button>
-																	)}
-																</div>
-															))
-														)}
-													</div>
-
-													{!question.identification && !reviewing && (
-														<Button
-															variant="ghost"
-															size="sm"
-															className="w-full"
-															onClick={() => addChoice(question.id)}
-														>
-															<Plus size={13} /> Add choice
-														</Button>
+																)}
+																{!reviewing && (
+																	<Button
+																		variant="ghost"
+																		size="icon"
+																		className="h-7 w-7 shrink-0 cursor-pointer"
+																		aria-label={`Remove choice ${ci + 1}`}
+																		onClick={() => removeChoice(question.id, ci)}
+																	>
+																		<X size={13} className="text-danger" />
+																	</Button>
+																)}
+															</div>
+														))
 													)}
-												</>
-											)}
-										</CardBody>
-									</Card>
-								);
-							})}
-							{section && !reviewing && (
-								<Button
-									type="button"
-									variant="ghost"
-									size="sm"
-									className="w-full"
-									onClick={() => addQuestion(section.clientKey)}
-								>
-									<Plus size={14} /> Add question to section
-								</Button>
-							)}
-						</div>
-					)
-				)}
+												</div>
+
+												{!question.identification && !reviewing && (
+													<Button
+														variant="ghost"
+														size="sm"
+														className="w-full"
+														onClick={() => addChoice(question.id)}
+													>
+														<Plus size={13} /> Add choice
+													</Button>
+												)}
+												<details className="border-line rounded-md border p-3">
+													<summary className="text-muted cursor-pointer text-xs font-semibold">
+														Teaching content
+													</summary>
+													<div className="mt-3 space-y-3">
+														<Textarea
+															label="Explanation"
+															rows={3}
+															value={question.explanation || ''}
+															onChange={(e) =>
+																handleInputChange(question.id, 'explanation', e.target.value)
+															}
+															disabled={reviewing}
+														/>
+														<Textarea
+															label="Worked solution"
+															rows={5}
+															value={question.workedSolution || ''}
+															onChange={(e) =>
+																handleInputChange(question.id, 'workedSolution', e.target.value)
+															}
+															disabled={reviewing}
+														/>
+														<Input
+															label="Source citation"
+															value={question.sourceCitation || ''}
+															onChange={(e) =>
+																handleInputChange(question.id, 'sourceCitation', e.target.value)
+															}
+															disabled={reviewing}
+														/>
+													</div>
+												</details>
+											</>
+										)}
+									</CardBody>
+								</Card>
+							);
+						})}
+						{section && !reviewing && (
+							<Button
+								type="button"
+								variant="ghost"
+								size="sm"
+								className="w-full"
+								onClick={() => addQuestion(section.clientKey)}
+							>
+								<Plus size={14} /> Add question to section
+							</Button>
+						)}
+					</div>
+				))}
 
 				{authoringSections.length === 0 && !reviewing && (
 					<Button

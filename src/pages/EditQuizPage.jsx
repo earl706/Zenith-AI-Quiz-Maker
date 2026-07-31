@@ -17,7 +17,16 @@ import { isExternalOrStaticImageUrl, resolveQuizImageSrc } from '../lib/quizImag
 import { invalidateQuizQueries } from '../lib/resources';
 import { toast } from '../stores/toastStore';
 import { PageHeader } from '../components/layout/PageHeader';
-import { Button, Card, CardBody, CardHeader, Input, LoadingScreen, Modal } from '../components/ui';
+import {
+	Button,
+	Card,
+	CardBody,
+	CardHeader,
+	Input,
+	LoadingScreen,
+	Modal,
+	Textarea
+} from '../components/ui';
 import MathInput from '../components/quiz/MathInput';
 import {
 	createSection,
@@ -55,6 +64,9 @@ function getDefaultQuestion(id, randomChoices = false, sectionKey = null) {
 		question_image: null,
 		question_image_preview: null,
 		question_image_url: '',
+		explanation: '',
+		workedSolution: '',
+		sourceCitation: '',
 		sectionKey
 	};
 }
@@ -201,6 +213,9 @@ export default function EditQuizPage() {
 							question.question_image ||
 							null,
 						question_image_url: qUrl || '',
+						explanation: question.explanation || '',
+						workedSolution: question.worked_solution || '',
+						sourceCitation: question.source_citation || '',
 						sectionKey: sectionKeyById.get(question.section) || null
 					};
 				});
@@ -580,7 +595,10 @@ export default function EditQuizPage() {
 						correct_answer: choices[correctIndex] || '',
 						correct_answer_index: correctIndex,
 						random_choices: !!question.randomChoices,
-						has_choice_images: hasChoiceImages
+						has_choice_images: hasChoiceImages,
+						explanation: question.explanation || '',
+						worked_solution: question.workedSolution || '',
+						source_citation: question.sourceCitation || ''
 					};
 					if (sections.length > 0 && question.sectionKey) {
 						const sectionIndex = sections.findIndex((s) => s.clientKey === question.sectionKey);
@@ -975,6 +993,39 @@ export default function EditQuizPage() {
 															<Plus size={13} /> Add choice
 														</Button>
 													)}
+													<details className="border-line rounded-md border p-3">
+														<summary className="text-muted cursor-pointer text-xs font-semibold">
+															Teaching content
+														</summary>
+														<div className="mt-3 space-y-3">
+															<Textarea
+																label="Explanation"
+																rows={3}
+																value={question.explanation || ''}
+																onChange={(e) =>
+																	handleInputChange(question.id, 'explanation', e.target.value)
+																}
+																disabled={reviewing}
+															/>
+															<Textarea
+																label="Worked solution"
+																rows={5}
+																value={question.workedSolution || ''}
+																onChange={(e) =>
+																	handleInputChange(question.id, 'workedSolution', e.target.value)
+																}
+																disabled={reviewing}
+															/>
+															<Input
+																label="Source citation"
+																value={question.sourceCitation || ''}
+																onChange={(e) =>
+																	handleInputChange(question.id, 'sourceCitation', e.target.value)
+																}
+																disabled={reviewing}
+															/>
+														</div>
+													</details>
 												</>
 											)}
 										</CardBody>

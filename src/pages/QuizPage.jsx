@@ -25,6 +25,8 @@ import {
 	ProgressRing
 } from '../components/ui';
 import MathRenderer from '../components/quiz/MathRenderer';
+import QuizQuestionListLayout from '../components/quiz/QuizQuestionListLayout';
+import { useQuestionDisplayLayout } from '../components/quiz/useQuestionDisplayLayout';
 import {
 	accuracyTone,
 	attemptScopeLabel,
@@ -63,6 +65,7 @@ export default function QuizPage() {
 	const { id } = useParams();
 	const navigate = useNavigate();
 	const { launchAttempt, attemptModal } = useAttemptLauncher();
+	const [questionLayout, setQuestionLayout] = useQuestionDisplayLayout();
 
 	const { data, isLoading, isError } = useQuery({
 		queryKey: ['quizzes', 'summary', id],
@@ -201,88 +204,98 @@ export default function QuizPage() {
 			)}
 
 			<div className="flex flex-col gap-8 lg:flex-row lg:items-start">
-				<section className="min-w-0 flex-1 space-y-4">
-					<h2 className="text-fg text-lg font-bold tracking-tight">Questions</h2>
+				<section className="min-w-0 flex-1">
+					<h2 className="text-fg mb-4 text-lg font-bold tracking-tight">Questions</h2>
 
 					{questions.length === 0 ? (
 						<Card className="p-8 text-center">
 							<p className="text-muted text-sm">This quiz has no questions yet.</p>
 						</Card>
 					) : (
-						questions.map((question, index) => {
-							const choices = Array.isArray(question.choices) ? question.choices : [];
-							const math = isMathematical(question.question_type);
+						<QuizQuestionListLayout
+							questions={questions}
+							sections={quiz.sections || []}
+							layout={questionLayout}
+							onLayoutChange={setQuestionLayout}
+							listClassName="space-y-4"
+							renderQuestion={(question, index) => {
+								const globalIndex = questions.findIndex((q) => q.id === question.id);
+								const questionNumber = (globalIndex >= 0 ? globalIndex : index) + 1;
+								const choices = Array.isArray(question.choices) ? question.choices : [];
+								const math = isMathematical(question.question_type);
 
-							return (
-								<Card key={question.id ?? index} className="overflow-hidden">
-									<div className="border-line flex items-center justify-between gap-3 border-b px-5 py-3">
-										<span className="text-muted text-xs font-medium tracking-wide uppercase">
-											Question {index + 1}
-										</span>
-										<Badge tone="neutral">{questionTypeLabel(question.question_type)}</Badge>
-									</div>
-									<CardBody className="space-y-4 p-5">
-										{math ? (
-											<div className="text-fg text-center text-base font-semibold">
-												<MathRenderer expression={question.question} displayMode={false} />
-											</div>
-										) : (
-											<p className="text-fg text-center text-base font-semibold">
-												{question.question}
-											</p>
-										)}
+								return (
+									<Card key={question.id ?? index} className="overflow-hidden">
+										<div className="border-line flex items-center justify-between gap-3 border-b px-5 py-3">
+											<span className="text-muted text-xs font-medium tracking-wide uppercase">
+												Question {questionNumber}
+											</span>
+											<Badge tone="neutral">{questionTypeLabel(question.question_type)}</Badge>
+										</div>
+										<CardBody className="space-y-4 p-5">
+											{math ? (
+												<div className="text-fg text-center text-base font-semibold">
+													<MathRenderer expression={question.question} displayMode={false} />
+												</div>
+											) : (
+												<p className="text-fg text-center text-base font-semibold">
+													{question.question}
+												</p>
+											)}
 
-										{question.question_image && (
-											<div className="flex justify-center">
-												<img
-													src={
-														resolveQuizImageSrc(question.question_image) || question.question_image
-													}
-													alt=""
-													className="max-h-40 rounded-md object-cover"
-												/>
-											</div>
-										)}
+											{question.question_image && (
+												<div className="flex justify-center">
+													<img
+														src={
+															resolveQuizImageSrc(question.question_image) ||
+															question.question_image
+														}
+														alt=""
+														className="max-h-40 rounded-md object-cover"
+													/>
+												</div>
+											)}
 
-										{choices.length > 0 && (
-											<div className="flex flex-wrap justify-center gap-2">
-												{choices.map((choice, ci) => {
-													const {
-														text: choiceText,
-														image: choiceImage,
-														id: choiceId
-													} = getChoiceData(choice);
-													if (!choiceText && !choiceImage) return null;
+											{choices.length > 0 && (
+												<div className="flex flex-wrap justify-center gap-2">
+													{choices.map((choice, ci) => {
+														const {
+															text: choiceText,
+															image: choiceImage,
+															id: choiceId
+														} = getChoiceData(choice);
+														if (!choiceText && !choiceImage) return null;
 
-													return (
-														<div
-															key={choiceId ?? ci}
-															className="bg-surface-2 flex max-w-56 min-w-30 flex-col items-center gap-2 rounded-md px-3 py-2.5"
-														>
-															{choiceImage && (
-																<img
-																	src={resolveQuizImageSrc(choiceImage) || choiceImage}
-																	alt=""
-																	className="max-h-20 rounded-md object-cover"
-																/>
-															)}
-															{choiceText &&
-																(math ? (
-																	<MathRenderer expression={choiceText} displayMode={false} />
-																) : (
-																	<span className="text-fg text-center text-sm font-medium">
-																		{choiceText}
-																	</span>
-																))}
-														</div>
-													);
-												})}
-											</div>
-										)}
-									</CardBody>
-								</Card>
-							);
-						})
+														return (
+															<div
+																key={choiceId ?? ci}
+																className="bg-surface-2 flex max-w-56 min-w-30 flex-col items-center gap-2 rounded-md px-3 py-2.5"
+															>
+																{choiceImage && (
+																	<img
+																		src={resolveQuizImageSrc(choiceImage) || choiceImage}
+																		alt=""
+																		className="max-h-20 rounded-md object-cover"
+																	/>
+																)}
+																{choiceText &&
+																	(math ? (
+																		<MathRenderer expression={choiceText} displayMode={false} />
+																	) : (
+																		<span className="text-fg text-center text-sm font-medium">
+																			{choiceText}
+																		</span>
+																	))}
+															</div>
+														);
+													})}
+												</div>
+											)}
+										</CardBody>
+									</Card>
+								);
+							}}
+						/>
 					)}
 				</section>
 

@@ -57,19 +57,23 @@ export function ImageDropzone({
 	onPreview,
 	label,
 	compact = false,
+	/** CSS aspect-ratio, e.g. "3/2" for landscape question images. */
+	aspectRatio = null,
 	urlValue = '',
 	onUrlChange
 }) {
 	const src = resolveQuizImageSrc(preview) || preview;
+	const isLandscape32 = aspectRatio === '3/2';
+	const frameClass = isLandscape32 ? 'aspect-[3/2] w-full max-w-[30rem]' : null;
 
 	if (src) {
 		return (
 			<div className="space-y-1.5">
-				<div className="relative">
+				<div className={cn('relative', frameClass && 'mx-auto max-w-[30rem]')}>
 					<button
 						type="button"
 						onClick={() => onPreview?.(src, label || 'Image preview')}
-						className="block w-full cursor-pointer overflow-hidden rounded-md text-left"
+						className="border-line block w-full cursor-pointer overflow-hidden rounded-md border-[0.1px] text-left"
 						aria-label={`Preview ${label || 'image'}`}
 					>
 						<img
@@ -77,7 +81,7 @@ export function ImageDropzone({
 							alt=""
 							className={cn(
 								'w-full object-cover transition hover:opacity-90',
-								compact ? 'h-16' : 'h-24'
+								frameClass || (compact ? 'h-16' : 'h-24')
 							)}
 						/>
 					</button>
@@ -106,16 +110,21 @@ export function ImageDropzone({
 		);
 	}
 
+	// Empty 3:2 dropzone: ~10% of filled height (30rem × 2/3 → 20rem → 2rem).
+	const emptyFrameClass = isLandscape32
+		? 'mx-auto h-8 w-full max-w-[30rem] flex-row gap-1.5'
+		: cn('w-full', compact ? 'h-12' : 'h-16', compact ? 'gap-0.5' : 'gap-1');
+
 	return (
 		<div className="space-y-1.5">
 			<label
 				className={cn(
-					'border-line hover:border-primary/40 text-muted flex w-full cursor-pointer flex-col items-center justify-center rounded-md border border-dashed text-xs transition',
-					compact ? 'h-12 gap-0.5' : 'h-16 gap-1'
+					'border-line hover:border-primary/40 text-muted flex cursor-pointer items-center justify-center rounded-md border border-dashed text-xs transition',
+					emptyFrameClass
 				)}
 			>
 				<input type="file" accept="image/*" onChange={onChange} className="hidden" />
-				<Plus size={compact ? 14 : 16} />
+				<Plus size={isLandscape32 || compact ? 14 : 16} />
 				<span>{label}</span>
 			</label>
 			{onUrlChange && (

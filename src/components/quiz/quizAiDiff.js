@@ -63,6 +63,9 @@ export function mapAiQuestion(question, index, randomChoices = false) {
 		showChoiceImages: false,
 		question_image: null,
 		question_image_preview: null,
+		explanation: question?.explanation || '',
+		workedSolution: question?.workedSolution ?? question?.worked_solution ?? '',
+		sourceCitation: question?.sourceCitation ?? question?.source_citation ?? '',
 		sectionKey: question?.sectionKey ?? null
 	};
 }
@@ -86,6 +89,9 @@ export function buildQuizSnapshot(questions, sections, meta = {}) {
 			mathematical: !!q.mathematical,
 			identification: !!q.identification,
 			randomChoices: !!q.randomChoices,
+			explanation: q.explanation || '',
+			workedSolution: q.workedSolution || '',
+			sourceCitation: q.sourceCitation || '',
 			sectionKey: q.sectionKey || null
 		}))
 	};
@@ -113,6 +119,9 @@ function questionContentEqual(a, b) {
 		!!a.mathematical === !!b.mathematical &&
 		!!a.identification === !!b.identification &&
 		(a.correctAnswerIndex ?? 0) === (b.correctAnswerIndex ?? 0) &&
+		String(a.explanation || '') === String(b.explanation || '') &&
+		String(a.workedSolution || '') === String(b.workedSolution || '') &&
+		String(a.sourceCitation || '') === String(b.sourceCitation || '') &&
 		String(a.sectionKey || '') === String(b.sectionKey || '') &&
 		choicesEqual(a.choices, b.choices)
 	);

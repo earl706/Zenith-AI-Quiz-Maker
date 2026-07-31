@@ -1,5 +1,8 @@
+import { useState } from 'react';
+
 import IdentificationAnswerInput from './IdentificationAnswerInput';
 import MathRenderer from './MathRenderer';
+import QuestionStudyFeedback from './QuestionStudyFeedback';
 import { resolveQuizImageSrc } from '../../lib/quizImages';
 
 export default function QuestionCard({
@@ -8,16 +11,21 @@ export default function QuestionCard({
 	handleAnswerChange,
 	handleIdentificationAnswerChange
 }) {
+	const [revealed, setRevealed] = useState(false);
 	const answer = answers.find((a) => a.id === question.id);
 	const questionImage = resolveQuizImageSrc(question.question_image) || question.question_image;
+	const hasAnswer = String(answer?.userAnswer ?? '').trim() !== '';
+	const identification = question.question_type === 'IDE' || question.question_type === 'IDE-COM';
 
 	return (
-		<>
-			{question.question_type === 'IDE' || question.question_type === 'IDE-COM' ? (
+		<div className="space-y-3">
+			{identification ? (
 				<IdentificationAnswerInput
 					answer={answer}
 					question={question}
 					handleIdentificationAnswerChange={handleIdentificationAnswerChange}
+					onEnter={() => hasAnswer && setRevealed(true)}
+					disabled={revealed}
 				/>
 			) : (
 				<div className="border-line bg-surface flex w-full flex-col items-center rounded-md border p-6">
@@ -43,7 +51,11 @@ export default function QuestionCard({
 								<button
 									key={choiceId}
 									type="button"
-									onClick={() => handleAnswerChange(question.id, 'userAnswer', choiceText)}
+									disabled={revealed}
+									onClick={() => {
+										handleAnswerChange(question.id, 'userAnswer', choiceText);
+										setRevealed(true);
+									}}
 									className={`w-full cursor-pointer rounded-md p-3 text-center font-semibold transition ${
 										answer.userAnswer === choiceText
 											? 'bg-primary text-primary-fg'
@@ -72,6 +84,17 @@ export default function QuestionCard({
 					</div>
 				</div>
 			)}
-		</>
+			{identification && !revealed && (
+				<button
+					type="button"
+					disabled={!hasAnswer}
+					onClick={() => setRevealed(true)}
+					className="bg-primary text-primary-fg disabled:bg-muted/30 disabled:text-muted w-full rounded-md px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed"
+				>
+					Check answer
+				</button>
+			)}
+			{revealed && <QuestionStudyFeedback question={question} answer={answer} />}
+		</div>
 	);
 }
