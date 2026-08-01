@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { cn } from '../../lib/format';
@@ -8,6 +8,8 @@ import IdentificationAnswerInput from './IdentificationAnswerInput';
 import MathRenderer from './MathRenderer';
 import QuestionStudyFeedback from './QuestionStudyFeedback';
 import { getChoiceData, isIdentification, isMathematical } from './quizHelpers';
+
+const AUTO_ADVANCE_MS = 250;
 
 export default function FlashcardAttempt({
 	questions,
@@ -28,13 +30,33 @@ export default function FlashcardAttempt({
 	const revealed = currentQuestion ? revealedIds.has(currentQuestion.id) : false;
 	const hasAnswer = String(answer?.userAnswer ?? '').trim() !== '';
 
-	const goPrev = () => setIndex((p) => (p - 1 + total) % total);
-	const goNext = () => setIndex((p) => (p + 1) % total);
+	const advanceTimer = useRef(null);
+
+	const cancelAutoAdvance = () => {
+		if (advanceTimer.current) {
+			clearTimeout(advanceTimer.current);
+			advanceTimer.current = null;
+		}
+	};
+
+	useEffect(() => cancelAutoAdvance, []);
+
+	const goTo = (next) => {
+		cancelAutoAdvance();
+		setIndex(next);
+	};
+
+	const goPrev = () => goTo((index - 1 + total) % total);
+	const goNext = () => goTo((index + 1) % total);
 
 	const handleChoiceSelect = (questionId, choiceText) => {
-		if (revealed) return;
 		onAnswerChange(questionId, 'userAnswer', choiceText);
-		setRevealedIds((previous) => new Set(previous).add(questionId));
+		cancelAutoAdvance();
+		if (isLast) return;
+		advanceTimer.current = setTimeout(() => {
+			advanceTimer.current = null;
+			setIndex((p) => Math.min(p + 1, total - 1));
+		}, AUTO_ADVANCE_MS);
 	};
 
 	const handleIdentificationEnter = () => {
@@ -59,7 +81,7 @@ export default function FlashcardAttempt({
 								key={q.id ?? i}
 								type="button"
 								aria-label={`Go to question ${i + 1}`}
-								onClick={() => setIndex(i)}
+								onClick={() => goTo(i)}
 								className={cn(
 									'h-2 w-2 rounded-full transition',
 									i === index
@@ -120,7 +142,6 @@ export default function FlashcardAttempt({
 									<button
 										key={choiceData.id ?? choiceIndex}
 										type="button"
-										disabled={revealed}
 										onClick={() => handleChoiceSelect(currentQuestion.id, choiceData.text)}
 										className={cn(
 											'w-full cursor-pointer rounded-md px-4 py-3 text-center font-semibold transition',
@@ -161,7 +182,9 @@ export default function FlashcardAttempt({
 					Check answer
 				</Button>
 			)}
-			{revealed && <QuestionStudyFeedback question={currentQuestion} answer={answer} />}
+			{isIdentification(currentQuestion.question_type) && revealed && (
+				<QuestionStudyFeedback question={currentQuestion} answer={answer} />
+			)}
 
 			<div className="border-line space-y-2 border-t pt-4">
 				<p className="text-muted text-center text-xs">

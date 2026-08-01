@@ -855,6 +855,7 @@ export default function EditQuizPage() {
 													<ImageDropzone
 														preview={question.question_image_preview}
 														compact
+														aspectRatio="3/2"
 														label="Question image"
 														onPreview={openImagePreview}
 														urlValue={question.question_image_url || ''}
@@ -1189,13 +1190,14 @@ export default function EditQuizPage() {
 				open={!!imagePreview}
 				onClose={closeImagePreview}
 				title={imagePreview?.title || 'Image preview'}
-				size="lg"
+				size="xl"
+				bodyClassName="flex h-[min(70vh,calc(100dvh-8rem))] max-h-[min(70vh,calc(100dvh-8rem))] items-center justify-center overflow-hidden p-3"
 			>
 				{imagePreview?.src && (
 					<img
 						src={imagePreview.src}
-						alt=""
-						className="max-h-[70vh] w-full rounded-md object-contain"
+						alt={imagePreview.title || 'Preview'}
+						className="max-h-full max-w-full rounded-md object-contain"
 					/>
 				)}
 			</Modal>
