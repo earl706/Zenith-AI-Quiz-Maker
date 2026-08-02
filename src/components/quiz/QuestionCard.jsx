@@ -3,17 +3,20 @@ import { useState } from 'react';
 import IdentificationAnswerInput from './IdentificationAnswerInput';
 import MathRenderer from './MathRenderer';
 import QuestionStudyFeedback from './QuestionStudyFeedback';
-import { resolveQuizImageSrc } from '../../lib/quizImages';
+import { resolveQuestionImageSrc, resolveQuizImageSrc } from '../../lib/quizImages';
+import { getChoiceData } from './quizHelpers';
 
 export default function QuestionCard({
 	question,
 	answers,
 	handleAnswerChange,
-	handleIdentificationAnswerChange
+	handleIdentificationAnswerChange,
+	answerSuggestionsEnabled = false,
+	suggestionCorpus = []
 }) {
 	const [revealed, setRevealed] = useState(false);
 	const answer = answers.find((a) => a.id === question.id);
-	const questionImage = resolveQuizImageSrc(question.question_image) || question.question_image;
+	const questionImage = resolveQuestionImageSrc(question);
 	const hasAnswer = String(answer?.userAnswer ?? '').trim() !== '';
 	const identification = question.question_type === 'IDE' || question.question_type === 'IDE-COM';
 
@@ -26,26 +29,29 @@ export default function QuestionCard({
 					handleIdentificationAnswerChange={handleIdentificationAnswerChange}
 					onEnter={() => hasAnswer && setRevealed(true)}
 					disabled={revealed}
+					answerSuggestionsEnabled={answerSuggestionsEnabled}
+					suggestionCorpus={suggestionCorpus}
 				/>
 			) : (
 				<div className="border-line bg-surface flex w-full flex-col items-center rounded-md border p-6">
 					<p className="text-fg mb-3 text-lg font-semibold">{question.question}</p>
 
 					{questionImage && (
-						<div className="mb-4 flex justify-center">
+						<div className="mb-4 flex w-full justify-center">
 							<img
 								src={questionImage}
 								alt="Question"
-								className="max-h-[200px] rounded-md object-cover"
+								className="h-auto max-h-[200px] w-full max-w-md object-contain"
 							/>
 						</div>
 					)}
 
 					<div className="flex w-full flex-col gap-2">
-						{question.choices.map((choice, index) => {
-							const choiceText = choice.text || choice;
-							const choiceImage = resolveQuizImageSrc(choice.image) || choice.image;
-							const choiceId = choice.id || index;
+						{(question.choices || []).map((choice, index) => {
+							const choiceData = getChoiceData(choice);
+							const choiceText = choiceData.text;
+							const choiceImage = resolveQuizImageSrc(choiceData.image) || choiceData.image;
+							const choiceId = choiceData.id || index;
 
 							return (
 								<button
@@ -67,7 +73,7 @@ export default function QuestionCard({
 											<img
 												src={choiceImage}
 												alt={`Choice ${index + 1}`}
-												className="max-h-[120px] rounded-md object-cover"
+												className="h-auto max-h-[120px] w-full max-w-[12rem] object-contain"
 											/>
 										)}
 										{question.question_type === 'COM' ||

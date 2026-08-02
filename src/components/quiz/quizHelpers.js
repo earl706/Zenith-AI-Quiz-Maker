@@ -77,7 +77,11 @@ export function applyGeneratedSections(quizData, mapQuestion) {
 
 export function getChoiceData(choice) {
 	if (typeof choice === 'object' && choice !== null) {
-		return { text: choice.text || choice, image: choice.image ?? null, id: choice.id };
+		return {
+			text: choice.text || choice,
+			image: choice.image || choice.image_url || null,
+			id: choice.id
+		};
 	}
 	return { text: choice, image: null, id: undefined };
 }
@@ -260,9 +264,27 @@ export function answersById(answers) {
 	return map;
 }
 
-export function buildAttemptQuery({ fullQuiz, sectionIds }) {
-	if (fullQuiz || !sectionIds?.length) return '?full=1';
-	return `?sections=${sectionIds.join(',')}`;
+export function buildAttemptQuery({
+	fullQuiz,
+	sectionIds,
+	shuffle = false,
+	sample = null,
+	answerSuggestions = true
+}) {
+	const params = new URLSearchParams();
+	if (fullQuiz || !sectionIds?.length) {
+		params.set('full', '1');
+	} else {
+		params.set('sections', sectionIds.join(','));
+	}
+	if (shuffle) params.set('shuffle', '1');
+	const sampleN = Number(sample);
+	if (Number.isFinite(sampleN) && sampleN > 0) {
+		params.set('sample', String(Math.floor(sampleN)));
+	}
+	if (answerSuggestions === false) params.set('suggestions', '0');
+	const qs = params.toString();
+	return qs ? `?${qs}` : '';
 }
 
 export function parseAttemptScopeFromSearch(search) {
@@ -273,8 +295,64 @@ export function parseAttemptScopeFromSearch(search) {
 		.split(',')
 		.map((p) => Number.parseInt(p.trim(), 10))
 		.filter((n) => Number.isFinite(n));
+	const sampleRaw = Number.parseInt(params.get('sample') || '', 10);
+	const suggestionsRaw = (params.get('suggestions') || '').toLowerCase();
 	return {
 		fullQuiz: full || sectionIds.length === 0,
-		sectionIds
+		sectionIds,
+		shuffle: params.get('shuffle') === '1' || params.get('shuffle') === 'true',
+		sample: Number.isFinite(sampleRaw) && sampleRaw > 0 ? sampleRaw : null,
+		answerSuggestions: suggestionsRaw !== '0' && suggestionsRaw !== 'false'
 	};
+}
+
+/** Unique plain-text identification answers (excludes IDE-COM) for autocomplete. */
+export function identificationAnswerCorpus(questions) {
+	const seen = new Set();
+	const corpus = [];
+	for (const question of questions || []) {
+		if (question?.question_type !== 'IDE') continue;
+		const answer = String(question.correct_answer ?? '').trim();
+		if (!answer) continue;
+		const key = answer.toLowerCase();
+		if (seen.has(key)) continue;
+		seen.add(key);
+		corpus.push(answer);
+	}
+	return corpus;
+}
+
+/** Prefix matches ranked by length (closer), then alphabetically. Max 5. */
+export function rankPrefixSuggestions(typed, corpus, max = 5) {
+	const query = String(typed ?? '')
+		.trim()
+		.toLowerCase();
+	if (!query || !corpus?.length) return [];
+	const limit = Math.max(1, Math.min(5, Math.floor(Number(max) || 5)));
+	return [...corpus]
+		.filter((entry) => String(entry).toLowerCase().startsWith(query))
+		.sort((a, b) => {
+			const lengthDelta = a.length - b.length;
+			if (lengthDelta !== 0) return lengthDelta;
+			return a.localeCompare(b, undefined, { sensitivity: 'base' });
+		})
+		.slice(0, limit);
+}
+
+/** Fisher–Yates shuffle (mutates copy). */
+export function shuffleArray(items) {
+	const next = [...(items || [])];
+	for (let i = next.length - 1; i > 0; i -= 1) {
+		const j = Math.floor(Math.random() * (i + 1));
+		[next[i], next[j]] = [next[j], next[i]];
+	}
+	return next;
+}
+
+/** Random sample of up to `count` items without replacement. */
+export function sampleArray(items, count) {
+	const n = Math.max(0, Math.floor(Number(count) || 0));
+	if (!items?.length || n <= 0) return [];
+	if (n >= items.length) return shuffleArray(items);
+	return shuffleArray(items).slice(0, n);
 }

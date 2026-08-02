@@ -1,13 +1,49 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { BookOpen, Check, List, RotateCcw, X } from 'lucide-react';
 
 import { cn, formatDurationSeconds } from '../../lib/format';
+import { resolveQuestionImageSrc, resolveQuizImageSrc } from '../../lib/quizImages';
 import { Badge, Button, Card, CardBody } from '../ui';
 import MathRenderer from './MathRenderer';
 import { getChoiceData, isIdentification, isMathematical } from './quizHelpers';
 import QuizQuestionListLayout from './QuizQuestionListLayout';
 import { useQuestionDisplayLayout } from './useQuestionDisplayLayout';
+
+const RESULT_FILTER_ALL = 'all';
+const RESULT_FILTER_WRONG = 'wrong';
+const RESULT_FILTER_CORRECT = 'correct';
+
+const RESULT_FILTER_OPTIONS = [
+	{ value: RESULT_FILTER_ALL, label: 'All' },
+	{ value: RESULT_FILTER_WRONG, label: 'Only wrong' },
+	{ value: RESULT_FILTER_CORRECT, label: 'Only correct' }
+];
+
+function ResultAnswerFilter({ value, onChange, className }) {
+	return (
+		<div
+			className={cn('border-line bg-surface-2 inline-flex rounded-md border p-0.5', className)}
+			role="group"
+			aria-label="Filter reviewed questions"
+		>
+			{RESULT_FILTER_OPTIONS.map((option) => (
+				<button
+					key={option.value}
+					type="button"
+					onClick={() => onChange(option.value)}
+					className={cn(
+						'cursor-pointer rounded-sm px-2.5 py-1.5 text-xs font-medium transition',
+						value === option.value ? 'bg-surface text-fg shadow-sm' : 'text-muted hover:text-fg'
+					)}
+					aria-pressed={value === option.value}
+				>
+					{option.label}
+				</button>
+			))}
+		</div>
+	);
+}
 
 function AnswerText({ value, mathematical, displayMode = false, className }) {
 	const text = String(value ?? '').trim();
@@ -110,7 +146,7 @@ function ChoiceResult({ choices, submitted, math }) {
 					>
 						{choiceData.image && (
 							<img
-								src={choiceData.image}
+								src={resolveQuizImageSrc(choiceData.image) || choiceData.image}
 								alt=""
 								className="mx-auto mb-2 max-h-20 rounded-md object-cover"
 							/>
@@ -162,6 +198,7 @@ function ResultQuestionCard({ question, submitted, index }) {
 	const correct = submitted?.correctAnswer === submitted?.userAnswer;
 	const math = isMathematical(question.question_type);
 	const identification = isIdentification(question.question_type);
+	const questionImage = resolveQuestionImageSrc(question);
 
 	return (
 		<Card
@@ -182,12 +219,12 @@ function ResultQuestionCard({ question, submitted, index }) {
 					{question.question}
 				</p>
 
-				{question.question_image && (
-					<div className="flex justify-center">
+				{questionImage && (
+					<div className="flex w-full justify-center">
 						<img
-							src={question.question_image}
+							src={questionImage}
 							alt=""
-							className="max-h-44 rounded-md object-cover"
+							className="h-auto max-h-44 w-full max-w-md object-contain"
 						/>
 					</div>
 				)}
@@ -215,6 +252,7 @@ export default function QuizResultReview({
 	onBackToList
 }) {
 	const [questionLayout, setQuestionLayout] = useQuestionDisplayLayout();
+	const [answerFilter, setAnswerFilter] = useState(RESULT_FILTER_ALL);
 
 	const reviewItems = useMemo(
 		() =>
@@ -233,6 +271,23 @@ export default function QuizResultReview({
 		});
 		return map;
 	}, [reviewItems]);
+
+	const correctByQuestionId = useMemo(() => {
+		const map = new Map();
+		reviewItems.forEach(({ question, correct }) => {
+			if (question?.id != null) map.set(question.id, correct);
+		});
+		return map;
+	}, [reviewItems]);
+
+	const filteredQuestions = useMemo(() => {
+		if (answerFilter === RESULT_FILTER_ALL) return questions;
+		return questions.filter((question) => {
+			const correct = correctByQuestionId.get(question.id);
+			if (answerFilter === RESULT_FILTER_CORRECT) return !!correct;
+			return !correct;
+		});
+	}, [answerFilter, questions, correctByQuestionId]);
 
 	const correctCount = useMemo(
 		() => reviewItems.filter((item) => item.correct).length,
@@ -261,27 +316,39 @@ export default function QuizResultReview({
 					<p className="text-muted text-sm">No questions to review.</p>
 				</Card>
 			) : (
-				<QuizQuestionListLayout
-					questions={questions}
-					sections={sections}
-					layout={questionLayout}
-					onLayoutChange={setQuestionLayout}
-					listClassName="space-y-3"
-					renderQuestion={(question, index) => {
-						const globalIndex = questions.findIndex((q) => q.id === question.id);
-						const resolvedIndex = globalIndex >= 0 ? globalIndex : index;
-						return (
-							<ResultQuestionCard
-								key={question.id ?? resolvedIndex}
-								question={question}
-								submitted={
-									submittedByQuestionId.get(question.id) ?? submittedAnswers[resolvedIndex]
-								}
-								index={resolvedIndex}
-							/>
-						);
-					}}
-				/>
+				<>
+					<QuizQuestionListLayout
+						questions={filteredQuestions}
+						sections={sections}
+						layout={questionLayout}
+						onLayoutChange={setQuestionLayout}
+						listClassName="space-y-3"
+						headerExtra={<ResultAnswerFilter value={answerFilter} onChange={setAnswerFilter} />}
+						renderQuestion={(question, index) => {
+							const globalIndex = questions.findIndex((q) => q.id === question.id);
+							const resolvedIndex = globalIndex >= 0 ? globalIndex : index;
+							return (
+								<ResultQuestionCard
+									key={question.id ?? resolvedIndex}
+									question={question}
+									submitted={
+										submittedByQuestionId.get(question.id) ?? submittedAnswers[resolvedIndex]
+									}
+									index={resolvedIndex}
+								/>
+							);
+						}}
+					/>
+					{filteredQuestions.length === 0 && (
+						<Card className="p-8 text-center">
+							<p className="text-muted text-sm">
+								{answerFilter === RESULT_FILTER_CORRECT
+									? 'No correct answers in this attempt.'
+									: 'No incorrect answers in this attempt.'}
+							</p>
+						</Card>
+					)}
+				</>
 			)}
 
 			<div className="flex flex-col gap-2 sm:flex-row sm:justify-center">

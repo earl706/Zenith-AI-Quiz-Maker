@@ -4,6 +4,7 @@ import { Target } from 'lucide-react';
 
 import { api } from '../lib/api';
 import { toast } from '../stores/toastStore';
+import { resolveQuizImageSrc } from '../lib/quizImages';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Badge, Button, LoadingScreen } from '../components/ui';
 import QuestionCard from '../components/quiz/QuestionCard';
@@ -16,7 +17,10 @@ import {
 	answersById,
 	buildAnswerRecords,
 	countAnswered,
-	parseAttemptScopeFromSearch
+	identificationAnswerCorpus,
+	parseAttemptScopeFromSearch,
+	sampleArray,
+	shuffleArray
 } from '../components/quiz/quizHelpers';
 
 function parseQuizPayload(data) {
@@ -50,6 +54,7 @@ export default function QuizAttempt() {
 
 	const answersMap = useMemo(() => answersById(answers), [answers]);
 	const answeredCount = useMemo(() => countAnswered(answers), [answers]);
+	const suggestionCorpus = useMemo(() => identificationAnswerCorpus(questions), [questions]);
 	const [questionLayout, setQuestionLayout] = useQuestionDisplayLayout();
 
 	const handleAnswerChange = useCallback((qid, field, value) => {
@@ -85,9 +90,16 @@ export default function QuizAttempt() {
 				);
 			const { quizData: nextQuiz, questions: nextQuestions } = parseQuizPayload(response.data);
 
+			let scopedQuestions = nextQuestions;
+			if (scope.sample) {
+				scopedQuestions = sampleArray(nextQuestions, scope.sample);
+			} else if (scope.shuffle) {
+				scopedQuestions = shuffleArray(nextQuestions);
+			}
+
 			setQuizData(nextQuiz);
-			setQuestions(nextQuestions);
-			setAnswers(buildAnswerRecords(nextQuestions));
+			setQuestions(scopedQuestions);
+			setAnswers(buildAnswerRecords(scopedQuestions));
 			setSubmittedAnswers([]);
 			setScore(0);
 			setAccuracy(0);
@@ -102,7 +114,7 @@ export default function QuizAttempt() {
 		} finally {
 			setLoading(false);
 		}
-	}, [id, navigate, scope.fullQuiz, scope.sectionIds, startAttempt]);
+	}, [id, navigate, scope.fullQuiz, scope.sectionIds, scope.shuffle, scope.sample, startAttempt]);
 
 	useEffect(() => {
 		// Initial load / scope change — loadQuiz owns loading state.
@@ -144,9 +156,13 @@ export default function QuizAttempt() {
 	if (loading) return <LoadingScreen />;
 
 	const modeLabel = quizData.flashcard_quiz ? 'Flashcard' : 'List';
-	const scopeLabel = scope.fullQuiz
-		? 'All sections'
-		: `${scope.sectionIds.length} section${scope.sectionIds.length === 1 ? '' : 's'}`;
+	const scopeLabel = scope.sample
+		? `${Math.min(scope.sample, questions.length)} random questions`
+		: scope.fullQuiz
+			? scope.shuffle
+				? 'All sections (shuffled)'
+				: 'All sections'
+			: `${scope.sectionIds.length} section${scope.sectionIds.length === 1 ? '' : 's'}`;
 
 	return (
 		<div>
@@ -164,12 +180,18 @@ export default function QuizAttempt() {
 				}
 			/>
 
-			{quizData.quiz_image && (
+			{(resolveQuizImageSrc(quizData.quiz_image) ||
+				resolveQuizImageSrc(quizData.quiz_image_url) ||
+				quizData.quiz_image) && (
 				<div className="mb-5 flex justify-center">
 					<img
-						src={quizData.quiz_image}
+						src={
+							resolveQuizImageSrc(quizData.quiz_image) ||
+							resolveQuizImageSrc(quizData.quiz_image_url) ||
+							quizData.quiz_image
+						}
 						alt=""
-						className="max-h-36 w-auto rounded-md object-cover"
+						className="h-auto max-h-36 w-auto max-w-full object-contain"
 					/>
 				</div>
 			)}
@@ -197,6 +219,8 @@ export default function QuizAttempt() {
 							onSubmit={submitAnswers}
 							submitting={submitting}
 							answeredCount={answeredCount}
+							answerSuggestionsEnabled={scope.answerSuggestions}
+							suggestionCorpus={suggestionCorpus}
 						/>
 					) : (
 						<QuizQuestionListLayout
@@ -211,6 +235,8 @@ export default function QuizAttempt() {
 									answers={answers}
 									handleAnswerChange={handleAnswerChange}
 									handleIdentificationAnswerChange={handleIdentificationAnswerChange}
+									answerSuggestionsEnabled={scope.answerSuggestions}
+									suggestionCorpus={suggestionCorpus}
 								/>
 							)}
 							footer={

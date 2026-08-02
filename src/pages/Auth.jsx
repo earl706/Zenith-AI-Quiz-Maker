@@ -4,6 +4,7 @@ import { BookOpen } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../stores/authStore';
 import { Button, Input } from '../components/ui';
+import PinInput from '../components/auth/PinInput';
 
 export function AuthShell({ children }) {
 	return (
@@ -69,18 +70,33 @@ function MfaForm() {
 	const [useRecovery, setUseRecovery] = useState(false);
 	const [loading, setLoading] = useState(false);
 
-	const submit = async (e) => {
-		e.preventDefault();
+	const runVerify = async ({ totp, recovery } = {}) => {
+		if (loading) return;
 		setLoading(true);
 		try {
 			await verifyMfa({
-				code: useRecovery ? undefined : code,
-				recoveryCode: useRecovery ? recoveryCode : undefined
+				code: recovery ? undefined : totp,
+				recoveryCode: recovery || undefined
 			});
 			navigate('/', { replace: true });
+		} catch {
+			setCode('');
 		} finally {
 			setLoading(false);
 		}
+	};
+
+	const submit = async (e) => {
+		e.preventDefault();
+		if (useRecovery) {
+			await runVerify({ recovery: recoveryCode });
+		} else if (code.length === 6) {
+			await runVerify({ totp: code });
+		}
+	};
+
+	const handlePinComplete = (nextCode) => {
+		runVerify({ totp: nextCode });
 	};
 
 	return (
@@ -97,24 +113,31 @@ function MfaForm() {
 						required
 					/>
 				) : (
-					<Input
-						label="Authentication code"
-						value={code}
-						onChange={(e) => setCode(e.target.value)}
-						placeholder="123456"
-						inputMode="numeric"
-						autoComplete="one-time-code"
-						required
-					/>
+					<div className="space-y-2">
+						<p className="text-fg text-sm font-medium">Authentication code</p>
+						<PinInput
+							value={code}
+							onChange={setCode}
+							onComplete={handlePinComplete}
+							disabled={loading}
+							error={Boolean(error)}
+						/>
+					</div>
 				)}
 				{error && <p className="bg-danger/10 text-danger rounded-md px-3 py-2 text-sm">{error}</p>}
-				<Button type="submit" className="w-full" loading={loading}>
-					Verify
-				</Button>
+				{useRecovery && (
+					<Button type="submit" className="w-full" loading={loading}>
+						Verify
+					</Button>
+				)}
+				{!useRecovery && loading && <p className="text-muted text-center text-xs">Verifying…</p>}
 				<button
 					type="button"
 					className="text-primary w-full cursor-pointer text-sm"
-					onClick={() => setUseRecovery((v) => !v)}
+					onClick={() => {
+						setUseRecovery((v) => !v);
+						setCode('');
+					}}
 				>
 					{useRecovery ? 'Use authenticator code' : 'Use a recovery code'}
 				</button>
@@ -163,13 +186,14 @@ export function LoginPage() {
 	return (
 		<AuthShell>
 			<h2 className="text-fg text-2xl font-bold">Welcome back</h2>
-			<form onSubmit={submit} className="mt-6 space-y-4">
+			<form onSubmit={submit} className="mt-6 space-y-4" autoComplete="off">
 				<Input
 					label="Email"
 					type="email"
 					value={email}
 					onChange={(e) => setEmail(e.target.value)}
 					placeholder="Email"
+					autoComplete="username"
 					required
 				/>
 				<Input
@@ -178,6 +202,7 @@ export function LoginPage() {
 					value={password}
 					onChange={(e) => setPassword(e.target.value)}
 					placeholder="Password"
+					autoComplete="off"
 					required
 				/>
 				{error && <p className="bg-danger/10 text-danger rounded-md px-3 py-2 text-sm">{error}</p>}

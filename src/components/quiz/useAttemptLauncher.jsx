@@ -5,33 +5,34 @@ import { buildAttemptQuery } from './quizHelpers';
 import SectionAttemptModal from './SectionAttemptModal';
 
 /**
- * Opens SectionAttemptModal when the quiz has sections; otherwise navigates directly.
+ * Always opens a pre-attempt modal (sections when present, suggestion setting always).
  */
 export function useAttemptLauncher() {
 	const navigate = useNavigate();
 	const [target, setTarget] = useState(null);
 
-	const launchAttempt = useCallback(
-		(quiz) => {
-			if (!quiz) return;
-			const id = quiz.uuid || quiz.quiz_id || quiz.id;
-			if (!id) return;
-			const sections = Array.isArray(quiz.sections) ? quiz.sections : [];
-			if (sections.length === 0) {
-				navigate(`/quizzes/attempt/${id}${buildAttemptQuery({ fullQuiz: true })}`);
-				return;
-			}
-			setTarget({ id, title: quiz.quiz_title || 'Quiz', sections });
-		},
-		[navigate]
-	);
+	const launchAttempt = useCallback((quiz) => {
+		if (!quiz) return;
+		const id = quiz.uuid || quiz.quiz_id || quiz.id;
+		if (!id) return;
+		const sections = Array.isArray(quiz.sections) ? quiz.sections : [];
+		setTarget({ id, title: quiz.quiz_title || 'Quiz', sections });
+	}, []);
 
 	const closeModal = useCallback(() => setTarget(null), []);
 
 	const confirmScope = useCallback(
-		({ fullQuiz, sectionIds }) => {
+		({ fullQuiz, sectionIds, shuffle, sample, answerSuggestions }) => {
 			if (!target?.id) return;
-			navigate(`/quizzes/attempt/${target.id}${buildAttemptQuery({ fullQuiz, sectionIds })}`);
+			navigate(
+				`/quizzes/attempt/${target.id}${buildAttemptQuery({
+					fullQuiz,
+					sectionIds,
+					shuffle,
+					sample,
+					answerSuggestions
+				})}`
+			);
 			setTarget(null);
 		},
 		[navigate, target]

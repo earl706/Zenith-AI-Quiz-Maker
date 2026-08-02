@@ -2,14 +2,16 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { cn } from '../../lib/format';
-import { resolveQuizImageSrc } from '../../lib/quizImages';
+import { resolveQuestionImageSrc, resolveQuizImageSrc } from '../../lib/quizImages';
 import { Button, Card, CardBody, LoadingScreen } from '../ui';
 import IdentificationAnswerInput from './IdentificationAnswerInput';
 import MathRenderer from './MathRenderer';
 import QuestionStudyFeedback from './QuestionStudyFeedback';
 import { getChoiceData, isIdentification, isMathematical } from './quizHelpers';
 
-const AUTO_ADVANCE_MS = 250;
+const MC_AUTO_ADVANCE_MS = 250;
+const ID_ENTER_ADVANCE_MS = 2000;
+const ID_CHECK_ADVANCE_MS = 5000;
 
 export default function FlashcardAttempt({
 	questions,
@@ -18,7 +20,9 @@ export default function FlashcardAttempt({
 	onIdentificationChange,
 	onSubmit,
 	submitting,
-	answeredCount
+	answeredCount,
+	answerSuggestionsEnabled = false,
+	suggestionCorpus = []
 }) {
 	const [index, setIndex] = useState(0);
 	const [revealedIds, setRevealedIds] = useState(() => new Set());
@@ -49,6 +53,24 @@ export default function FlashcardAttempt({
 	const goPrev = () => goTo((index - 1 + total) % total);
 	const goNext = () => goTo((index + 1) % total);
 
+	const scheduleAfterReveal = (delayMs) => {
+		cancelAutoAdvance();
+		advanceTimer.current = setTimeout(() => {
+			advanceTimer.current = null;
+			if (isLast) {
+				onSubmit?.();
+				return;
+			}
+			setIndex((previous) => Math.min(previous + 1, total - 1));
+		}, delayMs);
+	};
+
+	const revealIdentification = (delayMs) => {
+		if (!hasAnswer || !currentQuestion) return;
+		setRevealedIds((previous) => new Set(previous).add(currentQuestion.id));
+		scheduleAfterReveal(delayMs);
+	};
+
 	const handleChoiceSelect = (questionId, choiceText) => {
 		onAnswerChange(questionId, 'userAnswer', choiceText);
 		cancelAutoAdvance();
@@ -56,13 +78,7 @@ export default function FlashcardAttempt({
 		advanceTimer.current = setTimeout(() => {
 			advanceTimer.current = null;
 			setIndex((p) => Math.min(p + 1, total - 1));
-		}, AUTO_ADVANCE_MS);
-	};
-
-	const handleIdentificationEnter = () => {
-		if (hasAnswer && currentQuestion) {
-			setRevealedIds((previous) => new Set(previous).add(currentQuestion.id));
-		}
+		}, MC_AUTO_ADVANCE_MS);
 	};
 
 	if (!currentQuestion) return <LoadingScreen />;
@@ -111,9 +127,11 @@ export default function FlashcardAttempt({
 					answer={answer}
 					question={currentQuestion}
 					handleIdentificationAnswerChange={onIdentificationChange}
-					onEnter={handleIdentificationEnter}
+					onEnter={() => revealIdentification(ID_ENTER_ADVANCE_MS)}
 					autoFocus
 					disabled={revealed}
+					answerSuggestionsEnabled={answerSuggestionsEnabled}
+					suggestionCorpus={suggestionCorpus}
 				/>
 			) : (
 				<Card>
@@ -121,15 +139,12 @@ export default function FlashcardAttempt({
 						<p className="text-fg text-center text-base leading-snug font-semibold">
 							{currentQuestion.question}
 						</p>
-						{currentQuestion.question_image && (
-							<div className="flex justify-center">
+						{resolveQuestionImageSrc(currentQuestion) && (
+							<div className="flex w-full justify-center">
 								<img
-									src={
-										resolveQuizImageSrc(currentQuestion.question_image) ||
-										currentQuestion.question_image
-									}
+									src={resolveQuestionImageSrc(currentQuestion)}
 									alt=""
-									className="max-h-48 rounded-md object-cover"
+									className="h-auto max-h-48 w-full max-w-md object-contain"
 								/>
 							</div>
 						)}
@@ -177,7 +192,7 @@ export default function FlashcardAttempt({
 					className="w-full"
 					variant="secondary"
 					disabled={!hasAnswer || submitting}
-					onClick={handleIdentificationEnter}
+					onClick={() => revealIdentification(ID_CHECK_ADVANCE_MS)}
 				>
 					Check answer
 				</Button>
@@ -194,7 +209,10 @@ export default function FlashcardAttempt({
 					className="w-full"
 					variant={isLast ? 'primary' : 'secondary'}
 					loading={submitting}
-					onClick={onSubmit}
+					onClick={() => {
+						cancelAutoAdvance();
+						onSubmit?.();
+					}}
 				>
 					Submit quiz
 				</Button>

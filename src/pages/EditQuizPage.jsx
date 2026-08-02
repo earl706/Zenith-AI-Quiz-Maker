@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
 	Check,
@@ -29,11 +29,20 @@ import {
 } from '../components/ui';
 import MathInput from '../components/quiz/MathInput';
 import {
+	canUseSectionQuestionLayout,
 	createSection,
 	normalizeQuizSections,
 	questionTypeFromFlags,
 	questionsGroupedBySection
 } from '../components/quiz/quizHelpers';
+import {
+	QUESTION_LAYOUT_SCROLL,
+	QUESTION_LAYOUT_SECTION,
+	useQuestionDisplayLayout,
+	useSectionPageIndex
+} from '../components/quiz/useQuestionDisplayLayout';
+import QuestionDisplayLayoutToggle from '../components/quiz/QuestionDisplayLayoutToggle';
+import SectionQuestionNavigator from '../components/quiz/SectionQuestionNavigator';
 import {
 	QUIZ_TAG_COLORS,
 	ToggleChip,
@@ -118,6 +127,24 @@ export default function EditQuizPage() {
 	const authoringQuestions = reviewing ? aiProposal.displayQuestions || [] : questions;
 	const authoringSections = reviewing ? aiProposal.displaySections || [] : sections;
 
+	const sectionGroups = useMemo(
+		() => questionsGroupedBySection(authoringQuestions, authoringSections),
+		[authoringQuestions, authoringSections]
+	);
+	const sectionLayoutAvailable = canUseSectionQuestionLayout(authoringSections);
+	const [questionLayout, setQuestionLayout] = useQuestionDisplayLayout();
+	const effectiveQuestionLayout =
+		questionLayout === QUESTION_LAYOUT_SECTION && sectionLayoutAvailable
+			? QUESTION_LAYOUT_SECTION
+			: QUESTION_LAYOUT_SCROLL;
+	const [sectionPage, setSectionPage, setActiveSectionKey] = useSectionPageIndex(sectionGroups);
+	const visibleSectionGroups =
+		effectiveQuestionLayout === QUESTION_LAYOUT_SECTION
+			? sectionGroups[sectionPage]
+				? [sectionGroups[sectionPage]]
+				: []
+			: sectionGroups;
+
 	const openImagePreview = (src, title = 'Image preview') => {
 		if (!src) return;
 		setImagePreview({ src: resolveQuizImageSrc(src) || src, title });
@@ -156,8 +183,18 @@ export default function EditQuizPage() {
 					loadedSections.filter((s) => s.id != null).map((s) => [s.id, s.clientKey])
 				);
 
-				const transformedQuestions = questionsData.map((question, index) => {
-					const rawChoices = question.choices || [];
+				const orderedQuestions = [...questionsData].sort((a, b) => {
+					const aId = Number(a.id) || 0;
+					const bId = Number(b.id) || 0;
+					return aId - bId;
+				});
+
+				const transformedQuestions = orderedQuestions.map((question, index) => {
+					const rawChoices = [...(question.choices || [])].sort((a, b) => {
+						const aId = typeof a === 'object' && a !== null ? Number(a.id) || 0 : 0;
+						const bId = typeof b === 'object' && b !== null ? Number(b.id) || 0 : 0;
+						return aId - bId;
+					});
 					const transformedChoices = rawChoices.map((choice) =>
 						typeof choice === 'object' && choice !== null ? choice.text || '' : choice
 					);
@@ -183,9 +220,18 @@ export default function EditQuizPage() {
 					while (choiceImagePreviews.length < padTo) choiceImagePreviews.push(null);
 					while (choiceImageUrls.length < padTo) choiceImageUrls.push('');
 
-					const correctAnswerIndex = transformedChoices.findIndex(
+					const storedIndex = Number(question.correct_answer_index);
+					const matchedIndex = transformedChoices.findIndex(
 						(choice) => choice === question.correct_answer
 					);
+					const correctAnswerIndex =
+						Number.isInteger(storedIndex) &&
+						storedIndex >= 0 &&
+						storedIndex < transformedChoices.length
+							? storedIndex
+							: matchedIndex >= 0
+								? matchedIndex
+								: 0;
 					const hasChoiceImages =
 						!!question.has_choice_images ||
 						choiceImagePreviews.some(Boolean) ||
@@ -201,7 +247,7 @@ export default function EditQuizPage() {
 						choiceImages: Array(padTo).fill(null),
 						choiceImagePreviews,
 						choiceImageUrls,
-						correctAnswerIndex: correctAnswerIndex >= 0 ? correctAnswerIndex : 0,
+						correctAnswerIndex,
 						mathematical,
 						identification,
 						randomChoices: !!question.random_choices,
@@ -333,6 +379,7 @@ export default function EditQuizPage() {
 			}
 			return [...prev, next];
 		});
+		setActiveSectionKey(next.clientKey);
 	};
 
 	const updateSectionTitle = (clientKey, title) => {
@@ -711,10 +758,24 @@ export default function EditQuizPage() {
 					{authoringSections.length > 0 && (
 						<p className="text-muted text-xs">Questions must belong to a section.</p>
 					)}
+					{sectionLayoutAvailable && (
+						<QuestionDisplayLayoutToggle
+							layout={questionLayout}
+							onLayoutChange={setQuestionLayout}
+							className="ml-auto"
+						/>
+					)}
 				</div>
 
-				{questionsGroupedBySection(authoringQuestions, authoringSections).map(
-					({ section, questions: groupQuestions }) => (
+				{effectiveQuestionLayout === QUESTION_LAYOUT_SECTION && sectionLayoutAvailable && (
+					<SectionQuestionNavigator
+						groups={sectionGroups}
+						sectionPage={sectionPage}
+						onSectionPageChange={setSectionPage}
+					/>
+				)}
+
+				{visibleSectionGroups.map(({ section, questions: groupQuestions }) => (
 						<div key={section?.clientKey || 'ungrouped'} className="space-y-3">
 							{section && (
 								<div

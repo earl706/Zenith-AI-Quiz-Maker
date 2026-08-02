@@ -1646,18 +1646,14 @@ export default function CreateQuizPage() {
 				open={templatesOpen}
 				onClose={() => setTemplatesOpen(false)}
 				title="Quiz templates"
-				size="lg"
+				size="xl"
 			>
 				<div className="space-y-3">
-					<p className="text-muted text-xs">
-						Load a global template into this draft. You can edit questions and image URLs before
-						creating.
-					</p>
 					{templatesLoading && <p className="text-muted text-sm">Loading templates…</p>}
 					{!templatesLoading && templates.length === 0 && (
 						<p className="text-muted text-sm">No templates found. Run seed_quiz_templates.</p>
 					)}
-					<div className="grid max-h-[min(60vh,28rem)] gap-2 overflow-y-auto sm:grid-cols-2">
+					<div className="grid max-h-[min(60vh,28rem)] gap-2 overflow-y-auto sm:grid-cols-3">
 						{templates.map((t) => (
 							<button
 								key={t.slug}
