@@ -2,6 +2,13 @@ import { Check, Plus, X, Image as ImageIcon } from 'lucide-react';
 
 import { cn } from '../../lib/format';
 import { resolveQuizImageSrc } from '../../lib/quizImages';
+import { Input } from '../ui';
+import {
+	PER_QUESTION_TIMER_DEFAULT,
+	PER_QUESTION_TIMER_MAX,
+	PER_QUESTION_TIMER_MIN,
+	clampPerQuestionSeconds
+} from './quizHelpers';
 
 export const QUIZ_TAG_COLORS = [
 	{ name: 'Red', hex: '#EF4444' },
@@ -209,5 +216,99 @@ export function ChoiceImageControl({
 				/>
 			)}
 		</div>
+	);
+}
+
+/** Quiz-level per-question timer toggle + seconds (Create/Edit settings). */
+export function PerQuestionTimerSettings({
+	enabled,
+	onEnabledChange,
+	seconds,
+	onSecondsChange,
+	disabled = false
+}) {
+	return (
+		<div className="space-y-2">
+			<button
+				type="button"
+				disabled={disabled}
+				onClick={() => onEnabledChange(!enabled)}
+				aria-pressed={enabled}
+				className={cn(
+					'inline-flex w-full cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[0.7rem] font-medium transition',
+					'focus-visible:outline-primary focus-visible:outline-2 focus-visible:outline-offset-2',
+					enabled
+						? 'border-primary/40 bg-primary/12 text-primary shadow-primary/10 shadow-sm'
+						: 'border-line bg-surface text-muted hover:border-primary/25 hover:bg-surface-2 hover:text-fg',
+					disabled && 'cursor-not-allowed opacity-60'
+				)}
+			>
+				<span
+					aria-hidden
+					className={cn(
+						'flex h-3.5 w-3.5 items-center justify-center rounded-full border transition',
+						enabled ? 'border-primary bg-primary text-primary-fg' : 'border-line bg-transparent'
+					)}
+				>
+					{enabled && <Check size={9} strokeWidth={3} />}
+				</span>
+				Per-question timer
+			</button>
+			{enabled && (
+				<div className="space-y-1">
+					<Input
+						label={`Seconds per question (${PER_QUESTION_TIMER_MIN}–${PER_QUESTION_TIMER_MAX})`}
+						type="number"
+						min={PER_QUESTION_TIMER_MIN}
+						max={PER_QUESTION_TIMER_MAX}
+						value={seconds}
+						disabled={disabled}
+						onChange={(e) => {
+							const next = e.target.value;
+							if (next === '') {
+								onSecondsChange(PER_QUESTION_TIMER_DEFAULT);
+								return;
+							}
+							onSecondsChange(clampPerQuestionSeconds(next, seconds));
+						}}
+						className="py-1.5"
+					/>
+					<p className="text-muted text-[0.65rem] leading-snug">
+						Applies in flashcard mode: countdown, no going back, auto-advance when time runs out.
+						Optional per-question overrides below each question.
+					</p>
+				</div>
+			)}
+		</div>
+	);
+}
+
+/** Optional per-question seconds override when quiz timer is on. */
+export function QuestionTimerOverrideField({
+	value,
+	onChange,
+	quizDefaultSeconds,
+	disabled = false
+}) {
+	const display = value == null || value === '' ? '' : String(value);
+	return (
+		<Input
+			label={`Timer override (optional, default ${clampPerQuestionSeconds(quizDefaultSeconds)}s)`}
+			type="number"
+			min={PER_QUESTION_TIMER_MIN}
+			max={PER_QUESTION_TIMER_MAX}
+			placeholder="Use quiz default"
+			value={display}
+			disabled={disabled}
+			onChange={(e) => {
+				const raw = e.target.value;
+				if (raw === '') {
+					onChange(null);
+					return;
+				}
+				onChange(clampPerQuestionSeconds(raw, quizDefaultSeconds));
+			}}
+			className="py-1.5"
+		/>
 	);
 }

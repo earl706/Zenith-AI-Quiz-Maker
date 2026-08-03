@@ -1,17 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
-import { cn } from '../../lib/format';
+import { cn, formatDurationSeconds } from '../../lib/format';
 import { resolveQuestionImageSrc, resolveQuizImageSrc } from '../../lib/quizImages';
-import { Button, Card, CardBody, LoadingScreen } from '../ui';
+import { Button, Card, CardBody, LoadingScreen, ProgressBar } from '../ui';
 import IdentificationAnswerInput from './IdentificationAnswerInput';
 import MathRenderer from './MathRenderer';
 import QuestionStudyFeedback from './QuestionStudyFeedback';
-import { getChoiceData, isIdentification, isMathematical } from './quizHelpers';
+import {
+	getChoiceData,
+	isIdentification,
+	isMathematical,
+	resolveQuestionTimerSeconds
+} from './quizHelpers';
 
 const MC_AUTO_ADVANCE_MS = 250;
 const ID_ENTER_ADVANCE_MS = 2000;
 const ID_CHECK_ADVANCE_MS = 5000;
+const TIMER_REVEAL_ADVANCE_MS = 1500;
 
 export default function FlashcardAttempt({
 	questions,
@@ -22,19 +28,26 @@ export default function FlashcardAttempt({
 	submitting,
 	answeredCount,
 	answerSuggestionsEnabled = false,
-	suggestionCorpus = []
+	suggestionCorpus = [],
+	perQuestionTimerEnabled = false,
+	perQuestionTimeSeconds = 30
 }) {
 	const [index, setIndex] = useState(0);
 	const [revealedIds, setRevealedIds] = useState(() => new Set());
+	const [lockedIds, setLockedIds] = useState(() => new Set());
+	const [secondsLeft, setSecondsLeft] = useState(null);
 	const total = questions.length;
 	const currentQuestion = questions[index];
 	const answer = currentQuestion ? answersByIdMap.get(currentQuestion.id) : null;
 	const isLast = index === total - 1;
 	const math = currentQuestion ? isMathematical(currentQuestion.question_type) : false;
 	const revealed = currentQuestion ? revealedIds.has(currentQuestion.id) : false;
+	const locked = currentQuestion ? lockedIds.has(currentQuestion.id) : false;
 	const hasAnswer = String(answer?.userAnswer ?? '').trim() !== '';
 
 	const advanceTimer = useRef(null);
+	const questionLimitRef = useRef(0);
+	const timedOutRef = useRef(false);
 
 	const cancelAutoAdvance = () => {
 		if (advanceTimer.current) {
@@ -45,35 +58,76 @@ export default function FlashcardAttempt({
 
 	useEffect(() => cancelAutoAdvance, []);
 
+	const markLocked = (questionId) => {
+		setLockedIds((previous) => new Set(previous).add(questionId));
+	};
+
+	const markRevealed = (questionId) => {
+		setRevealedIds((previous) => new Set(previous).add(questionId));
+	};
+
 	const goTo = (next) => {
+		if (perQuestionTimerEnabled && next < index) return;
 		cancelAutoAdvance();
+		timedOutRef.current = false;
 		setIndex(next);
 	};
 
-	const goPrev = () => goTo((index - 1 + total) % total);
-	const goNext = () => goTo((index + 1) % total);
+	const goPrev = () => {
+		if (perQuestionTimerEnabled) return;
+		goTo((index - 1 + total) % total);
+	};
+
+	const advanceForward = () => {
+		cancelAutoAdvance();
+		timedOutRef.current = false;
+		if (isLast) {
+			onSubmit?.();
+			return;
+		}
+		setIndex((previous) => Math.min(previous + 1, total - 1));
+	};
+
+	const goNext = () => {
+		if (!currentQuestion) return;
+		if (perQuestionTimerEnabled) {
+			if (!locked) {
+				markLocked(currentQuestion.id);
+				if (hasAnswer) markRevealed(currentQuestion.id);
+			}
+			advanceForward();
+			return;
+		}
+		goTo((index + 1) % total);
+	};
 
 	const scheduleAfterReveal = (delayMs) => {
 		cancelAutoAdvance();
 		advanceTimer.current = setTimeout(() => {
 			advanceTimer.current = null;
-			if (isLast) {
-				onSubmit?.();
-				return;
-			}
-			setIndex((previous) => Math.min(previous + 1, total - 1));
+			advanceForward();
 		}, delayMs);
 	};
 
 	const revealIdentification = (delayMs) => {
-		if (!hasAnswer || !currentQuestion) return;
-		setRevealedIds((previous) => new Set(previous).add(currentQuestion.id));
+		if (!hasAnswer || !currentQuestion || locked) return;
+		markRevealed(currentQuestion.id);
+		markLocked(currentQuestion.id);
+		if (perQuestionTimerEnabled) {
+			return;
+		}
 		scheduleAfterReveal(delayMs);
 	};
 
 	const handleChoiceSelect = (questionId, choiceText) => {
+		if (lockedIds.has(questionId)) return;
 		onAnswerChange(questionId, 'userAnswer', choiceText);
 		cancelAutoAdvance();
+		if (perQuestionTimerEnabled) {
+			markLocked(questionId);
+			markRevealed(questionId);
+			return;
+		}
 		if (isLast) return;
 		advanceTimer.current = setTimeout(() => {
 			advanceTimer.current = null;
@@ -81,10 +135,75 @@ export default function FlashcardAttempt({
 		}, MC_AUTO_ADVANCE_MS);
 	};
 
+	const handleTimeout = () => {
+		if (!currentQuestion || timedOutRef.current) return;
+		timedOutRef.current = true;
+		markLocked(currentQuestion.id);
+		markRevealed(currentQuestion.id);
+		scheduleAfterReveal(TIMER_REVEAL_ADVANCE_MS);
+	};
+
+	useEffect(() => {
+		if (!perQuestionTimerEnabled || !currentQuestion) {
+			setSecondsLeft(null);
+			return undefined;
+		}
+		if (locked) {
+			return undefined;
+		}
+		const limit = resolveQuestionTimerSeconds(currentQuestion, perQuestionTimeSeconds);
+		questionLimitRef.current = limit;
+		timedOutRef.current = false;
+		setSecondsLeft(limit);
+		const interval = setInterval(() => {
+			setSecondsLeft((prev) => {
+				if (prev == null) return prev;
+				if (prev <= 1) {
+					clearInterval(interval);
+					return 0;
+				}
+				return prev - 1;
+			});
+		}, 1000);
+		return () => clearInterval(interval);
+	}, [perQuestionTimerEnabled, currentQuestion?.id, perQuestionTimeSeconds, index, locked]);
+
+	useEffect(() => {
+		if (!perQuestionTimerEnabled || secondsLeft !== 0 || locked) return;
+		handleTimeout();
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- fire once at zero
+	}, [secondsLeft, perQuestionTimerEnabled, locked, currentQuestion?.id]);
+
 	if (!currentQuestion) return <LoadingScreen />;
+
+	const limit =
+		questionLimitRef.current ||
+		resolveQuestionTimerSeconds(currentQuestion, perQuestionTimeSeconds);
+	const remaining = secondsLeft ?? limit;
+	const progressPct = limit > 0 ? (remaining / limit) * 100 : 0;
+	const warning = remaining <= Math.max(5, Math.ceil(limit * 0.25));
+	const timerTone = warning ? 'danger' : 'primary';
 
 	return (
 		<div className="space-y-4">
+			{perQuestionTimerEnabled && (
+				<div className="space-y-2">
+					<div className="flex items-center justify-between gap-2">
+						<p className="text-muted text-xs font-medium tracking-wide uppercase">Question timer</p>
+						<p
+							className={cn(
+								'font-mono text-lg font-bold tracking-tight',
+								warning ? 'text-danger' : 'text-fg'
+							)}
+							aria-live="polite"
+						>
+							{formatDurationSeconds(Math.max(0, remaining))}
+						</p>
+					</div>
+					<ProgressBar value={progressPct} tone={timerTone} />
+				</div>
+			)}
+
 			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 				<p className="text-muted text-sm">
 					Question <span className="text-fg font-semibold">{index + 1}</span> of {total}
@@ -92,19 +211,22 @@ export default function FlashcardAttempt({
 				<div className="flex flex-wrap gap-1.5">
 					{questions.map((q, i) => {
 						const filled = String(answersByIdMap.get(q.id)?.userAnswer ?? '').trim() !== '';
+						const canJump = !perQuestionTimerEnabled || i >= index;
 						return (
 							<button
 								key={q.id ?? i}
 								type="button"
 								aria-label={`Go to question ${i + 1}`}
-								onClick={() => goTo(i)}
+								disabled={!canJump || submitting}
+								onClick={() => canJump && goTo(i)}
 								className={cn(
 									'h-2 w-2 rounded-full transition',
 									i === index
 										? 'bg-primary scale-125'
 										: filled
 											? 'bg-primary/45'
-											: 'bg-line hover:bg-muted/40'
+											: 'bg-line hover:bg-muted/40',
+									!canJump && 'cursor-not-allowed opacity-40'
 								)}
 							/>
 						);
@@ -113,7 +235,12 @@ export default function FlashcardAttempt({
 			</div>
 
 			<div className="flex gap-2">
-				<Button variant="secondary" className="flex-1" onClick={goPrev} disabled={submitting}>
+				<Button
+					variant="secondary"
+					className="flex-1"
+					onClick={goPrev}
+					disabled={submitting || perQuestionTimerEnabled}
+				>
 					<ChevronLeft size={16} /> Prev
 				</Button>
 				<Button variant="secondary" className="flex-1" onClick={goNext} disabled={submitting}>
@@ -129,7 +256,7 @@ export default function FlashcardAttempt({
 					handleIdentificationAnswerChange={onIdentificationChange}
 					onEnter={() => revealIdentification(ID_ENTER_ADVANCE_MS)}
 					autoFocus
-					disabled={revealed}
+					disabled={revealed || locked}
 					answerSuggestionsEnabled={answerSuggestionsEnabled}
 					suggestionCorpus={suggestionCorpus}
 				/>
@@ -157,9 +284,11 @@ export default function FlashcardAttempt({
 									<button
 										key={choiceData.id ?? choiceIndex}
 										type="button"
+										disabled={locked || submitting}
 										onClick={() => handleChoiceSelect(currentQuestion.id, choiceData.text)}
 										className={cn(
-											'w-full cursor-pointer rounded-md px-4 py-3 text-center font-semibold transition',
+											'w-full rounded-md px-4 py-3 text-center font-semibold transition',
+											locked || submitting ? 'cursor-not-allowed' : 'cursor-pointer',
 											selected
 												? 'bg-primary text-primary-fg ring-primary/30 ring-2 ring-offset-2 ring-offset-[var(--surface)]'
 												: 'bg-surface-2 text-fg hover:bg-primary/10'
@@ -187,7 +316,7 @@ export default function FlashcardAttempt({
 				</Card>
 			)}
 
-			{isIdentification(currentQuestion.question_type) && !revealed && (
+			{isIdentification(currentQuestion.question_type) && !revealed && !locked && (
 				<Button
 					className="w-full"
 					variant="secondary"
@@ -197,9 +326,7 @@ export default function FlashcardAttempt({
 					Check answer
 				</Button>
 			)}
-			{isIdentification(currentQuestion.question_type) && revealed && (
-				<QuestionStudyFeedback question={currentQuestion} answer={answer} />
-			)}
+			{revealed && <QuestionStudyFeedback question={currentQuestion} answer={answer} />}
 
 			<div className="border-line space-y-2 border-t pt-4">
 				<p className="text-muted text-center text-xs">

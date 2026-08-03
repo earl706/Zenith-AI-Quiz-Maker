@@ -11,22 +11,25 @@ export default function AttemptStatusPanel({
 	showResults,
 	score,
 	accuracy,
-	sectionScores = []
+	sectionScores = [],
+	hideElapsedTimer = false
 }) {
 	const progressPct = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0;
 	const tone = accuracyTone(accuracy);
 
 	return (
 		<aside className="flex w-full shrink-0 flex-col gap-3 lg:sticky lg:top-6 lg:w-64 lg:self-start">
-			<Card className="p-5 text-center">
-				<p className="text-muted mb-3 inline-flex items-center gap-1.5 text-xs font-medium tracking-wide uppercase">
-					<Clock size={13} />
-					Time
-				</p>
-				<p className="text-fg font-mono text-3xl font-bold tracking-tight">
-					{formatDurationSeconds(time)}
-				</p>
-			</Card>
+			{!hideElapsedTimer && (
+				<Card className="p-5 text-center">
+					<p className="text-muted mb-3 inline-flex items-center gap-1.5 text-xs font-medium tracking-wide uppercase">
+						<Clock size={13} />
+						Time
+					</p>
+					<p className="text-fg font-mono text-3xl font-bold tracking-tight">
+						{formatDurationSeconds(time)}
+					</p>
+				</Card>
+			)}
 
 			{!showResults && (
 				<Card className="flex flex-col items-center gap-3 p-5">

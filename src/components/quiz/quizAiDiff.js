@@ -66,7 +66,9 @@ export function mapAiQuestion(question, index, randomChoices = false) {
 		explanation: question?.explanation || '',
 		workedSolution: question?.workedSolution ?? question?.worked_solution ?? '',
 		sourceCitation: question?.sourceCitation ?? question?.source_citation ?? '',
-		sectionKey: question?.sectionKey ?? null
+		sectionKey: question?.sectionKey ?? null,
+		perQuestionTimeSeconds:
+			question?.perQuestionTimeSeconds ?? question?.per_question_time_seconds ?? null
 	};
 }
 
@@ -92,7 +94,10 @@ export function buildQuizSnapshot(questions, sections, meta = {}) {
 			explanation: q.explanation || '',
 			workedSolution: q.workedSolution || '',
 			sourceCitation: q.sourceCitation || '',
-			sectionKey: q.sectionKey || null
+			sectionKey: q.sectionKey || null,
+			...(q.perQuestionTimeSeconds != null
+				? { perQuestionTimeSeconds: q.perQuestionTimeSeconds }
+				: {})
 		}))
 	};
 }
@@ -232,6 +237,9 @@ function mergeProposedQuestion(baselineQ, proposedQ) {
 	// Preserve numeric DB id when the AI kept the same client continuity.
 	if (typeof baselineQ.id === 'number') {
 		merged.id = baselineQ.id;
+	}
+	if (merged.perQuestionTimeSeconds == null && baselineQ.perQuestionTimeSeconds != null) {
+		merged.perQuestionTimeSeconds = baselineQ.perQuestionTimeSeconds;
 	}
 	return merged;
 }

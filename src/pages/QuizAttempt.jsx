@@ -49,7 +49,9 @@ export default function QuizAttempt() {
 	const [quizData, setQuizData] = useState({
 		quiz_title: '',
 		flashcard_quiz: false,
-		quiz_image: null
+		quiz_image: null,
+		per_question_timer_enabled: false,
+		per_question_time_seconds: 30
 	});
 
 	const answersMap = useMemo(() => answersById(answers), [answers]);
@@ -221,6 +223,8 @@ export default function QuizAttempt() {
 							answeredCount={answeredCount}
 							answerSuggestionsEnabled={scope.answerSuggestions}
 							suggestionCorpus={suggestionCorpus}
+							perQuestionTimerEnabled={!!quizData.per_question_timer_enabled}
+							perQuestionTimeSeconds={quizData.per_question_time_seconds ?? 30}
 						/>
 					) : (
 						<QuizQuestionListLayout
@@ -266,6 +270,7 @@ export default function QuizAttempt() {
 					score={score}
 					accuracy={accuracy}
 					sectionScores={sectionScores}
+					hideElapsedTimer={!!quizData.per_question_timer_enabled && !quizResults}
 				/>
 			</div>
 		</div>

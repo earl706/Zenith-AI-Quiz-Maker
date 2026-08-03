@@ -1,19 +1,30 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { BookOpen, Plus, Pencil, Trash2, Play, Eye } from 'lucide-react';
 
 import { get, del } from '../lib/api';
 import { formatDate } from '../lib/format';
+import { resolveQuizImageSrc } from '../lib/quizImages';
 import { invalidateQuizQueries, normalizeQuizList } from '../lib/resources';
 import { toast } from '../stores/toastStore';
 import { PageHeader } from '../components/layout/PageHeader';
-import { Button, Card, Badge, Modal, EmptyState, LoadingScreen } from '../components/ui';
+import {
+	Button,
+	Card,
+	Badge,
+	Modal,
+	EmptyState,
+	LoadingScreen,
+	Pagination
+} from '../components/ui';
 import { useAttemptLauncher } from '../components/quiz/useAttemptLauncher';
+import { LIST_PAGE_SIZE, paginateClient } from '../hooks/useListControls';
 
 export default function QuizzesPage() {
 	const navigate = useNavigate();
 	const [deleteTarget, setDeleteTarget] = useState(null);
+	const [page, setPage] = useState(1);
 	const { launchAttempt, attemptModal } = useAttemptLauncher();
 
 	const { data, isLoading } = useQuery({
@@ -24,6 +35,11 @@ export default function QuizzesPage() {
 	});
 
 	const quizList = normalizeQuizList(data);
+	const paged = useMemo(() => paginateClient(quizList, page, LIST_PAGE_SIZE), [quizList, page]);
+
+	useEffect(() => {
+		if (paged.page !== page) setPage(paged.page);
+	}, [paged.page, page]);
 
 	const removeMutation = useMutation({
 		mutationFn: (uuid) => del(`/quizzes/quiz/${uuid}/`),
@@ -63,75 +79,110 @@ export default function QuizzesPage() {
 					}
 				/>
 			) : (
-				<div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-					{quizList.map((quiz) => {
-						const id = quiz.uuid || quiz.quiz_id;
-						return (
-							<Card key={id} className="flex flex-col p-5 transition hover:shadow-md">
-								<div className="mb-3 flex items-start gap-2">
-									{quiz.tag_color && (
-										<div
-											className="mt-1 h-3 w-3 shrink-0 rounded-full"
-											style={{ backgroundColor: quiz.tag_color }}
-										/>
-									)}
-									<div className="min-w-0 flex-1">
-										<h3 className="text-fg truncate font-semibold">{quiz.quiz_title}</h3>
-										<p className="text-muted text-xs">
-											{formatDate(quiz.created_at || quiz.date_created)}
-										</p>
-									</div>
-								</div>
-
-								<div className="mb-4 flex flex-wrap gap-1.5">
-									<Badge tone="primary">{quiz.questions?.length ?? 0} Qs</Badge>
-									{(quiz.sections?.length ?? 0) > 0 && (
-										<Badge tone="neutral">
-											{quiz.sections.length} section{quiz.sections.length === 1 ? '' : 's'}
-										</Badge>
-									)}
-									{quiz.flashcard_quiz || quiz.quizType === 'flashcard' ? (
-										<Badge tone="accent">Flashcard</Badge>
+				<>
+					<div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+						{paged.results.map((quiz) => {
+							const id = quiz.uuid || quiz.quiz_id;
+							const imageSrc =
+								resolveQuizImageSrc(quiz.quiz_image) ||
+								resolveQuizImageSrc(quiz.quiz_image_url) ||
+								null;
+							return (
+								<Card
+									key={id}
+									className="flex flex-col overflow-hidden transition hover:shadow-md"
+								>
+									{imageSrc ? (
+										<div className="border-line bg-surface-2 flex h-36 items-center justify-center border-b">
+											<img
+												src={imageSrc}
+												alt=""
+												className="h-full max-h-36 w-full object-contain"
+											/>
+										</div>
 									) : (
-										<Badge tone="success">List</Badge>
+										<div
+											className="border-line bg-surface-2 text-muted flex h-36 items-center justify-center border-b"
+											aria-hidden
+										>
+											<BookOpen size={28} strokeWidth={1.5} />
+										</div>
 									)}
-								</div>
+									<div className="flex flex-1 flex-col p-5">
+										<div className="mb-3 flex items-start gap-2">
+											{quiz.tag_color && (
+												<div
+													className="mt-1 h-3 w-3 shrink-0 rounded-full"
+													style={{ backgroundColor: quiz.tag_color }}
+												/>
+											)}
+											<div className="min-w-0 flex-1">
+												<h3 className="text-fg truncate font-semibold">{quiz.quiz_title}</h3>
+												<p className="text-muted text-xs">
+													{formatDate(quiz.created_at || quiz.date_created)}
+												</p>
+											</div>
+										</div>
 
-								<div className="mt-auto flex items-center gap-2">
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={() => navigate(`/quizzes/${id}`)}
-										title="View"
-									>
-										<Eye size={14} />
-									</Button>
-									<Button
-										variant="ghost"
-										size="sm"
-										onClick={() => navigate(`/quizzes/edit/${id}`)}
-										title="Edit"
-									>
-										<Pencil size={14} />
-									</Button>
-									<Button
-										variant="ghost"
-										size="sm"
-										className="text-danger"
-										onClick={() => setDeleteTarget(id)}
-										title="Delete"
-									>
-										<Trash2 size={14} />
-									</Button>
-									<div className="flex-1" />
-									<Button size="sm" onClick={() => launchAttempt(quiz)}>
-										<Play size={14} /> Attempt
-									</Button>
-								</div>
-							</Card>
-						);
-					})}
-				</div>
+										<div className="mb-4 flex flex-wrap gap-1.5">
+											<Badge tone="primary">{quiz.questions?.length ?? 0} Qs</Badge>
+											{(quiz.sections?.length ?? 0) > 0 && (
+												<Badge tone="neutral">
+													{quiz.sections.length} section
+													{quiz.sections.length === 1 ? '' : 's'}
+												</Badge>
+											)}
+											{quiz.flashcard_quiz || quiz.quizType === 'flashcard' ? (
+												<Badge tone="accent">Flashcard</Badge>
+											) : (
+												<Badge tone="success">List</Badge>
+											)}
+										</div>
+
+										<div className="mt-auto flex items-center gap-2">
+											<Button
+												variant="ghost"
+												size="sm"
+												onClick={() => navigate(`/quizzes/${id}`)}
+												title="View"
+											>
+												<Eye size={14} />
+											</Button>
+											<Button
+												variant="ghost"
+												size="sm"
+												onClick={() => navigate(`/quizzes/edit/${id}`)}
+												title="Edit"
+											>
+												<Pencil size={14} />
+											</Button>
+											<Button
+												variant="ghost"
+												size="sm"
+												className="text-danger"
+												onClick={() => setDeleteTarget(id)}
+												title="Delete"
+											>
+												<Trash2 size={14} />
+											</Button>
+											<div className="flex-1" />
+											<Button size="sm" onClick={() => launchAttempt(quiz)}>
+												<Play size={14} /> Attempt
+											</Button>
+										</div>
+									</div>
+								</Card>
+							);
+						})}
+					</div>
+					<Pagination
+						page={paged.page}
+						totalPages={paged.total_pages}
+						count={paged.count}
+						pageSize={paged.page_size}
+						onPageChange={setPage}
+					/>
+				</>
 			)}
 
 			<Modal

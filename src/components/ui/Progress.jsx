@@ -61,7 +61,12 @@ export function ProgressRing({ value = 0, size = 64, stroke = 6, tone = 'primary
 					style={{ transition: 'stroke-dashoffset 0.6s ease' }}
 				/>
 			</svg>
-			<span className="text-fg absolute text-sm font-semibold">
+			<span
+				className={cn(
+					'text-fg absolute font-semibold',
+					size < 48 ? 'text-[0.65rem]' : 'text-sm'
+				)}
+			>
 				{label ?? `${Math.round(pct)}`}
 			</span>
 		</div>

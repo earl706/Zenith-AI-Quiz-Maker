@@ -356,3 +356,34 @@ export function sampleArray(items, count) {
 	if (n >= items.length) return shuffleArray(items);
 	return shuffleArray(items).slice(0, n);
 }
+
+export const PER_QUESTION_TIMER_MIN = 10;
+export const PER_QUESTION_TIMER_MAX = 600;
+export const PER_QUESTION_TIMER_DEFAULT = 30;
+
+/** Clamp to 10–600 seconds; invalid → fallback. */
+export function clampPerQuestionSeconds(value, fallback = PER_QUESTION_TIMER_DEFAULT) {
+	const n = Number(value);
+	if (!Number.isFinite(n)) return fallback;
+	return Math.min(PER_QUESTION_TIMER_MAX, Math.max(PER_QUESTION_TIMER_MIN, Math.round(n)));
+}
+
+/**
+ * Resolve seconds for a question: per-question override, else quiz default.
+ * Accepts API snake_case or authoring camelCase on the question.
+ */
+export function resolveQuestionTimerSeconds(question, quizDefaultSeconds) {
+	const raw = question?.per_question_time_seconds ?? question?.perQuestionTimeSeconds ?? null;
+	if (raw == null || raw === '') {
+		return clampPerQuestionSeconds(quizDefaultSeconds);
+	}
+	return clampPerQuestionSeconds(raw);
+}
+
+/** Parse optional override from import/API (empty → null). */
+export function parseOptionalTimerSeconds(raw) {
+	if (raw == null || raw === '') return null;
+	const n = Number(raw);
+	if (!Number.isFinite(n)) return null;
+	return clampPerQuestionSeconds(n);
+}

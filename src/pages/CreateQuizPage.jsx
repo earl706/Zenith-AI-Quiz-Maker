@@ -34,7 +34,10 @@ import MathInput from '../components/quiz/MathInput';
 import {
 	canUseSectionQuestionLayout,
 	createSection,
-	questionsGroupedBySection
+	questionsGroupedBySection,
+	PER_QUESTION_TIMER_DEFAULT,
+	clampPerQuestionSeconds,
+	parseOptionalTimerSeconds
 } from '../components/quiz/quizHelpers';
 import {
 	QUESTION_LAYOUT_SECTION,
@@ -47,7 +50,9 @@ import {
 	QUIZ_TAG_COLORS,
 	ToggleChip,
 	ImageDropzone,
-	ChoiceImageControl
+	ChoiceImageControl,
+	PerQuestionTimerSettings,
+	QuestionTimerOverrideField
 } from '../components/quiz/quizAuthoringUi';
 import { useQuizAiProposal } from '../components/quiz/useQuizAiProposal';
 import QuizAiInstructionModal from '../components/quiz/QuizAiInstructionModal';
@@ -102,7 +107,8 @@ function getDefaultQuestion(id, randomChoices = false, sectionKey = null) {
 		explanation: '',
 		workedSolution: '',
 		sourceCitation: '',
-		sectionKey
+		sectionKey,
+		perQuestionTimeSeconds: null
 	};
 }
 
@@ -130,6 +136,8 @@ export default function CreateQuizPage() {
 	const [randomQuestionOrder, setRandomQuestionOrder] = useState(false);
 	const [randomQuestionChoices, setRandomQuestionChoices] = useState(false);
 	const [quizType, setQuizType] = useState('list');
+	const [perQuestionTimerEnabled, setPerQuestionTimerEnabled] = useState(false);
+	const [perQuestionTimeSeconds, setPerQuestionTimeSeconds] = useState(PER_QUESTION_TIMER_DEFAULT);
 	const [quizTitle, setQuizTitle] = useState('Quiz Title');
 	const [selectedColor, setSelectedColor] = useState(colors[0].hex);
 	const [quizImage, setQuizImage] = useState(null);
@@ -265,11 +273,16 @@ export default function CreateQuizPage() {
 					sectionKey:
 						sectionIndex != null && nextSections[sectionIndex]
 							? nextSections[sectionIndex].clientKey
-							: nextSections[0]?.clientKey || null
+							: nextSections[0]?.clientKey || null,
+					perQuestionTimeSeconds: parseOptionalTimerSeconds(q.per_question_time_seconds)
 				};
 			});
 			setQuizTitle(data.title || 'Quiz Title');
 			if (data.tag_color) setSelectedColor(data.tag_color);
+			setPerQuestionTimerEnabled(!!data.per_question_timer_enabled);
+			setPerQuestionTimeSeconds(
+				clampPerQuestionSeconds(data.per_question_time_seconds, PER_QUESTION_TIMER_DEFAULT)
+			);
 			setQuizImage(null);
 			const cover = data.cover_image_url || '';
 			setQuizImageUrl(cover);
@@ -353,6 +366,13 @@ export default function CreateQuizPage() {
 				setQuizType(data.quizType || 'list');
 				setRandomQuestionOrder(!!data.randomQuestions);
 				setRandomQuestionChoices(data.questions.some((q) => q.randomChoices === true));
+				setPerQuestionTimerEnabled(!!(data.perQuestionTimer ?? data.per_question_timer_enabled));
+				setPerQuestionTimeSeconds(
+					clampPerQuestionSeconds(
+						data.perQuestionTimeSeconds ?? data.per_question_time_seconds,
+						PER_QUESTION_TIMER_DEFAULT
+					)
+				);
 				setQuizImage(null);
 				setQuizImagePreview(null);
 
@@ -387,7 +407,10 @@ export default function CreateQuizPage() {
 						explanation: q.explanation || '',
 						workedSolution: q.workedSolution || q.worked_solution || '',
 						sourceCitation: q.sourceCitation || q.source_citation || '',
-						sectionKey: null
+						sectionKey: null,
+						perQuestionTimeSeconds: parseOptionalTimerSeconds(
+							q.perQuestionTimeSeconds ?? q.per_question_time_seconds
+						)
 					};
 				});
 				setSections([]);
@@ -661,6 +684,11 @@ export default function CreateQuizPage() {
 			formData.append('quiz_title', quizTitle);
 			formData.append('public', false);
 			formData.append('randomQuestions', randomQuestionOrder);
+			formData.append('perQuestionTimer', perQuestionTimerEnabled);
+			formData.append(
+				'perQuestionTimeSeconds',
+				clampPerQuestionSeconds(perQuestionTimeSeconds, PER_QUESTION_TIMER_DEFAULT)
+			);
 			formData.append('tag_color', selectedColor);
 			formData.append('quizType', quizType);
 			if (quizImage) formData.append('quiz_image', quizImage);
@@ -675,6 +703,16 @@ export default function CreateQuizPage() {
 				formData.append(`questions[${qi}][explanation]`, question.explanation || '');
 				formData.append(`questions[${qi}][worked_solution]`, question.workedSolution || '');
 				formData.append(`questions[${qi}][source_citation]`, question.sourceCitation || '');
+				if (
+					perQuestionTimerEnabled &&
+					question.perQuestionTimeSeconds != null &&
+					question.perQuestionTimeSeconds !== ''
+				) {
+					formData.append(
+						`questions[${qi}][perQuestionTimeSeconds]`,
+						clampPerQuestionSeconds(question.perQuestionTimeSeconds)
+					);
+				}
 				const choiceUrls = question.choiceImageUrls || [];
 				const hasChoiceImages =
 					!!question.hasChoiceImages ||
@@ -1288,6 +1326,16 @@ export default function CreateQuizPage() {
 														Teaching content
 													</summary>
 													<div className="mt-3 space-y-3">
+														{perQuestionTimerEnabled && (
+															<QuestionTimerOverrideField
+																value={question.perQuestionTimeSeconds}
+																quizDefaultSeconds={perQuestionTimeSeconds}
+																disabled={reviewing}
+																onChange={(seconds) =>
+																	handleInputChange(question.id, 'perQuestionTimeSeconds', seconds)
+																}
+															/>
+														)}
 														<Textarea
 															label="Explanation"
 															rows={3}
@@ -1454,6 +1502,14 @@ export default function CreateQuizPage() {
 							Shuffle choices
 						</ToggleChip>
 					</div>
+
+					<PerQuestionTimerSettings
+						enabled={perQuestionTimerEnabled}
+						onEnabledChange={setPerQuestionTimerEnabled}
+						seconds={perQuestionTimeSeconds}
+						onSecondsChange={setPerQuestionTimeSeconds}
+						disabled={reviewing}
+					/>
 
 					<div>
 						<p className="text-fg mb-1.5 text-xs font-medium">Tag</p>
