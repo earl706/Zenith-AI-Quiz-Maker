@@ -8,6 +8,7 @@ import { cn } from '../../lib/format';
 /**
  * Live WYSIWYG math editor (MathLive). Emits LaTeX strings via onChange
  * so existing MathRenderer / scoring paths stay compatible.
+ * Does not rewrite stored values — authors/fixtures own the LaTeX text.
  */
 export default function MathFieldInput({
 	value = '',
@@ -43,8 +44,9 @@ export default function MathFieldInput({
 		mf.smartSuperscript = true;
 		mf.placeholder = placeholder || '';
 		mf.disabled = Boolean(disabled);
-		mf.setValue(value ?? '', { silenceNotifications: true });
-		lastEmitted.current = value ?? '';
+		const initial = value ?? '';
+		mf.setValue(initial, { silenceNotifications: true });
+		lastEmitted.current = initial;
 
 		const handleInput = (event) => {
 			const latex = event.target?.value ?? '';

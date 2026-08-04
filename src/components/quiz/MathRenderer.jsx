@@ -2,6 +2,9 @@ import { useMemo } from 'react';
 import 'katex/dist/katex.min.css';
 import Latex from 'react-latex-next';
 
+/**
+ * Renders stored LaTeX as-is. Does not rewrite author/fixture text.
+ */
 export default function MathRenderer({
 	expression,
 	displayMode = false,
@@ -9,8 +12,8 @@ export default function MathRenderer({
 	errorFallback = null
 }) {
 	const formattedExpression = useMemo(() => {
-		if (!expression || expression.trim() === '') return null;
-		return expression;
+		if (!expression || String(expression).trim() === '') return null;
+		return String(expression);
 	}, [expression]);
 
 	if (!formattedExpression) {

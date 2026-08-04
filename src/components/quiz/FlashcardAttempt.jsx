@@ -113,10 +113,7 @@ export default function FlashcardAttempt({
 		if (!hasAnswer || !currentQuestion || locked) return;
 		markRevealed(currentQuestion.id);
 		markLocked(currentQuestion.id);
-		if (perQuestionTimerEnabled) {
-			return;
-		}
-		scheduleAfterReveal(delayMs);
+		scheduleAfterReveal(perQuestionTimerEnabled ? TIMER_REVEAL_ADVANCE_MS : delayMs);
 	};
 
 	const handleChoiceSelect = (questionId, choiceText) => {
@@ -126,6 +123,7 @@ export default function FlashcardAttempt({
 		if (perQuestionTimerEnabled) {
 			markLocked(questionId);
 			markRevealed(questionId);
+			scheduleAfterReveal(TIMER_REVEAL_ADVANCE_MS);
 			return;
 		}
 		if (isLast) return;

@@ -78,50 +78,62 @@ export default function QuizAttempt() {
 		}
 	}, [id, scope.fullQuiz, scope.sectionIds]);
 
-	const loadQuiz = useCallback(async () => {
-		setLoading(true);
-		try {
-			const sectionQuery =
-				!scope.fullQuiz && scope.sectionIds.length ? `&sections=${scope.sectionIds.join(',')}` : '';
-			const response = await api
-				.get(`/quizzes/quiz/${id}/?randomize=true${sectionQuery}`)
-				.catch(() =>
-					api.get(
-						`/quizzes/quiz/${id}/${sectionQuery ? `?sections=${scope.sectionIds.join(',')}` : ''}`
-					)
-				);
-			const { quizData: nextQuiz, questions: nextQuestions } = parseQuizPayload(response.data);
+	const loadQuiz = useCallback(
+		async (signal) => {
+			setLoading(true);
+			try {
+				const sectionQuery =
+					!scope.fullQuiz && scope.sectionIds.length
+						? `&sections=${scope.sectionIds.join(',')}`
+						: '';
+				const response = await api
+					.get(`/quizzes/quiz/${id}/?randomize=true${sectionQuery}`)
+					.catch(() =>
+						api.get(
+							`/quizzes/quiz/${id}/${sectionQuery ? `?sections=${scope.sectionIds.join(',')}` : ''}`
+						)
+					);
+				if (signal?.aborted) return;
 
-			let scopedQuestions = nextQuestions;
-			if (scope.sample) {
-				scopedQuestions = sampleArray(nextQuestions, scope.sample);
-			} else if (scope.shuffle) {
-				scopedQuestions = shuffleArray(nextQuestions);
+				const { quizData: nextQuiz, questions: nextQuestions } = parseQuizPayload(response.data);
+
+				let scopedQuestions = nextQuestions;
+				if (scope.sample) {
+					scopedQuestions = sampleArray(nextQuestions, scope.sample);
+				} else if (scope.shuffle) {
+					scopedQuestions = shuffleArray(nextQuestions);
+				}
+
+				setQuizData(nextQuiz);
+				setQuestions(scopedQuestions);
+				setAnswers(buildAnswerRecords(scopedQuestions));
+				setSubmittedAnswers([]);
+				setScore(0);
+				setAccuracy(0);
+				setSectionScores([]);
+				setQuizResults(false);
+				setTime(0);
+				setIsRunning(true);
+				if (!signal?.aborted) {
+					await startAttempt();
+				}
+			} catch {
+				if (signal?.aborted) return;
+				toast.error('Could not load quiz.');
+				navigate('/quizzes');
+			} finally {
+				if (!signal?.aborted) setLoading(false);
 			}
-
-			setQuizData(nextQuiz);
-			setQuestions(scopedQuestions);
-			setAnswers(buildAnswerRecords(scopedQuestions));
-			setSubmittedAnswers([]);
-			setScore(0);
-			setAccuracy(0);
-			setSectionScores([]);
-			setQuizResults(false);
-			setTime(0);
-			setIsRunning(true);
-			await startAttempt();
-		} catch {
-			toast.error('Could not load quiz.');
-			navigate('/quizzes');
-		} finally {
-			setLoading(false);
-		}
-	}, [id, navigate, scope.fullQuiz, scope.sectionIds, scope.shuffle, scope.sample, startAttempt]);
+		},
+		[id, navigate, scope.fullQuiz, scope.sectionIds, scope.shuffle, scope.sample, startAttempt]
+	);
 
 	useEffect(() => {
+		const controller = new AbortController();
 		// Initial load / scope change — loadQuiz owns loading state.
 		// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional fetch-on-mount
-		loadQuiz();
+		loadQuiz(controller.signal);
+		return () => controller.abort();
 	}, [loadQuiz]);
 
 	useEffect(() => {
