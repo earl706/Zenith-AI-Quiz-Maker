@@ -34,6 +34,7 @@ import {
 	normalizeQuizSections,
 	questionTypeFromFlags,
 	questionsGroupedBySection,
+	sortQuestionsBySectionOrder,
 	PER_QUESTION_TIMER_DEFAULT,
 	clampPerQuestionSeconds,
 	parseOptionalTimerSeconds
@@ -195,11 +196,7 @@ export default function EditQuizPage() {
 					loadedSections.filter((s) => s.id != null).map((s) => [s.id, s.clientKey])
 				);
 
-				const orderedQuestions = [...questionsData].sort((a, b) => {
-					const aId = Number(a.id) || 0;
-					const bId = Number(b.id) || 0;
-					return aId - bId;
-				});
+				const orderedQuestions = sortQuestionsBySectionOrder(questionsData, loadedSections);
 
 				const transformedQuestions = orderedQuestions.map((question, index) => {
 					const rawChoices = [...(question.choices || [])].sort((a, b) => {
@@ -224,7 +221,9 @@ export default function EditQuizPage() {
 						return resolveQuizImageSrc(fromObj || choiceImageUrls[i]) || fromObj || null;
 					});
 					const mathematical =
-						question.question_type === 'MUL-COM' || question.question_type === 'COM';
+						question.question_type === 'MUL-COM' ||
+						question.question_type === 'IDE-COM' ||
+						question.question_type === 'COM';
 					const identification =
 						question.question_type === 'IDE' || question.question_type === 'IDE-COM';
 					const padTo = Math.max(transformedChoices.length, identification ? 1 : 4);
@@ -624,7 +623,7 @@ export default function EditQuizPage() {
 			}
 
 			quizData.questions = await Promise.all(
-				questions.map(async (question) => {
+				questions.map(async (question, qi) => {
 					const choices = question.choices || [];
 					const correctIndex = Math.max(
 						0,
@@ -654,6 +653,7 @@ export default function EditQuizPage() {
 						...(typeof question.id === 'number' ? { id: question.id } : {}),
 						question: question.title,
 						question_type: questionTypeFromFlags(question),
+						order: qi,
 						choices_array: choices,
 						choice_images: choiceImages,
 						choice_image_urls: choiceImageUrls,

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -33,7 +34,8 @@ import {
 	getAttemptStats,
 	getChoiceData,
 	isMathematical,
-	questionTypeLabel
+	questionTypeLabel,
+	sortQuestionsBySectionOrder
 } from '../components/quiz/quizHelpers';
 import { useAttemptLauncher } from '../components/quiz/useAttemptLauncher';
 
@@ -81,9 +83,21 @@ export default function QuizPage() {
 		retry: false
 	});
 
-	if (isLoading) return <LoadingScreen />;
-
 	const { quiz, questions, attempts, meta } = parseQuizSummary(data);
+	const sections = quiz?.sections || [];
+	const orderedQuestions = useMemo(
+		() => sortQuestionsBySectionOrder(questions, sections),
+		[questions, sections]
+	);
+	const questionNumberById = useMemo(() => {
+		const map = new Map();
+		orderedQuestions.forEach((q, i) => {
+			if (q?.id != null) map.set(q.id, i + 1);
+		});
+		return map;
+	}, [orderedQuestions]);
+
+	if (isLoading) return <LoadingScreen />;
 
 	if (isError || !quiz) {
 		return (
@@ -213,14 +227,14 @@ export default function QuizPage() {
 						</Card>
 					) : (
 						<QuizQuestionListLayout
-							questions={questions}
-							sections={quiz.sections || []}
+							questions={orderedQuestions}
+							sections={sections}
 							layout={questionLayout}
 							onLayoutChange={setQuestionLayout}
 							listClassName="space-y-4"
 							renderQuestion={(question, index) => {
-								const globalIndex = questions.findIndex((q) => q.id === question.id);
-								const questionNumber = (globalIndex >= 0 ? globalIndex : index) + 1;
+								const questionNumber =
+									(question?.id != null && questionNumberById.get(question.id)) || index + 1;
 								const choices = Array.isArray(question.choices) ? question.choices : [];
 								const math = isMathematical(question.question_type);
 
@@ -233,15 +247,9 @@ export default function QuizPage() {
 											<Badge tone="neutral">{questionTypeLabel(question.question_type)}</Badge>
 										</div>
 										<CardBody className="space-y-4 p-5">
-											{math ? (
-												<div className="text-fg text-center text-base font-semibold">
-													<MathRenderer expression={question.question} displayMode={false} />
-												</div>
-											) : (
-												<p className="text-fg text-center text-base font-semibold">
-													{question.question}
-												</p>
-											)}
+											<p className="text-fg text-center text-base font-semibold">
+												{question.question}
+											</p>
 
 											{question.question_image && (
 												<div className="flex justify-center">
@@ -269,7 +277,7 @@ export default function QuizPage() {
 														return (
 															<div
 																key={choiceId ?? ci}
-																className="bg-surface-2 flex max-w-56 min-w-30 flex-col items-center gap-2 rounded-md px-3 py-2.5"
+																className="bg-surface-2 flex max-w-full min-w-30 flex-col items-center gap-2 rounded-md px-4 py-2.5 sm:max-w-3xl"
 															>
 																{choiceImage && (
 																	<img
@@ -280,7 +288,9 @@ export default function QuizPage() {
 																)}
 																{choiceText &&
 																	(math ? (
-																		<MathRenderer expression={choiceText} displayMode={false} />
+																		<div className="max-w-full overflow-x-auto text-center whitespace-nowrap">
+																			<MathRenderer expression={choiceText} displayMode={false} />
+																		</div>
 																	) : (
 																		<span className="text-fg text-center text-sm font-medium">
 																			{choiceText}

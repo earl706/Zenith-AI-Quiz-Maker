@@ -20,7 +20,8 @@ import {
 	identificationAnswerCorpus,
 	parseAttemptScopeFromSearch,
 	sampleArray,
-	shuffleArray
+	shuffleArray,
+	sortQuestionsBySectionOrder
 } from '../components/quiz/quizHelpers';
 
 function parseQuizPayload(data) {
@@ -102,6 +103,8 @@ export default function QuizAttempt() {
 					scopedQuestions = sampleArray(nextQuestions, scope.sample);
 				} else if (scope.shuffle) {
 					scopedQuestions = shuffleArray(nextQuestions);
+				} else if (!nextQuiz.random_question_order) {
+					scopedQuestions = sortQuestionsBySectionOrder(nextQuestions, nextQuiz.sections || []);
 				}
 
 				setQuizData(nextQuiz);

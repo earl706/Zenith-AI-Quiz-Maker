@@ -213,10 +213,37 @@ export function questionsGroupedBySection(questions, sections) {
 	return groups;
 }
 
+/** Stable quiz display/attempt order: section.order, then question.order, then id. */
+export function sortQuestionsBySectionOrder(questions = [], sections = []) {
+	const sectionOrder = new Map([...(sections || [])].map((s) => [s.id, s.order ?? 0]));
+	return [...(questions || [])].sort((a, b) => {
+		const aSid = a.section ?? a.section_id ?? null;
+		const bSid = b.section ?? b.section_id ?? null;
+		const aSecOrder =
+			aSid == null
+				? Number.POSITIVE_INFINITY
+				: (sectionOrder.get(aSid) ?? Number.POSITIVE_INFINITY);
+		const bSecOrder =
+			bSid == null
+				? Number.POSITIVE_INFINITY
+				: (sectionOrder.get(bSid) ?? Number.POSITIVE_INFINITY);
+		if (aSecOrder !== bSecOrder) return aSecOrder - bSecOrder;
+		const aOrder = a.order ?? 0;
+		const bOrder = b.order ?? 0;
+		if (aOrder !== bOrder) return aOrder - bOrder;
+		return (Number(a.id) || 0) - (Number(b.id) || 0);
+	});
+}
+
 /** Group API quiz questions by section id (attempt / detail payloads). */
 export function groupQuestionsByApiSection(questions, sections) {
 	if (!sections?.length) {
-		return [{ section: null, questions: questions || [] }];
+		return [
+			{
+				section: null,
+				questions: sortQuestionsBySectionOrder(questions || [], sections)
+			}
+		];
 	}
 	const sorted = [...sections].sort(
 		(a, b) => (a.order ?? 0) - (b.order ?? 0) || (a.id ?? 0) - (b.id ?? 0)
@@ -228,12 +255,16 @@ export function groupQuestionsByApiSection(questions, sections) {
 		if (sid != null && byId.has(sid)) byId.get(sid).push(q);
 		else orphan.push(q);
 	}
+	const sortWithin = (list) =>
+		[...list].sort(
+			(a, b) => (a.order ?? 0) - (b.order ?? 0) || (Number(a.id) || 0) - (Number(b.id) || 0)
+		);
 	const groups = sorted.map((section) => ({
 		section,
-		questions: byId.get(section.id) || []
+		questions: sortWithin(byId.get(section.id) || [])
 	}));
 	if (orphan.length) {
-		groups.push({ section: null, questions: orphan });
+		groups.push({ section: null, questions: sortWithin(orphan) });
 	}
 	return groups.filter((g) => g.questions.length > 0);
 }

@@ -697,9 +697,16 @@ export default function CreateQuizPage() {
 			questions.forEach((question, qi) => {
 				formData.append(`questions[${qi}][title]`, question.title);
 				formData.append(`questions[${qi}][correctAnswerIndex]`, question.correctAnswerIndex);
-				formData.append(`questions[${qi}][randomChoices]`, question.randomChoices);
-				formData.append(`questions[${qi}][identification]`, question.identification);
-				formData.append(`questions[${qi}][mathematical]`, question.mathematical);
+				formData.append(
+					`questions[${qi}][randomChoices]`,
+					question.randomChoices ? 'true' : 'false'
+				);
+				formData.append(
+					`questions[${qi}][identification]`,
+					question.identification ? 'true' : 'false'
+				);
+				formData.append(`questions[${qi}][mathematical]`, question.mathematical ? 'true' : 'false');
+				formData.append(`questions[${qi}][order]`, String(qi));
 				formData.append(`questions[${qi}][explanation]`, question.explanation || '');
 				formData.append(`questions[${qi}][worked_solution]`, question.workedSolution || '');
 				formData.append(`questions[${qi}][source_citation]`, question.sourceCitation || '');
@@ -718,7 +725,7 @@ export default function CreateQuizPage() {
 					!!question.hasChoiceImages ||
 					question.choiceImages.some(Boolean) ||
 					choiceUrls.some(Boolean);
-				formData.append(`questions[${qi}][hasChoiceImages]`, hasChoiceImages);
+				formData.append(`questions[${qi}][hasChoiceImages]`, hasChoiceImages ? 'true' : 'false');
 				if (sections.length > 0 && question.sectionKey) {
 					const sectionIndex = sections.findIndex((s) => s.clientKey === question.sectionKey);
 					if (sectionIndex >= 0) {
@@ -757,8 +764,12 @@ export default function CreateQuizPage() {
 				toast.success('Quiz created!');
 				navigate(`/quizzes/${quizId}`);
 			}
-		} catch {
-			toast.error('Failed to create quiz.');
+		} catch (error) {
+			const detail =
+				error?.response?.data?.detail ||
+				error?.response?.data?.error ||
+				(typeof error?.response?.data === 'string' ? error.response.data : null);
+			toast.error(detail || 'Failed to create quiz.');
 		} finally {
 			setCreating(false);
 		}

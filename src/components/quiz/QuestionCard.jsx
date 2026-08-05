@@ -34,7 +34,13 @@ export default function QuestionCard({
 				/>
 			) : (
 				<div className="border-line bg-surface flex w-full flex-col items-center rounded-md border p-6">
-					<p className="text-fg mb-3 text-lg font-semibold">{question.question}</p>
+					{question.question_type === 'MUL-COM' || question.question_type === 'COM' ? (
+						<div className="text-fg mb-3 text-lg font-semibold">
+							<MathRenderer expression={question.question} displayMode={false} />
+						</div>
+					) : (
+						<p className="text-fg mb-3 text-lg font-semibold">{question.question}</p>
+					)}
 
 					{questionImage && (
 						<div className="mb-4 flex w-full justify-center">

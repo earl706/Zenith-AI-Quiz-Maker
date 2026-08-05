@@ -231,9 +231,16 @@ export function RegisterPage() {
 	const register = useAuthStore((s) => s.register);
 	const error = useAuthStore((s) => s.error);
 	const [form, setForm] = useState({ full_name: '', email: '', password: '' });
+	const [confirmPassword, setConfirmPassword] = useState('');
+	const [confirmError, setConfirmError] = useState('');
 	const [loading, setLoading] = useState(false);
 	const submit = async (e) => {
 		e.preventDefault();
+		if (form.password !== confirmPassword) {
+			setConfirmError('Passwords do not match.');
+			return;
+		}
+		setConfirmError('');
 		setLoading(true);
 		try {
 			await register(form);
@@ -265,8 +272,26 @@ export function RegisterPage() {
 					type="password"
 					minLength={8}
 					value={form.password}
-					onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+					onChange={(e) => {
+						setForm((f) => ({ ...f, password: e.target.value }));
+						if (confirmError) setConfirmError('');
+					}}
 					placeholder="At least 8 characters"
+					autoComplete="new-password"
+					required
+				/>
+				<Input
+					label="Confirm password"
+					type="password"
+					minLength={8}
+					value={confirmPassword}
+					onChange={(e) => {
+						setConfirmPassword(e.target.value);
+						if (confirmError) setConfirmError('');
+					}}
+					placeholder="Re-enter password"
+					autoComplete="new-password"
+					error={confirmError}
 					required
 				/>
 				{error && <p className="bg-danger/10 text-danger rounded-md px-3 py-2 text-sm">{error}</p>}
