@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import MathFieldInput from './MathFieldInput';
-import MathRenderer from './MathRenderer';
+import QuestionTitle from './QuestionTitle';
 import { resolveQuestionImageSrc } from '../../lib/quizImages';
 import { rankPrefixSuggestions } from './quizHelpers';
 
@@ -86,15 +86,11 @@ export default function IdentificationAnswerInput({
 
 	return (
 		<div className="border-line bg-surface flex w-full flex-col items-center rounded-md border p-5">
-			{isMath ? (
-				<div className="text-fg mb-3 w-full text-center text-base leading-snug font-semibold">
-					<MathRenderer expression={question.question} displayMode={false} />
-				</div>
-			) : (
-				<p className="text-fg mb-3 w-full text-center text-base leading-snug font-semibold">
-					{question.question}
-				</p>
-			)}
+			<QuestionTitle
+				text={question.question}
+				mathematical={isMath}
+				className="mb-3 w-full text-base"
+			/>
 			{questionImage && (
 				<div className="mb-3 flex w-full justify-center">
 					<img

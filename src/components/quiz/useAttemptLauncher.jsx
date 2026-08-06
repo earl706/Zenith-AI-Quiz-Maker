@@ -5,19 +5,52 @@ import { buildAttemptQuery } from './quizHelpers';
 import SectionAttemptModal from './SectionAttemptModal';
 
 /**
- * Always opens a pre-attempt modal (sections when present, suggestion setting always).
+ * Always opens a pre-attempt modal (sections when present, suggestion setting always),
+ * unless options.skipModal is set with a non-empty initialSectionIds list.
+ *
+ * launchAttempt(quiz, {
+ *   initialSectionIds?: number[],
+ *   highlightedSectionId?: number,
+ *   skipModal?: boolean,
+ *   answerSuggestions?: boolean  // only used when skipModal
+ * })
  */
 export function useAttemptLauncher() {
 	const navigate = useNavigate();
 	const [target, setTarget] = useState(null);
 
-	const launchAttempt = useCallback((quiz) => {
-		if (!quiz) return;
-		const id = quiz.uuid || quiz.quiz_id || quiz.id;
-		if (!id) return;
-		const sections = Array.isArray(quiz.sections) ? quiz.sections : [];
-		setTarget({ id, title: quiz.quiz_title || 'Quiz', sections });
-	}, []);
+	const launchAttempt = useCallback(
+		(quiz, options = {}) => {
+			if (!quiz) return;
+			const id = quiz.uuid || quiz.quiz_id || quiz.id;
+			if (!id) return;
+			const sections = Array.isArray(quiz.sections) ? quiz.sections : [];
+			const initialSectionIds = Array.isArray(options.initialSectionIds)
+				? options.initialSectionIds.filter(Boolean)
+				: [];
+			const highlightedSectionId = options.highlightedSectionId ?? initialSectionIds[0] ?? null;
+
+			if (options.skipModal && initialSectionIds.length > 0) {
+				navigate(
+					`/quizzes/attempt/${id}${buildAttemptQuery({
+						fullQuiz: false,
+						sectionIds: initialSectionIds,
+						answerSuggestions: options.answerSuggestions !== false
+					})}`
+				);
+				return;
+			}
+
+			setTarget({
+				id,
+				title: quiz.quiz_title || 'Quiz',
+				sections,
+				initialSectionIds: initialSectionIds.length ? initialSectionIds : null,
+				highlightedSectionId
+			});
+		},
+		[navigate]
+	);
 
 	const closeModal = useCallback(() => setTarget(null), []);
 
@@ -40,12 +73,14 @@ export function useAttemptLauncher() {
 
 	const modal = target ? (
 		<SectionAttemptModal
-			key={target.id}
+			key={`${target.id}-${(target.initialSectionIds || []).join(',')}`}
 			open
 			onClose={closeModal}
 			sections={target.sections || []}
 			quizTitle={target.title || 'Quiz'}
 			onConfirm={confirmScope}
+			initialSectionIds={target.initialSectionIds}
+			highlightedSectionId={target.highlightedSectionId}
 		/>
 	) : null;
 

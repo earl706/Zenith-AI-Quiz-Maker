@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -9,12 +9,14 @@ import {
 	Shuffle,
 	ListOrdered,
 	Clock,
-	HelpCircle
+	HelpCircle,
+	SlidersHorizontal
 } from 'lucide-react';
 
 import { get } from '../lib/api';
 import { formatDate, formatDurationSeconds, fromNow } from '../lib/format';
 import { resolveQuizImageSrc } from '../lib/quizImages';
+import { toast } from '../stores/toastStore';
 import { PageHeader } from '../components/layout/PageHeader';
 import {
 	Badge,
@@ -26,13 +28,21 @@ import {
 	ProgressRing
 } from '../components/ui';
 import MathRenderer from '../components/quiz/MathRenderer';
+import QuestionTitle from '../components/quiz/QuestionTitle';
+import { PersistedQuizSettingsModal } from '../components/quiz/QuizSettingsModal';
 import QuizQuestionListLayout from '../components/quiz/QuizQuestionListLayout';
-import { useQuestionDisplayLayout } from '../components/quiz/useQuestionDisplayLayout';
+import {
+	QUESTION_LAYOUT_SECTION,
+	useQuestionDisplayLayout,
+	useSectionPageIndex
+} from '../components/quiz/useQuestionDisplayLayout';
 import {
 	accuracyTone,
 	attemptScopeLabel,
+	canUseSectionQuestionLayout,
 	getAttemptStats,
 	getChoiceData,
+	groupQuestionsByApiSection,
 	isMathematical,
 	questionTypeLabel,
 	sortQuestionsBySectionOrder
@@ -68,8 +78,9 @@ export default function QuizPage() {
 	const navigate = useNavigate();
 	const { launchAttempt, attemptModal } = useAttemptLauncher();
 	const [questionLayout, setQuestionLayout] = useQuestionDisplayLayout();
+	const [settingsOpen, setSettingsOpen] = useState(false);
 
-	const { data, isLoading, isError } = useQuery({
+	const { data, isLoading, isError, refetch } = useQuery({
 		queryKey: ['quizzes', 'summary', id],
 		queryFn: async () => {
 			try {
@@ -84,11 +95,24 @@ export default function QuizPage() {
 	});
 
 	const { quiz, questions, attempts, meta } = parseQuizSummary(data);
+	const settingsQuiz = useMemo(() => {
+		if (!quiz) return null;
+		const nested = Array.isArray(quiz.questions) ? quiz.questions : [];
+		if (nested.length) return quiz;
+		return { ...quiz, questions };
+	}, [quiz, questions]);
 	const sections = quiz?.sections || [];
 	const orderedQuestions = useMemo(
 		() => sortQuestionsBySectionOrder(questions, sections),
 		[questions, sections]
 	);
+	const sectionGroups = useMemo(
+		() => groupQuestionsByApiSection(orderedQuestions, sections),
+		[orderedQuestions, sections]
+	);
+	const sectionLayoutAvailable = canUseSectionQuestionLayout(sections) && sectionGroups.length >= 2;
+	const viewingSectionLayout = questionLayout === QUESTION_LAYOUT_SECTION && sectionLayoutAvailable;
+	const [sectionPage, setSectionPage] = useSectionPageIndex(sectionGroups);
 	const questionNumberById = useMemo(() => {
 		const map = new Map();
 		orderedQuestions.forEach((q, i) => {
@@ -96,6 +120,24 @@ export default function QuizPage() {
 		});
 		return map;
 	}, [orderedQuestions]);
+
+	const handleHeaderAttempt = () => {
+		if (!viewingSectionLayout) {
+			launchAttempt(quiz);
+			return;
+		}
+		const group = sectionGroups[sectionPage];
+		const sectionId = group?.section?.id;
+		const count = group?.questions?.length ?? 0;
+		if (!sectionId || count === 0) {
+			toast.error('This section has no questions to attempt.');
+			return;
+		}
+		launchAttempt(quiz, {
+			initialSectionIds: [sectionId],
+			highlightedSectionId: sectionId
+		});
+	};
 
 	if (isLoading) return <LoadingScreen />;
 
@@ -160,17 +202,33 @@ export default function QuizPage() {
 						: ''
 				}`}
 				actions={
-					<div className="flex gap-2">
+					<div className="flex items-center gap-1.5 sm:gap-2">
+						<Button
+							variant="ghost"
+							size="icon"
+							className="cursor-pointer"
+							aria-label="Quiz settings"
+							title="Quiz settings"
+							onClick={() => setSettingsOpen(true)}
+						>
+							<SlidersHorizontal size={16} />
+						</Button>
 						<Button variant="secondary" onClick={() => navigate(`/quizzes/edit/${id}`)}>
 							<Pencil size={14} /> Edit
 						</Button>
-						<Button onClick={() => launchAttempt(quiz)}>
+						<Button onClick={handleHeaderAttempt}>
 							<Play size={14} /> Attempt
 						</Button>
 					</div>
 				}
 			/>
 
+			<PersistedQuizSettingsModal
+				quiz={settingsQuiz}
+				open={settingsOpen}
+				onClose={() => setSettingsOpen(false)}
+				onSaved={() => refetch()}
+			/>
 			{quiz.quiz_image && (
 				<div className="border-line bg-surface mb-6 overflow-hidden rounded-md border">
 					<img
@@ -231,6 +289,8 @@ export default function QuizPage() {
 							sections={sections}
 							layout={questionLayout}
 							onLayoutChange={setQuestionLayout}
+							sectionPage={sectionPage}
+							onSectionPageChange={setSectionPage}
 							listClassName="space-y-4"
 							renderQuestion={(question, index) => {
 								const questionNumber =
@@ -247,9 +307,11 @@ export default function QuizPage() {
 											<Badge tone="neutral">{questionTypeLabel(question.question_type)}</Badge>
 										</div>
 										<CardBody className="space-y-4 p-5">
-											<p className="text-fg text-center text-base font-semibold">
-												{question.question}
-											</p>
+											<QuestionTitle
+												text={question.question}
+												mathematical={math}
+												className="text-base"
+											/>
 
 											{question.question_image && (
 												<div className="flex justify-center">

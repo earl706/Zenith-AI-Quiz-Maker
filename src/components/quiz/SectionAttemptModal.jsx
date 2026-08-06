@@ -4,16 +4,28 @@ import { Button, Input, Modal } from '../ui';
 
 const DEFAULT_SAMPLE = 10;
 
+function normalizeInitialIds(initialSectionIds, allIds) {
+	if (!Array.isArray(initialSectionIds) || !initialSectionIds.length) return null;
+	const allowed = new Set(allIds);
+	const next = initialSectionIds.filter((id) => allowed.has(id));
+	return next.length ? next : null;
+}
+
 /**
  * Pre-attempt settings: sections (when present), random modes, answer suggestions.
  * onConfirm({ fullQuiz, sectionIds, shuffle?, sample?, answerSuggestions })
+ *
+ * initialSectionIds — when set, opens with only those sections checked (not "All").
+ * highlightedSectionId — subtle hint for the section that drove the pre-selection.
  */
 export default function SectionAttemptModal({
 	open,
 	onClose,
 	sections = [],
 	quizTitle = 'Quiz',
-	onConfirm
+	onConfirm,
+	initialSectionIds = null,
+	highlightedSectionId = null
 }) {
 	const sorted = useMemo(
 		() =>
@@ -25,8 +37,14 @@ export default function SectionAttemptModal({
 
 	const hasSections = sorted.length > 0;
 	const allIds = useMemo(() => sorted.map((s) => s.id).filter(Boolean), [sorted]);
-	const [selected, setSelected] = useState(allIds);
-	const [allSelected, setAllSelected] = useState(true);
+	const presetIds = useMemo(
+		() => normalizeInitialIds(initialSectionIds, allIds),
+		[initialSectionIds, allIds]
+	);
+	const focusId = highlightedSectionId ?? presetIds?.[0] ?? null;
+
+	const [selected, setSelected] = useState(() => presetIds ?? allIds);
+	const [allSelected, setAllSelected] = useState(() => !presetIds);
 	const [sampleCount, setSampleCount] = useState(String(DEFAULT_SAMPLE));
 	const [answerSuggestions, setAnswerSuggestions] = useState(true);
 
@@ -77,6 +95,11 @@ export default function SectionAttemptModal({
 		confirmWith({ fullQuiz: true, sectionIds: [], shuffle: true, sample: count });
 	};
 
+	const startFocusedSection = () => {
+		if (!focusId) return;
+		confirmWith({ fullQuiz: false, sectionIds: [focusId] });
+	};
+
 	return (
 		<Modal
 			open={open}
@@ -123,6 +146,11 @@ export default function SectionAttemptModal({
 					<div className="mb-4 space-y-2">
 						<p className="text-fg text-xs font-medium tracking-wide uppercase">Quick start</p>
 						<div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+							{presetIds?.length === 1 && focusId && (
+								<Button type="button" className="sm:flex-1" onClick={startFocusedSection}>
+									Start this section
+								</Button>
+							)}
 							<Button
 								type="button"
 								variant="secondary"
@@ -158,6 +186,13 @@ export default function SectionAttemptModal({
 						</div>
 					</div>
 
+					{presetIds && (
+						<p className="text-muted mb-2 text-xs">
+							Pre-selected from the section you&apos;re viewing — you can change the selection
+							below.
+						</p>
+					)}
+
 					<label className="border-line bg-surface-2 mb-3 flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2.5">
 						<input
 							type="checkbox"
@@ -171,9 +206,14 @@ export default function SectionAttemptModal({
 					<ul className="grid max-h-64 grid-cols-2 gap-2 overflow-y-auto">
 						{sorted.map((section) => {
 							const checked = allSelected || selected.includes(section.id);
+							const isFocused = focusId != null && section.id === focusId;
 							return (
 								<li key={section.id} className="min-w-0">
-									<label className="border-line hover:bg-surface-2 flex h-full cursor-pointer items-center gap-3 rounded-md border px-3 py-2.5 transition">
+									<label
+										className={`border-line hover:bg-surface-2 flex h-full cursor-pointer items-center gap-3 rounded-md border px-3 py-2.5 transition ${
+											isFocused ? 'border-primary/40 bg-primary/6 ring-primary/25 ring-1' : ''
+										}`}
+									>
 										<input
 											type="checkbox"
 											checked={checked}

@@ -1,7 +1,8 @@
-import { Clock } from 'lucide-react';
+import { useState } from 'react';
+import { Clock, List, RotateCcw } from 'lucide-react';
 
 import { formatDurationSeconds } from '../../lib/format';
-import { Badge, Card, ProgressRing } from '../ui';
+import { Badge, Button, Card, Modal, ProgressRing } from '../ui';
 import { accuracyTone } from './quizHelpers';
 
 export default function AttemptStatusPanel({
@@ -12,10 +13,30 @@ export default function AttemptStatusPanel({
 	score,
 	accuracy,
 	sectionScores = [],
-	hideElapsedTimer = false
+	hideElapsedTimer = false,
+	onSubmit,
+	submitting = false,
+	onRetake,
+	onBackToList
 }) {
+	const [confirmOpen, setConfirmOpen] = useState(false);
 	const progressPct = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0;
 	const tone = accuracyTone(accuracy);
+	const unanswered = Math.max(0, totalQuestions - answeredCount);
+
+	const requestSubmit = () => {
+		if (totalQuestions === 0) return;
+		if (unanswered > 0) {
+			setConfirmOpen(true);
+			return;
+		}
+		onSubmit?.();
+	};
+
+	const confirmSubmit = () => {
+		setConfirmOpen(false);
+		onSubmit?.();
+	};
 
 	return (
 		<aside className="flex w-full shrink-0 flex-col gap-3 lg:sticky lg:top-6 lg:w-64 lg:self-start">
@@ -38,6 +59,16 @@ export default function AttemptStatusPanel({
 					<p className="text-fg text-sm font-medium">
 						{answeredCount} of {totalQuestions} answered
 					</p>
+					{onSubmit && (
+						<Button
+							className="w-full cursor-pointer"
+							loading={submitting}
+							disabled={totalQuestions === 0}
+							onClick={requestSubmit}
+						>
+							Submit quiz
+						</Button>
+					)}
 				</Card>
 			)}
 
@@ -78,8 +109,51 @@ export default function AttemptStatusPanel({
 							</ul>
 						</div>
 					)}
+					{(onRetake || onBackToList) && (
+						<div className="border-line flex flex-col gap-2 border-t pt-4">
+							{onRetake && (
+								<Button className="w-full cursor-pointer" onClick={onRetake}>
+									<RotateCcw size={14} /> Retake quiz
+								</Button>
+							)}
+							{onBackToList && (
+								<Button
+									className="w-full cursor-pointer"
+									variant="secondary"
+									onClick={onBackToList}
+								>
+									<List size={14} /> Quiz list
+								</Button>
+							)}
+						</div>
+					)}
 				</Card>
 			)}
+
+			<Modal
+				open={confirmOpen}
+				onClose={() => setConfirmOpen(false)}
+				title="Submit incomplete quiz?"
+				size="sm"
+				footer={
+					<>
+						<Button variant="secondary" onClick={() => setConfirmOpen(false)}>
+							Keep answering
+						</Button>
+						<Button loading={submitting} onClick={confirmSubmit}>
+							Submit anyway
+						</Button>
+					</>
+				}
+			>
+				<p className="text-muted text-sm">
+					You have answered {answeredCount} of {totalQuestions}.{' '}
+					{unanswered === 1
+						? '1 question is still unanswered.'
+						: `${unanswered} questions are still unanswered.`}{' '}
+					Submit now?
+				</p>
+			</Modal>
 		</aside>
 	);
 }

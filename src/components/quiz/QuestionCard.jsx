@@ -3,8 +3,9 @@ import { useState } from 'react';
 import IdentificationAnswerInput from './IdentificationAnswerInput';
 import MathRenderer from './MathRenderer';
 import QuestionStudyFeedback from './QuestionStudyFeedback';
+import QuestionTitle from './QuestionTitle';
 import { resolveQuestionImageSrc, resolveQuizImageSrc } from '../../lib/quizImages';
-import { getChoiceData } from './quizHelpers';
+import { getChoiceData, isMathematical } from './quizHelpers';
 
 export default function QuestionCard({
 	question,
@@ -34,13 +35,11 @@ export default function QuestionCard({
 				/>
 			) : (
 				<div className="border-line bg-surface flex w-full flex-col items-center rounded-md border p-6">
-					{question.question_type === 'MUL-COM' || question.question_type === 'COM' ? (
-						<div className="text-fg mb-3 text-lg font-semibold">
-							<MathRenderer expression={question.question} displayMode={false} />
-						</div>
-					) : (
-						<p className="text-fg mb-3 text-lg font-semibold">{question.question}</p>
-					)}
+					<QuestionTitle
+						text={question.question}
+						mathematical={isMathematical(question.question_type)}
+						className="mb-3 text-lg"
+					/>
 
 					{questionImage && (
 						<div className="mb-4 flex w-full justify-center">

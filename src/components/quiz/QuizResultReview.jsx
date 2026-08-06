@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { BookOpen, Check, List, RotateCcw, X } from 'lucide-react';
+import { BookOpen, Check, X } from 'lucide-react';
 
 import { cn, formatDurationSeconds } from '../../lib/format';
+import { answersEqual } from '../../lib/mathAnswersEqual';
 import { resolveQuestionImageSrc, resolveQuizImageSrc } from '../../lib/quizImages';
-import { Badge, Button, Card, CardBody } from '../ui';
+import { Badge, Card, CardBody } from '../ui';
 import MathRenderer from './MathRenderer';
 import { getChoiceData, isIdentification, isMathematical } from './quizHelpers';
 import QuizQuestionListLayout from './QuizQuestionListLayout';
@@ -195,7 +196,9 @@ function TeachingContent({ question }) {
 }
 
 function ResultQuestionCard({ question, submitted, index }) {
-	const correct = submitted?.correctAnswer === submitted?.userAnswer;
+	const correct = answersEqual(submitted?.correctAnswer, submitted?.userAnswer, {
+		questionType: question?.question_type ?? submitted?.questionType
+	});
 	const math = isMathematical(question.question_type);
 	const identification = isIdentification(question.question_type);
 	const questionImage = resolveQuestionImageSrc(question);
@@ -247,9 +250,7 @@ export default function QuizResultReview({
 	score,
 	accuracy,
 	time,
-	sectionScores = [],
-	onRetake,
-	onBackToList
+	sectionScores = []
 }) {
 	const [questionLayout, setQuestionLayout] = useQuestionDisplayLayout();
 	const [answerFilter, setAnswerFilter] = useState(RESULT_FILTER_ALL);
@@ -259,7 +260,14 @@ export default function QuizResultReview({
 			questions.map((question, index) => ({
 				question,
 				submitted: submittedAnswers[index],
-				correct: submittedAnswers[index]?.correctAnswer === submittedAnswers[index]?.userAnswer
+				correct: answersEqual(
+					submittedAnswers[index]?.correctAnswer,
+					submittedAnswers[index]?.userAnswer,
+					{
+						mathematical: isMathematical(question.question_type),
+						questionType: question.question_type ?? submittedAnswers[index]?.questionType
+					}
+				)
 			})),
 		[questions, submittedAnswers]
 	);
@@ -350,15 +358,6 @@ export default function QuizResultReview({
 					)}
 				</>
 			)}
-
-			<div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
-				<Button onClick={onRetake}>
-					<RotateCcw size={14} /> Retake quiz
-				</Button>
-				<Button variant="secondary" onClick={onBackToList}>
-					<List size={14} /> Quiz list
-				</Button>
-			</div>
 		</motion.div>
 	);
 }

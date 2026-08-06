@@ -52,9 +52,9 @@ import {
 	ToggleChip,
 	ImageDropzone,
 	ChoiceImageControl,
-	PerQuestionTimerSettings,
 	QuestionTimerOverrideField
 } from '../components/quiz/quizAuthoringUi';
+import QuizSettingsModal from '../components/quiz/QuizSettingsModal';
 import { useQuizAiProposal } from '../components/quiz/useQuizAiProposal';
 import QuizAiInstructionModal from '../components/quiz/QuizAiInstructionModal';
 import QuizAiReviewBar, { QuizAiChangeControls } from '../components/quiz/QuizAiReviewBar';
@@ -1174,11 +1174,32 @@ export default function EditQuizPage() {
 				onSubmit={(instruction, model) => aiProposal.runRevise(instruction, model)}
 			/>
 
-			<Modal
+			<QuizSettingsModal
 				open={settingsOpen}
 				onClose={() => setSettingsOpen(false)}
-				title="Quiz settings"
-				size="md"
+				quizTitle={quizTitle}
+				onQuizTitleChange={setQuizTitle}
+				quizImagePreview={quizImagePreview}
+				quizImageUrl={quizImageUrl}
+				onQuizImageUpload={handleQuizImageUpload}
+				onQuizCoverUrlChange={setQuizCoverUrl}
+				onClearQuizImage={clearQuizImage}
+				quizType={quizType}
+				onQuizTypeChange={setQuizType}
+				randomQuestionOrder={randomQuestionOrder}
+				onRandomQuestionOrderChange={setRandomQuestionOrder}
+				randomQuestionChoices={randomQuestionChoices}
+				onRandomQuestionChoicesChange={(next) => {
+					setRandomQuestionChoices(next);
+					setQuestions((qs) => qs.map((q) => ({ ...q, randomChoices: next })));
+				}}
+				perQuestionTimerEnabled={perQuestionTimerEnabled}
+				onPerQuestionTimerEnabledChange={setPerQuestionTimerEnabled}
+				perQuestionTimeSeconds={perQuestionTimeSeconds}
+				onPerQuestionTimeSecondsChange={setPerQuestionTimeSeconds}
+				selectedColor={selectedColor}
+				onSelectedColorChange={setSelectedColor}
+				disabled={reviewing}
 				footer={
 					<Button
 						className="w-full cursor-pointer sm:w-auto"
@@ -1189,98 +1210,7 @@ export default function EditQuizPage() {
 						Save changes
 					</Button>
 				}
-			>
-				<div className="space-y-3">
-					<Input
-						label="Title"
-						value={quizTitle}
-						onChange={(e) => setQuizTitle(e.target.value)}
-						className="py-1.5"
-					/>
-
-					<ImageDropzone
-						preview={quizImagePreview}
-						compact
-						label="Cover image"
-						onPreview={openImagePreview}
-						urlValue={quizImageUrl}
-						onUrlChange={setQuizCoverUrl}
-						onClear={clearQuizImage}
-						onChange={handleQuizImageUpload}
-					/>
-
-					<div>
-						<p className="text-fg mb-1.5 text-xs font-medium">Type</p>
-						<div className="flex gap-1.5">
-							{['list', 'flashcard'].map((t) => (
-								<button
-									key={t}
-									type="button"
-									className={cn(
-										'flex-1 cursor-pointer rounded-md px-2 py-1.5 text-xs font-medium capitalize transition',
-										quizType === t
-											? 'bg-primary text-primary-fg'
-											: 'bg-surface-2 text-fg hover:bg-line'
-									)}
-									onClick={() => setQuizType(t)}
-								>
-									{t}
-								</button>
-							))}
-						</div>
-					</div>
-
-					<div className="flex flex-col flex-nowrap gap-1.5">
-						<ToggleChip
-							active={randomQuestionOrder}
-							onClick={() => setRandomQuestionOrder(!randomQuestionOrder)}
-						>
-							Shuffle questions
-						</ToggleChip>
-						<ToggleChip
-							active={randomQuestionChoices}
-							onClick={() => {
-								setRandomQuestionChoices(!randomQuestionChoices);
-								setQuestions((qs) =>
-									qs.map((q) => ({ ...q, randomChoices: !randomQuestionChoices }))
-								);
-							}}
-						>
-							Shuffle choices
-						</ToggleChip>
-					</div>
-
-					<PerQuestionTimerSettings
-						enabled={perQuestionTimerEnabled}
-						onEnabledChange={setPerQuestionTimerEnabled}
-						seconds={perQuestionTimeSeconds}
-						onSecondsChange={setPerQuestionTimeSeconds}
-						disabled={reviewing}
-					/>
-
-					<div>
-						<p className="text-fg mb-1.5 text-xs font-medium">Tag</p>
-						<div className="grid grid-cols-8 gap-1.5">
-							{colors.map((color) => (
-								<button
-									key={color.hex}
-									type="button"
-									title={color.name}
-									aria-label={color.name}
-									onClick={() => setSelectedColor(color.hex)}
-									className={cn(
-										'h-5 w-5 cursor-pointer rounded-full border transition',
-										selectedColor === color.hex
-											? 'border-fg ring-primary/40 scale-110 ring-2'
-											: 'border-line hover:scale-105'
-									)}
-									style={{ backgroundColor: color.hex }}
-								/>
-							))}
-						</div>
-					</div>
-				</div>
-			</Modal>
+			/>
 
 			<Modal
 				open={!!imagePreview}

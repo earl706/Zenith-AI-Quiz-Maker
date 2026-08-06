@@ -1,6 +1,7 @@
 import { BookOpen, CheckCircle2, XCircle } from 'lucide-react';
 
 import { cn } from '../../lib/format';
+import { answersEqual } from '../../lib/mathAnswersEqual';
 import MathRenderer from './MathRenderer';
 import { isMathematical } from './quizHelpers';
 
@@ -19,8 +20,11 @@ export default function QuestionStudyFeedback({ question, answer }) {
 	const correctAnswer = String(answer?.correctAnswer ?? question?.correct_answer ?? '').trim();
 	if (!selected) return null;
 
-	const correct = selected === correctAnswer;
 	const math = isMathematical(question?.question_type);
+	const correct = answersEqual(correctAnswer, selected, {
+		mathematical: math,
+		questionType: question?.question_type ?? answer?.questionType
+	});
 
 	return (
 		<div

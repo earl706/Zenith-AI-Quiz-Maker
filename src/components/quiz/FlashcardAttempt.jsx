@@ -7,6 +7,7 @@ import { Button, Card, CardBody, LoadingScreen, ProgressBar } from '../ui';
 import IdentificationAnswerInput from './IdentificationAnswerInput';
 import MathRenderer from './MathRenderer';
 import QuestionStudyFeedback from './QuestionStudyFeedback';
+import QuestionTitle from './QuestionTitle';
 import {
 	getChoiceData,
 	isIdentification,
@@ -26,7 +27,6 @@ export default function FlashcardAttempt({
 	onIdentificationChange,
 	onSubmit,
 	submitting,
-	answeredCount,
 	answerSuggestionsEnabled = false,
 	suggestionCorpus = [],
 	perQuestionTimerEnabled = false,
@@ -261,9 +261,11 @@ export default function FlashcardAttempt({
 			) : (
 				<Card>
 					<CardBody className="space-y-4 p-5 sm:p-6">
-						<p className="text-fg text-center text-base leading-snug font-semibold">
-							{currentQuestion.question}
-						</p>
+						<QuestionTitle
+							text={currentQuestion.question}
+							mathematical={math}
+							className="text-base"
+						/>
 						{resolveQuestionImageSrc(currentQuestion) && (
 							<div className="flex w-full justify-center">
 								<img
@@ -325,23 +327,6 @@ export default function FlashcardAttempt({
 				</Button>
 			)}
 			{revealed && <QuestionStudyFeedback question={currentQuestion} answer={answer} />}
-
-			<div className="border-line space-y-2 border-t pt-4">
-				<p className="text-muted text-center text-xs">
-					Answered {answeredCount} of {total}
-				</p>
-				<Button
-					className="w-full"
-					variant={isLast ? 'primary' : 'secondary'}
-					loading={submitting}
-					onClick={() => {
-						cancelAutoAdvance();
-						onSubmit?.();
-					}}
-				>
-					Submit quiz
-				</Button>
-			</div>
 		</div>
 	);
 }

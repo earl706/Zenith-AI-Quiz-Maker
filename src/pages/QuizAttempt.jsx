@@ -6,7 +6,7 @@ import { api } from '../lib/api';
 import { toast } from '../stores/toastStore';
 import { resolveQuizImageSrc } from '../lib/quizImages';
 import { PageHeader } from '../components/layout/PageHeader';
-import { Badge, Button, LoadingScreen } from '../components/ui';
+import { Badge, LoadingScreen } from '../components/ui';
 import QuestionCard from '../components/quiz/QuestionCard';
 import FlashcardAttempt from '../components/quiz/FlashcardAttempt';
 import QuizResultReview from '../components/quiz/QuizResultReview';
@@ -224,8 +224,6 @@ export default function QuizAttempt() {
 							accuracy={accuracy}
 							time={time}
 							sectionScores={sectionScores}
-							onRetake={handleRetake}
-							onBackToList={() => navigate('/quizzes')}
 						/>
 					) : quizData.flashcard_quiz ? (
 						<FlashcardAttempt
@@ -235,7 +233,6 @@ export default function QuizAttempt() {
 							onIdentificationChange={handleIdentificationAnswerChange}
 							onSubmit={submitAnswers}
 							submitting={submitting}
-							answeredCount={answeredCount}
 							answerSuggestionsEnabled={scope.answerSuggestions}
 							suggestionCorpus={suggestionCorpus}
 							perQuestionTimerEnabled={!!quizData.per_question_timer_enabled}
@@ -258,21 +255,6 @@ export default function QuizAttempt() {
 									suggestionCorpus={suggestionCorpus}
 								/>
 							)}
-							footer={
-								<div className="border-line space-y-2 border-t pt-4">
-									<p className="text-muted text-center text-xs">
-										Answered {answeredCount} of {questions.length}
-									</p>
-									<Button
-										className="w-full"
-										loading={submitting}
-										disabled={questions.length === 0}
-										onClick={submitAnswers}
-									>
-										Submit quiz
-									</Button>
-								</div>
-							}
 						/>
 					)}
 				</div>
@@ -286,6 +268,10 @@ export default function QuizAttempt() {
 					accuracy={accuracy}
 					sectionScores={sectionScores}
 					hideElapsedTimer={!!quizData.per_question_timer_enabled && !quizResults}
+					onSubmit={submitAnswers}
+					submitting={submitting}
+					onRetake={handleRetake}
+					onBackToList={() => navigate('/quizzes')}
 				/>
 			</div>
 		</div>

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { BookOpen, Plus, Pencil, Trash2, Play, Eye } from 'lucide-react';
+import { BookOpen, Plus, Pencil, Trash2, Play, Eye, SlidersHorizontal } from 'lucide-react';
 
 import { get, del } from '../lib/api';
 import { formatDate } from '../lib/format';
@@ -18,12 +18,14 @@ import {
 	LoadingScreen,
 	Pagination
 } from '../components/ui';
+import { PersistedQuizSettingsModal } from '../components/quiz/QuizSettingsModal';
 import { useAttemptLauncher } from '../components/quiz/useAttemptLauncher';
 import { LIST_PAGE_SIZE, paginateClient } from '../hooks/useListControls';
 
 export default function QuizzesPage() {
 	const navigate = useNavigate();
 	const [deleteTarget, setDeleteTarget] = useState(null);
+	const [settingsQuiz, setSettingsQuiz] = useState(null);
 	const [page, setPage] = useState(1);
 	const { launchAttempt, attemptModal } = useAttemptLauncher();
 
@@ -88,10 +90,7 @@ export default function QuizzesPage() {
 								resolveQuizImageSrc(quiz.quiz_image_url) ||
 								null;
 							return (
-								<Card
-									key={id}
-									className="flex flex-col overflow-hidden transition hover:shadow-md"
-								>
+								<Card key={id} className="flex flex-col overflow-hidden transition hover:shadow-md">
 									{imageSrc ? (
 										<div className="border-line bg-surface-2 flex h-36 items-center justify-center border-b">
 											<img
@@ -151,6 +150,15 @@ export default function QuizzesPage() {
 											<Button
 												variant="ghost"
 												size="sm"
+												onClick={() => setSettingsQuiz(quiz)}
+												title="Quiz settings"
+												aria-label="Quiz settings"
+											>
+												<SlidersHorizontal size={14} />
+											</Button>
+											<Button
+												variant="ghost"
+												size="sm"
 												onClick={() => navigate(`/quizzes/edit/${id}`)}
 												title="Edit"
 											>
@@ -184,6 +192,12 @@ export default function QuizzesPage() {
 					/>
 				</>
 			)}
+
+			<PersistedQuizSettingsModal
+				quiz={settingsQuiz}
+				open={!!settingsQuiz}
+				onClose={() => setSettingsQuiz(null)}
+			/>
 
 			<Modal
 				open={!!deleteTarget}
