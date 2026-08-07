@@ -253,7 +253,7 @@ export default function FlashcardAttempt({
 					question={currentQuestion}
 					handleIdentificationAnswerChange={onIdentificationChange}
 					onEnter={() => revealIdentification(ID_ENTER_ADVANCE_MS)}
-					autoFocus
+					autoFocus={!revealed && !locked}
 					disabled={revealed || locked}
 					answerSuggestionsEnabled={answerSuggestionsEnabled}
 					suggestionCorpus={suggestionCorpus}
@@ -264,7 +264,7 @@ export default function FlashcardAttempt({
 						<QuestionTitle
 							text={currentQuestion.question}
 							mathematical={math}
-							className="text-base"
+							className="text-2xl"
 						/>
 						{resolveQuestionImageSrc(currentQuestion) && (
 							<div className="flex w-full justify-center">

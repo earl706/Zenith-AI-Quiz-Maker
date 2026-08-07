@@ -138,6 +138,7 @@ export default function CreateQuizPage() {
 	const [quizType, setQuizType] = useState('list');
 	const [perQuestionTimerEnabled, setPerQuestionTimerEnabled] = useState(false);
 	const [perQuestionTimeSeconds, setPerQuestionTimeSeconds] = useState(PER_QUESTION_TIMER_DEFAULT);
+	const [answerSuggestionsEnabled, setAnswerSuggestionsEnabled] = useState(true);
 	const [quizTitle, setQuizTitle] = useState('Quiz Title');
 	const [selectedColor, setSelectedColor] = useState(colors[0].hex);
 	const [quizImage, setQuizImage] = useState(null);
@@ -283,6 +284,7 @@ export default function CreateQuizPage() {
 			setPerQuestionTimeSeconds(
 				clampPerQuestionSeconds(data.per_question_time_seconds, PER_QUESTION_TIMER_DEFAULT)
 			);
+			setAnswerSuggestionsEnabled(data.answer_suggestions_enabled !== false);
 			setQuizImage(null);
 			const cover = data.cover_image_url || '';
 			setQuizImageUrl(cover);
@@ -372,6 +374,9 @@ export default function CreateQuizPage() {
 						data.perQuestionTimeSeconds ?? data.per_question_time_seconds,
 						PER_QUESTION_TIMER_DEFAULT
 					)
+				);
+				setAnswerSuggestionsEnabled(
+					(data.answerSuggestions ?? data.answer_suggestions_enabled) !== false
 				);
 				setQuizImage(null);
 				setQuizImagePreview(null);
@@ -689,6 +694,7 @@ export default function CreateQuizPage() {
 				'perQuestionTimeSeconds',
 				clampPerQuestionSeconds(perQuestionTimeSeconds, PER_QUESTION_TIMER_DEFAULT)
 			);
+			formData.append('answerSuggestions', answerSuggestionsEnabled);
 			formData.append('tag_color', selectedColor);
 			formData.append('quizType', quizType);
 			if (quizImage) formData.append('quiz_image', quizImage);
@@ -1462,6 +1468,8 @@ export default function CreateQuizPage() {
 				onPerQuestionTimerEnabledChange={setPerQuestionTimerEnabled}
 				perQuestionTimeSeconds={perQuestionTimeSeconds}
 				onPerQuestionTimeSecondsChange={setPerQuestionTimeSeconds}
+				answerSuggestionsEnabled={answerSuggestionsEnabled}
+				onAnswerSuggestionsEnabledChange={setAnswerSuggestionsEnabled}
 				selectedColor={selectedColor}
 				onSelectedColorChange={setSelectedColor}
 				disabled={reviewing}

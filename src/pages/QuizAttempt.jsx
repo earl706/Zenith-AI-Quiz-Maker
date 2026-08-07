@@ -4,7 +4,6 @@ import { Target } from 'lucide-react';
 
 import { api } from '../lib/api';
 import { toast } from '../stores/toastStore';
-import { resolveQuizImageSrc } from '../lib/quizImages';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Badge, LoadingScreen } from '../components/ui';
 import QuestionCard from '../components/quiz/QuestionCard';
@@ -12,12 +11,14 @@ import FlashcardAttempt from '../components/quiz/FlashcardAttempt';
 import QuizResultReview from '../components/quiz/QuizResultReview';
 import AttemptStatusPanel from '../components/quiz/AttemptStatusPanel';
 import QuizQuestionListLayout from '../components/quiz/QuizQuestionListLayout';
+import { useAttemptLauncher } from '../components/quiz/useAttemptLauncher';
 import { useQuestionDisplayLayout } from '../components/quiz/useQuestionDisplayLayout';
 import {
 	answersById,
 	buildAnswerRecords,
 	countAnswered,
 	identificationAnswerCorpus,
+	isIdentification,
 	parseAttemptScopeFromSearch,
 	sampleArray,
 	shuffleArray,
@@ -35,6 +36,8 @@ export default function QuizAttempt() {
 	const navigate = useNavigate();
 	const location = useLocation();
 	const scope = useMemo(() => parseAttemptScopeFromSearch(location.search), [location.search]);
+	const launchKey = location.state?.attemptLaunchAt;
+	const { launchAttempt, attemptModal } = useAttemptLauncher();
 
 	const [time, setTime] = useState(0);
 	const [isRunning, setIsRunning] = useState(true);
@@ -52,12 +55,17 @@ export default function QuizAttempt() {
 		flashcard_quiz: false,
 		quiz_image: null,
 		per_question_timer_enabled: false,
-		per_question_time_seconds: 30
+		per_question_time_seconds: 30,
+		answer_suggestions_enabled: true
 	});
 
 	const answersMap = useMemo(() => answersById(answers), [answers]);
 	const answeredCount = useMemo(() => countAnswered(answers), [answers]);
 	const suggestionCorpus = useMemo(() => identificationAnswerCorpus(questions), [questions]);
+	const firstIdentificationId = useMemo(() => {
+		const match = questions.find((q) => isIdentification(q.question_type));
+		return match?.id ?? null;
+	}, [questions]);
 	const [questionLayout, setQuestionLayout] = useQuestionDisplayLayout();
 
 	const handleAnswerChange = useCallback((qid, field, value) => {
@@ -133,11 +141,11 @@ export default function QuizAttempt() {
 
 	useEffect(() => {
 		const controller = new AbortController();
-		// Initial load / scope change — loadQuiz owns loading state.
+		// Initial load / scope change / same-URL retake via launcher state.
 		// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional fetch-on-mount
 		loadQuiz(controller.signal);
 		return () => controller.abort();
-	}, [loadQuiz]);
+	}, [loadQuiz, launchKey]);
 
 	useEffect(() => {
 		if (!isRunning) return undefined;
@@ -167,10 +175,31 @@ export default function QuizAttempt() {
 	};
 
 	const handleRetake = () => {
-		loadQuiz();
+		const sections = Array.isArray(quizData.sections) ? quizData.sections : [];
+		if (sections.length === 0) {
+			loadQuiz();
+			return;
+		}
+		const initialSectionIds = scope.fullQuiz ? [] : scope.sectionIds;
+		launchAttempt(
+			{ ...quizData, uuid: quizData.uuid || id },
+			{
+				initialSectionIds,
+				highlightedSectionId:
+					!scope.fullQuiz && scope.sectionIds.length === 1 ? scope.sectionIds[0] : undefined,
+				presetHint: 'Pre-selected from your last attempt — you can change the selection below.'
+			}
+		);
 	};
 
-	if (loading) return <LoadingScreen />;
+	if (loading) {
+		return (
+			<>
+				{attemptModal}
+				<LoadingScreen />
+			</>
+		);
+	}
 
 	const modeLabel = quizData.flashcard_quiz ? 'Flashcard' : 'List';
 	const scopeLabel = scope.sample
@@ -183,6 +212,7 @@ export default function QuizAttempt() {
 
 	return (
 		<div>
+			{attemptModal}
 			<PageHeader
 				title={quizData.quiz_title || 'Quiz attempt'}
 				icon={Target}
@@ -196,22 +226,6 @@ export default function QuizAttempt() {
 					</div>
 				}
 			/>
-
-			{(resolveQuizImageSrc(quizData.quiz_image) ||
-				resolveQuizImageSrc(quizData.quiz_image_url) ||
-				quizData.quiz_image) && (
-				<div className="mb-5 flex justify-center">
-					<img
-						src={
-							resolveQuizImageSrc(quizData.quiz_image) ||
-							resolveQuizImageSrc(quizData.quiz_image_url) ||
-							quizData.quiz_image
-						}
-						alt=""
-						className="h-auto max-h-36 w-auto max-w-full object-contain"
-					/>
-				</div>
-			)}
 
 			<div className="flex flex-col gap-6 lg:flex-row lg:items-start">
 				<div className="min-w-0 flex-1">
@@ -233,7 +247,7 @@ export default function QuizAttempt() {
 							onIdentificationChange={handleIdentificationAnswerChange}
 							onSubmit={submitAnswers}
 							submitting={submitting}
-							answerSuggestionsEnabled={scope.answerSuggestions}
+							answerSuggestionsEnabled={quizData.answer_suggestions_enabled !== false}
 							suggestionCorpus={suggestionCorpus}
 							perQuestionTimerEnabled={!!quizData.per_question_timer_enabled}
 							perQuestionTimeSeconds={quizData.per_question_time_seconds ?? 30}
@@ -251,8 +265,9 @@ export default function QuizAttempt() {
 									answers={answers}
 									handleAnswerChange={handleAnswerChange}
 									handleIdentificationAnswerChange={handleIdentificationAnswerChange}
-									answerSuggestionsEnabled={scope.answerSuggestions}
+									answerSuggestionsEnabled={quizData.answer_suggestions_enabled !== false}
 									suggestionCorpus={suggestionCorpus}
+									autoFocus={firstIdentificationId != null && question.id === firstIdentificationId}
 								/>
 							)}
 						/>
@@ -272,6 +287,7 @@ export default function QuizAttempt() {
 					submitting={submitting}
 					onRetake={handleRetake}
 					onBackToList={() => navigate('/quizzes')}
+					quizImage={quizData.quiz_image || quizData.quiz_image_url || null}
 				/>
 			</div>
 		</div>

@@ -13,7 +13,8 @@ export default function QuestionCard({
 	handleAnswerChange,
 	handleIdentificationAnswerChange,
 	answerSuggestionsEnabled = false,
-	suggestionCorpus = []
+	suggestionCorpus = [],
+	autoFocus = false
 }) {
 	const [revealed, setRevealed] = useState(false);
 	const answer = answers.find((a) => a.id === question.id);
@@ -29,6 +30,7 @@ export default function QuestionCard({
 					question={question}
 					handleIdentificationAnswerChange={handleIdentificationAnswerChange}
 					onEnter={() => hasAnswer && setRevealed(true)}
+					autoFocus={autoFocus && !revealed}
 					disabled={revealed}
 					answerSuggestionsEnabled={answerSuggestionsEnabled}
 					suggestionCorpus={suggestionCorpus}
@@ -38,7 +40,7 @@ export default function QuestionCard({
 					<QuestionTitle
 						text={question.question}
 						mathematical={isMathematical(question.question_type)}
-						className="mb-3 text-lg"
+						className="mb-3 text-2xl"
 					/>
 
 					{questionImage && (

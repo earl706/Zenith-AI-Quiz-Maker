@@ -10,7 +10,8 @@ import {
 	ListOrdered,
 	Clock,
 	HelpCircle,
-	SlidersHorizontal
+	SlidersHorizontal,
+	Map as MapIcon
 } from 'lucide-react';
 
 import { get } from '../lib/api';
@@ -18,6 +19,7 @@ import { formatDate, formatDurationSeconds, fromNow } from '../lib/format';
 import { resolveQuizImageSrc } from '../lib/quizImages';
 import { toast } from '../stores/toastStore';
 import { PageHeader } from '../components/layout/PageHeader';
+import CreateRoadmapFromQuizModal from '../components/roadmap/CreateRoadmapFromQuizModal';
 import {
 	Badge,
 	Button,
@@ -79,6 +81,7 @@ export default function QuizPage() {
 	const { launchAttempt, attemptModal } = useAttemptLauncher();
 	const [questionLayout, setQuestionLayout] = useQuestionDisplayLayout();
 	const [settingsOpen, setSettingsOpen] = useState(false);
+	const [roadmapOpen, setRoadmapOpen] = useState(false);
 
 	const { data, isLoading, isError, refetch } = useQuery({
 		queryKey: ['quizzes', 'summary', id],
@@ -213,6 +216,15 @@ export default function QuizPage() {
 						>
 							<SlidersHorizontal size={16} />
 						</Button>
+						{sections.length > 0 && (
+							<Button
+								variant="secondary"
+								onClick={() => setRoadmapOpen(true)}
+								title="Create mastery roadmap from this quiz"
+							>
+								<MapIcon size={14} /> Roadmap
+							</Button>
+						)}
 						<Button variant="secondary" onClick={() => navigate(`/quizzes/edit/${id}`)}>
 							<Pencil size={14} /> Edit
 						</Button>
@@ -228,6 +240,12 @@ export default function QuizPage() {
 				open={settingsOpen}
 				onClose={() => setSettingsOpen(false)}
 				onSaved={() => refetch()}
+			/>
+			<CreateRoadmapFromQuizModal
+				open={roadmapOpen}
+				onClose={() => setRoadmapOpen(false)}
+				quiz={quiz}
+				navigateOnSuccess
 			/>
 			{quiz.quiz_image && (
 				<div className="border-line bg-surface mb-6 overflow-hidden rounded-md border">

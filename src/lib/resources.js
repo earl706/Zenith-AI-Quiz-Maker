@@ -12,6 +12,20 @@ export function normalizeQuizList(payload) {
 	return [];
 }
 
+/** Prefer annotated question_count from list API; fall back to nested questions. */
+export function quizQuestionCount(quiz) {
+	if (typeof quiz?.question_count === 'number') return quiz.question_count;
+	if (Array.isArray(quiz?.questions)) return quiz.questions.length;
+	return 0;
+}
+
+/** Prefer annotated section_count from list API; fall back to nested sections. */
+export function quizSectionCount(quiz) {
+	if (typeof quiz?.section_count === 'number') return quiz.section_count;
+	if (Array.isArray(quiz?.sections)) return quiz.sections.length;
+	return 0;
+}
+
 export function invalidateQuizQueries() {
 	return Promise.all([
 		queryClient.invalidateQueries({ queryKey: ['quizzes'] }),

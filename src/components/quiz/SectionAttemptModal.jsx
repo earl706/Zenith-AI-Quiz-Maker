@@ -11,12 +11,16 @@ function normalizeInitialIds(initialSectionIds, allIds) {
 	return next.length ? next : null;
 }
 
+const DEFAULT_PRESET_HINT =
+	"Pre-selected from the section you're viewing — you can change the selection below.";
+
 /**
- * Pre-attempt settings: sections (when present), random modes, answer suggestions.
- * onConfirm({ fullQuiz, sectionIds, shuffle?, sample?, answerSuggestions })
+ * Pre-attempt settings: sections (when present) and random modes.
+ * onConfirm({ fullQuiz, sectionIds, shuffle?, sample? })
  *
  * initialSectionIds — when set, opens with only those sections checked (not "All").
  * highlightedSectionId — subtle hint for the section that drove the pre-selection.
+ * presetHint — optional override for the preset helper line under Quick start.
  */
 export default function SectionAttemptModal({
 	open,
@@ -25,7 +29,8 @@ export default function SectionAttemptModal({
 	quizTitle = 'Quiz',
 	onConfirm,
 	initialSectionIds = null,
-	highlightedSectionId = null
+	highlightedSectionId = null,
+	presetHint = null
 }) {
 	const sorted = useMemo(
 		() =>
@@ -46,7 +51,6 @@ export default function SectionAttemptModal({
 	const [selected, setSelected] = useState(() => presetIds ?? allIds);
 	const [allSelected, setAllSelected] = useState(() => !presetIds);
 	const [sampleCount, setSampleCount] = useState(String(DEFAULT_SAMPLE));
-	const [answerSuggestions, setAnswerSuggestions] = useState(true);
 
 	const toggleAll = () => {
 		if (allSelected) {
@@ -66,7 +70,7 @@ export default function SectionAttemptModal({
 	const canConfirm = !hasSections || allSelected || selected.length > 0;
 
 	const confirmWith = (scope) => {
-		onConfirm?.({ ...scope, answerSuggestions });
+		onConfirm?.(scope);
 		onClose?.();
 	};
 
@@ -129,18 +133,6 @@ export default function SectionAttemptModal({
 				)}
 			</p>
 
-			<label className="border-line bg-surface-2 mb-4 flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5">
-				<input
-					type="checkbox"
-					checked={answerSuggestions}
-					onChange={(e) => setAnswerSuggestions(e.target.checked)}
-					className="mt-0.5 h-4 w-4 accent-[var(--primary)]"
-				/>
-				<span className="min-w-0">
-					<span className="text-fg block text-sm font-medium">Show answer suggestions</span>
-				</span>
-			</label>
-
 			{hasSections && (
 				<>
 					<div className="mb-4 space-y-2">
@@ -187,10 +179,7 @@ export default function SectionAttemptModal({
 					</div>
 
 					{presetIds && (
-						<p className="text-muted mb-2 text-xs">
-							Pre-selected from the section you&apos;re viewing — you can change the selection
-							below.
-						</p>
+						<p className="text-muted mb-2 text-xs">{presetHint || DEFAULT_PRESET_HINT}</p>
 					)}
 
 					<label className="border-line bg-surface-2 mb-3 flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2.5">

@@ -4,15 +4,19 @@ import { useNavigate } from 'react-router-dom';
 import { buildAttemptQuery } from './quizHelpers';
 import SectionAttemptModal from './SectionAttemptModal';
 
+function attemptLaunchState() {
+	return { attemptLaunchAt: Date.now() };
+}
+
 /**
- * Always opens a pre-attempt modal (sections when present, suggestion setting always),
+ * Always opens a pre-attempt modal (sections when present),
  * unless options.skipModal is set with a non-empty initialSectionIds list.
  *
  * launchAttempt(quiz, {
  *   initialSectionIds?: number[],
  *   highlightedSectionId?: number,
  *   skipModal?: boolean,
- *   answerSuggestions?: boolean  // only used when skipModal
+ *   presetHint?: string  // override SectionAttemptModal preset helper text
  * })
  */
 export function useAttemptLauncher() {
@@ -34,9 +38,9 @@ export function useAttemptLauncher() {
 				navigate(
 					`/quizzes/attempt/${id}${buildAttemptQuery({
 						fullQuiz: false,
-						sectionIds: initialSectionIds,
-						answerSuggestions: options.answerSuggestions !== false
-					})}`
+						sectionIds: initialSectionIds
+					})}`,
+					{ state: attemptLaunchState() }
 				);
 				return;
 			}
@@ -46,7 +50,8 @@ export function useAttemptLauncher() {
 				title: quiz.quiz_title || 'Quiz',
 				sections,
 				initialSectionIds: initialSectionIds.length ? initialSectionIds : null,
-				highlightedSectionId
+				highlightedSectionId,
+				presetHint: options.presetHint ?? null
 			});
 		},
 		[navigate]
@@ -55,16 +60,16 @@ export function useAttemptLauncher() {
 	const closeModal = useCallback(() => setTarget(null), []);
 
 	const confirmScope = useCallback(
-		({ fullQuiz, sectionIds, shuffle, sample, answerSuggestions }) => {
+		({ fullQuiz, sectionIds, shuffle, sample }) => {
 			if (!target?.id) return;
 			navigate(
 				`/quizzes/attempt/${target.id}${buildAttemptQuery({
 					fullQuiz,
 					sectionIds,
 					shuffle,
-					sample,
-					answerSuggestions
-				})}`
+					sample
+				})}`,
+				{ state: attemptLaunchState() }
 			);
 			setTarget(null);
 		},
@@ -81,6 +86,7 @@ export function useAttemptLauncher() {
 			onConfirm={confirmScope}
 			initialSectionIds={target.initialSectionIds}
 			highlightedSectionId={target.highlightedSectionId}
+			presetHint={target.presetHint}
 		/>
 	) : null;
 

@@ -295,13 +295,7 @@ export function answersById(answers) {
 	return map;
 }
 
-export function buildAttemptQuery({
-	fullQuiz,
-	sectionIds,
-	shuffle = false,
-	sample = null,
-	answerSuggestions = true
-}) {
+export function buildAttemptQuery({ fullQuiz, sectionIds, shuffle = false, sample = null }) {
 	const params = new URLSearchParams();
 	if (fullQuiz || !sectionIds?.length) {
 		params.set('full', '1');
@@ -313,7 +307,6 @@ export function buildAttemptQuery({
 	if (Number.isFinite(sampleN) && sampleN > 0) {
 		params.set('sample', String(Math.floor(sampleN)));
 	}
-	if (answerSuggestions === false) params.set('suggestions', '0');
 	const qs = params.toString();
 	return qs ? `?${qs}` : '';
 }
@@ -327,13 +320,11 @@ export function parseAttemptScopeFromSearch(search) {
 		.map((p) => Number.parseInt(p.trim(), 10))
 		.filter((n) => Number.isFinite(n));
 	const sampleRaw = Number.parseInt(params.get('sample') || '', 10);
-	const suggestionsRaw = (params.get('suggestions') || '').toLowerCase();
 	return {
 		fullQuiz: full || sectionIds.length === 0,
 		sectionIds,
 		shuffle: params.get('shuffle') === '1' || params.get('shuffle') === 'true',
-		sample: Number.isFinite(sampleRaw) && sampleRaw > 0 ? sampleRaw : null,
-		answerSuggestions: suggestionsRaw !== '0' && suggestionsRaw !== 'false'
+		sample: Number.isFinite(sampleRaw) && sampleRaw > 0 ? sampleRaw : null
 	};
 }
 

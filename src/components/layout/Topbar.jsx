@@ -4,6 +4,7 @@ import { Menu, Search } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useUIStore } from '../../stores/uiStore';
 import { Avatar, Button } from '../ui';
+import { NotificationBell } from './NotificationBell';
 import { ThemeToggle } from './ThemeToggle';
 
 export function Topbar() {
@@ -35,6 +36,7 @@ export function Topbar() {
 			</button>
 
 			<div className="flex flex-1 items-center justify-end gap-1">
+				<NotificationBell />
 				<ThemeToggle />
 				<button
 					onClick={() => navigate('/settings')}

@@ -89,7 +89,7 @@ export default function IdentificationAnswerInput({
 			<QuestionTitle
 				text={question.question}
 				mathematical={isMath}
-				className="mb-3 w-full text-base"
+				className="mb-3 w-full text-2xl"
 			/>
 			{questionImage && (
 				<div className="mb-3 flex w-full justify-center">

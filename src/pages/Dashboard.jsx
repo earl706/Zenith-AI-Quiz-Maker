@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { get } from '../lib/api';
 import { formatDate, fromNow } from '../lib/format';
-import { normalizeQuizList } from '../lib/resources';
+import { normalizeQuizList, quizQuestionCount } from '../lib/resources';
 import { useAuthStore } from '../stores/authStore';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Button, Card, CardBody, CardHeader, StatCard, EmptyState } from '../components/ui';
@@ -26,8 +26,8 @@ export default function DashboardPage() {
 	const { data: quizzes, isLoading } = useQuery({
 		queryKey: ['dashboard', 'quizzes'],
 		queryFn: () => get('/quizzes/quiz/'),
-		staleTime: 0,
-		refetchOnMount: 'always'
+		staleTime: 60_000,
+		refetchOnMount: true
 	});
 
 	const { data: attempts } = useQuery({
@@ -117,8 +117,8 @@ export default function DashboardPage() {
 									<div className="min-w-0 flex-1">
 										<p className="text-fg truncate text-sm font-medium">{quiz.quiz_title}</p>
 										<p className="text-muted text-xs">
-											{formatDate(quiz.created_at || quiz.date_created)} ·{' '}
-											{quiz.questions?.length ?? 0} questions
+											{formatDate(quiz.created_at || quiz.date_created)} · {quizQuestionCount(quiz)}{' '}
+											questions
 										</p>
 									</div>
 									<Button

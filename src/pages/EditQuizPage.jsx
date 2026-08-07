@@ -98,6 +98,7 @@ export default function EditQuizPage() {
 	const [quizType, setQuizType] = useState('list');
 	const [perQuestionTimerEnabled, setPerQuestionTimerEnabled] = useState(false);
 	const [perQuestionTimeSeconds, setPerQuestionTimeSeconds] = useState(PER_QUESTION_TIMER_DEFAULT);
+	const [answerSuggestionsEnabled, setAnswerSuggestionsEnabled] = useState(true);
 	const [quizTitle, setQuizTitle] = useState('');
 	const [selectedColor, setSelectedColor] = useState(colors[0].hex);
 	const [quizImage, setQuizImage] = useState(null);
@@ -178,6 +179,7 @@ export default function EditQuizPage() {
 				setPerQuestionTimeSeconds(
 					clampPerQuestionSeconds(quizData.per_question_time_seconds, PER_QUESTION_TIMER_DEFAULT)
 				);
+				setAnswerSuggestionsEnabled(quizData.answer_suggestions_enabled !== false);
 				setOriginalQuizImage(quizData.quiz_image);
 				const coverUrl = quizData.quiz_image_url || '';
 				const coverDisplay = quizData.quiz_image || coverUrl;
@@ -595,6 +597,7 @@ export default function EditQuizPage() {
 					perQuestionTimeSeconds,
 					PER_QUESTION_TIMER_DEFAULT
 				),
+				answer_suggestions_enabled: answerSuggestionsEnabled,
 				sections: sections.map((section, si) => ({
 					...(section.id ? { id: section.id } : {}),
 					title: section.title || `Section ${si + 1}`,
@@ -1197,6 +1200,8 @@ export default function EditQuizPage() {
 				onPerQuestionTimerEnabledChange={setPerQuestionTimerEnabled}
 				perQuestionTimeSeconds={perQuestionTimeSeconds}
 				onPerQuestionTimeSecondsChange={setPerQuestionTimeSeconds}
+				answerSuggestionsEnabled={answerSuggestionsEnabled}
+				onAnswerSuggestionsEnabledChange={setAnswerSuggestionsEnabled}
 				selectedColor={selectedColor}
 				onSelectedColorChange={setSelectedColor}
 				disabled={reviewing}

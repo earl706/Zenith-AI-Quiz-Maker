@@ -35,5 +35,7 @@ export const appRoutes = [
 	{ path: 'quizzes/:id', Component: lazy(() => import('./QuizPage')) },
 	{ path: 'quizzes/attempt/:id', Component: lazy(() => import('./QuizAttempt')) },
 	{ path: 'attempts', Component: lazy(() => import('./AttemptsPage')) },
+	{ path: 'progress', Component: lazy(() => import('./ProgressPage')) },
+	{ path: 'roadmap', Component: lazy(() => import('./RoadmapPage')) },
 	{ path: 'settings', Component: lazy(() => import('./Settings')) }
 ];

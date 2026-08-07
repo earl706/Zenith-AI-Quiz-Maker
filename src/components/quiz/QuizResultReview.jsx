@@ -218,7 +218,7 @@ function ResultQuestionCard({ question, submitted, index }) {
 					</Badge>
 				</div>
 
-				<p className="text-fg text-center text-[0.95rem] leading-snug font-semibold">
+				<p className="text-fg text-center text-2xl leading-snug font-semibold">
 					{question.question}
 				</p>
 

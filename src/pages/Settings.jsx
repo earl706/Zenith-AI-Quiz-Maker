@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Cloud, Cpu, LogOut, Settings as SettingsIcon, Shield } from 'lucide-react';
 
-import { patch } from '../lib/api';
+import { get, patch, post } from '../lib/api';
 import { cn } from '../lib/format';
 import { toast } from '../stores/toastStore';
 import { useAuthStore } from '../stores/authStore';
@@ -247,8 +247,80 @@ export default function SettingsPage() {
 						</Button>
 					</CardBody>
 				</Card>
+
+				<NotificationPrefsCard />
 			</div>
 			<MfaSetupModal open={mfaSetupOpen} onClose={() => setMfaSetupOpen(false)} />
 		</div>
+	);
+}
+
+function NotificationPrefsCard() {
+	const { data: prefs, isLoading } = useQuery({
+		queryKey: ['notifications', 'preferences'],
+		queryFn: () => get('/notifications/preferences/')
+	});
+	const qc = useQueryClient();
+	const save = useMutation({
+		mutationFn: (body) => patch('/notifications/preferences/', body),
+		onSuccess: (data) => {
+			qc.setQueryData(['notifications', 'preferences'], data);
+			post('/notifications/refresh-schedule/').catch(() => {});
+			toast.success('Notification preferences saved.');
+		},
+		onError: () => toast.error('Could not save notification preferences.')
+	});
+
+	if (isLoading || !prefs) {
+		return (
+			<Card className="lg:col-span-2">
+				<CardHeader title="Study notifications" />
+				<CardBody>
+					<p className="text-muted text-sm">Loading…</p>
+				</CardBody>
+			</Card>
+		);
+	}
+
+	const toggle = (key) => save.mutate({ [key]: !prefs[key] });
+
+	return (
+		<Card className="lg:col-span-2">
+			<CardHeader
+				title="Study notifications"
+				subtitle="Daily streak reminders and roadmap deadline alerts (on by default)"
+			/>
+			<CardBody className="space-y-3">
+				{[
+					['email_streak_daily', 'Email: daily streak reminder'],
+					['email_deadline', 'Email: roadmap deadline alerts'],
+					['desktop_streak_daily', 'Desktop: daily streak reminder'],
+					['desktop_deadline', 'Desktop: roadmap deadline alerts']
+				].map(([key, label]) => (
+					<label key={key} className="flex cursor-pointer items-center gap-3 text-sm">
+						<input
+							type="checkbox"
+							className="h-4 w-4 cursor-pointer accent-[var(--primary)]"
+							checked={Boolean(prefs[key])}
+							onChange={() => toggle(key)}
+						/>
+						<span className="text-fg">{label}</span>
+					</label>
+				))}
+				<Input
+					label="Local digest hour (0–23)"
+					type="number"
+					min={0}
+					max={23}
+					defaultValue={prefs.digest_hour_local}
+					onBlur={(e) => {
+						const hour = Math.max(0, Math.min(23, Number(e.target.value) || 8));
+						if (hour !== prefs.digest_hour_local) {
+							save.mutate({ digest_hour_local: hour });
+						}
+					}}
+				/>
+			</CardBody>
+		</Card>
 	);
 }

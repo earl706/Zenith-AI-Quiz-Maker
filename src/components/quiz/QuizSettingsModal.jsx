@@ -48,6 +48,8 @@ export default function QuizSettingsModal({
 	onPerQuestionTimerEnabledChange,
 	perQuestionTimeSeconds,
 	onPerQuestionTimeSecondsChange,
+	answerSuggestionsEnabled,
+	onAnswerSuggestionsEnabledChange,
 	selectedColor,
 	onSelectedColorChange,
 	disabled = false,
@@ -121,6 +123,15 @@ export default function QuizSettingsModal({
 						>
 							Shuffle choices
 						</ToggleChip>
+						<ToggleChip
+							active={answerSuggestionsEnabled}
+							onClick={() =>
+								!disabled && onAnswerSuggestionsEnabledChange?.(!answerSuggestionsEnabled)
+							}
+							className={disabled ? 'pointer-events-none opacity-60' : undefined}
+						>
+							Answer suggestions
+						</ToggleChip>
 					</div>
 
 					<PerQuestionTimerSettings
@@ -182,7 +193,10 @@ function draftFromQuiz(quiz) {
 	const preview =
 		resolveQuizImageSrc(coverDisplay) || resolveQuizImageSrc(coverUrl) || coverDisplay || null;
 	const questions = Array.isArray(quiz?.questions) ? quiz.questions : [];
-	const anyShuffleChoices = questions.some((q) => !!q.random_choices);
+	const anyShuffleChoices =
+		typeof quiz?.any_random_choices === 'boolean'
+			? quiz.any_random_choices
+			: questions.some((q) => !!q.random_choices);
 
 	return {
 		quizTitle: quiz?.quiz_title || '',
@@ -194,6 +208,7 @@ function draftFromQuiz(quiz) {
 			quiz?.per_question_time_seconds,
 			PER_QUESTION_TIMER_DEFAULT
 		),
+		answerSuggestionsEnabled: quiz?.answer_suggestions_enabled !== false,
 		selectedColor: quiz?.tag_color || QUIZ_TAG_COLORS[0].hex,
 		quizImage: null,
 		quizImageUrl: isExternalOrStaticImageUrl(coverUrl)
@@ -208,9 +223,9 @@ function draftFromQuiz(quiz) {
 }
 
 /**
- * Settings modal that loads from a quiz row and PUTs quiz-level settings
- * (optionally syncing random_choices on all questions). Used by QuizPage /
- * QuizzesPage.
+ * Settings modal that loads from a quiz row and PUTs quiz-level settings.
+ * Shuffle-choices uses write-only random_choices_all (bulk DB update) — no
+ * detail hydrate and no nested questions payload.
  */
 export function PersistedQuizSettingsModal({ quiz, open, onClose, onSaved }) {
 	const [draft, setDraft] = useState(() => draftFromQuiz(quiz));
@@ -273,7 +288,9 @@ export function PersistedQuizSettingsModal({ quiz, open, onClose, onSaved }) {
 				per_question_time_seconds: clampPerQuestionSeconds(
 					draft.perQuestionTimeSeconds,
 					PER_QUESTION_TIMER_DEFAULT
-				)
+				),
+				answer_suggestions_enabled: draft.answerSuggestionsEnabled,
+				random_choices_all: draft.randomQuestionChoices
 			};
 
 			if (draft.quizImage) {
@@ -288,27 +305,6 @@ export function PersistedQuizSettingsModal({ quiz, open, onClose, onSaved }) {
 			} else if (draft.originalCover && isExternalOrStaticImageUrl(draft.originalCover)) {
 				payload.quiz_image = null;
 				payload.quiz_image_url = draft.originalCover;
-			}
-
-			const questions = Array.isArray(quiz?.questions) ? quiz.questions : [];
-			if (questions.length > 0) {
-				payload.questions = questions
-					.filter((q) => q?.id != null)
-					.map((q, i) => ({
-						id: q.id,
-						question: q.question,
-						question_type: q.question_type,
-						random_choices: draft.randomQuestionChoices,
-						correct_answer: q.correct_answer,
-						correct_answer_index: q.correct_answer_index ?? 0,
-						has_choice_images: !!q.has_choice_images,
-						explanation: q.explanation || '',
-						worked_solution: q.worked_solution || '',
-						source_citation: q.source_citation || '',
-						order: q.order ?? i,
-						per_question_time_seconds: q.per_question_time_seconds ?? null,
-						...(q.section != null ? { section: q.section } : {})
-					}));
 			}
 
 			await put(`/quizzes/quiz/${uuid}/`, payload);
@@ -348,6 +344,10 @@ export function PersistedQuizSettingsModal({ quiz, open, onClose, onSaved }) {
 			}
 			perQuestionTimeSeconds={draft.perQuestionTimeSeconds}
 			onPerQuestionTimeSecondsChange={(v) => setDraft((d) => ({ ...d, perQuestionTimeSeconds: v }))}
+			answerSuggestionsEnabled={draft.answerSuggestionsEnabled}
+			onAnswerSuggestionsEnabledChange={(v) =>
+				setDraft((d) => ({ ...d, answerSuggestionsEnabled: v }))
+			}
 			selectedColor={draft.selectedColor}
 			onSelectedColorChange={(v) => setDraft((d) => ({ ...d, selectedColor: v }))}
 			footer={

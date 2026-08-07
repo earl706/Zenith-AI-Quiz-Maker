@@ -5,6 +5,79 @@ import './mathField.css';
 
 import { cn } from '../../lib/format';
 
+function isMathFieldFocused(mf) {
+	if (!mf) return false;
+	const active = document.activeElement;
+	if (active === mf) return true;
+	if (mf.shadowRoot?.activeElement) return true;
+	if (active && typeof mf.contains === 'function' && mf.contains(active)) return true;
+	return false;
+}
+
+function tryFocusMathField(mf) {
+	if (!mf || mf.disabled) return false;
+	try {
+		mf.focus?.();
+	} catch {
+		return false;
+	}
+	return isMathFieldFocused(mf);
+}
+
+/**
+ * Focus ASAP; if MathLive is not ready yet, retry on mount / frames / short delays.
+ * Does not change virtual-keyboard policy — same as a user click-focus.
+ */
+function scheduleMathFieldAutoFocus(mf) {
+	let cancelled = false;
+	const timers = [];
+	let rafOuter = 0;
+	let rafInner = 0;
+
+	const attempt = () => {
+		if (cancelled || !mf || mf.disabled) return true;
+		return tryFocusMathField(mf);
+	};
+
+	if (attempt()) {
+		return () => {
+			cancelled = true;
+		};
+	}
+
+	const onMount = () => {
+		attempt();
+	};
+	mf.addEventListener('mount', onMount);
+
+	rafOuter = requestAnimationFrame(() => {
+		if (attempt()) return;
+		rafInner = requestAnimationFrame(() => {
+			attempt();
+		});
+	});
+
+	for (const ms of [0, 50, 100, 200]) {
+		timers.push(setTimeout(() => attempt(), ms));
+	}
+
+	if (typeof customElements !== 'undefined') {
+		customElements.whenDefined('math-field').then(() => {
+			if (!cancelled) {
+				requestAnimationFrame(() => attempt());
+			}
+		});
+	}
+
+	return () => {
+		cancelled = true;
+		mf.removeEventListener('mount', onMount);
+		cancelAnimationFrame(rafOuter);
+		cancelAnimationFrame(rafInner);
+		for (const id of timers) clearTimeout(id);
+	};
+}
+
 /**
  * Live WYSIWYG math editor (MathLive). Emits LaTeX strings via onChange
  * so existing MathRenderer / scoring paths stay compatible.
@@ -63,16 +136,14 @@ export default function MathFieldInput({
 
 		mf.addEventListener('input', handleInput);
 		mf.addEventListener('keydown', handleKeyDown);
-		if (autoFocus) {
-			queueMicrotask(() => {
-				try {
-					mf.focus?.();
-				} catch {
-					/* math-field may not be ready yet */
-				}
-			});
+
+		let cancelAutoFocus = null;
+		if (autoFocus && !disabled) {
+			cancelAutoFocus = scheduleMathFieldAutoFocus(mf);
 		}
+
 		return () => {
+			cancelAutoFocus?.();
 			mf.removeEventListener('input', handleInput);
 			mf.removeEventListener('keydown', handleKeyDown);
 		};

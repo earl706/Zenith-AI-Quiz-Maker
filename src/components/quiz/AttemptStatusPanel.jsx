@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Clock, List, RotateCcw } from 'lucide-react';
 
 import { formatDurationSeconds } from '../../lib/format';
+import { resolveQuizImageSrc } from '../../lib/quizImages';
 import { Badge, Button, Card, Modal, ProgressRing } from '../ui';
 import { accuracyTone } from './quizHelpers';
 
@@ -17,12 +18,15 @@ export default function AttemptStatusPanel({
 	onSubmit,
 	submitting = false,
 	onRetake,
-	onBackToList
+	onBackToList,
+	quizImage = null
 }) {
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const progressPct = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0;
 	const tone = accuracyTone(accuracy);
 	const unanswered = Math.max(0, totalQuestions - answeredCount);
+	const imageSrc =
+		resolveQuizImageSrc(quizImage) || (typeof quizImage === 'string' ? quizImage : null);
 
 	const requestSubmit = () => {
 		if (totalQuestions === 0) return;
@@ -40,6 +44,8 @@ export default function AttemptStatusPanel({
 
 	return (
 		<aside className="flex w-full shrink-0 flex-col gap-3 lg:sticky lg:top-6 lg:w-64 lg:self-start">
+			{imageSrc && <img src={imageSrc} alt="" className="h-auto w-full object-contain" />}
+
 			{!hideElapsedTimer && (
 				<Card className="p-5 text-center">
 					<p className="text-muted mb-3 inline-flex items-center gap-1.5 text-xs font-medium tracking-wide uppercase">

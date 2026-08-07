@@ -1,0 +1,1 @@
+import"./react-vendor-DSjXlcOo.js";const l=10;function h(a,e,t=l){const n=a.length,s=Math.max(1,Math.ceil(n/t)),o=Math.min(Math.max(1,e),s),c=(o-1)*t;return{results:a.slice(c,c+t),count:n,total_pages:s,page:o,page_size:t}}export{l as L,h as p};

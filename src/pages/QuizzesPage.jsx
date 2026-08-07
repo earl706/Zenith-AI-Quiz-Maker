@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { BookOpen, Plus, Pencil, Trash2, Play, Eye, SlidersHorizontal } from 'lucide-react';
+import { BookOpen, Plus, Pencil, Trash2, Play, Eye, SlidersHorizontal, Map } from 'lucide-react';
 
 import { get, del } from '../lib/api';
 import { formatDate } from '../lib/format';
 import { resolveQuizImageSrc } from '../lib/quizImages';
-import { invalidateQuizQueries, normalizeQuizList } from '../lib/resources';
+import {
+	invalidateQuizQueries,
+	normalizeQuizList,
+	quizQuestionCount,
+	quizSectionCount
+} from '../lib/resources';
 import { toast } from '../stores/toastStore';
 import { PageHeader } from '../components/layout/PageHeader';
+import CreateRoadmapFromQuizModal from '../components/roadmap/CreateRoadmapFromQuizModal';
 import {
 	Button,
 	Card,
@@ -26,14 +32,15 @@ export default function QuizzesPage() {
 	const navigate = useNavigate();
 	const [deleteTarget, setDeleteTarget] = useState(null);
 	const [settingsQuiz, setSettingsQuiz] = useState(null);
+	const [roadmapQuiz, setRoadmapQuiz] = useState(null);
 	const [page, setPage] = useState(1);
 	const { launchAttempt, attemptModal } = useAttemptLauncher();
 
 	const { data, isLoading } = useQuery({
 		queryKey: ['quizzes', 'list'],
 		queryFn: () => get('/quizzes/quiz/'),
-		staleTime: 0,
-		refetchOnMount: 'always'
+		staleTime: 60_000,
+		refetchOnMount: true
 	});
 
 	const quizList = normalizeQuizList(data);
@@ -85,6 +92,8 @@ export default function QuizzesPage() {
 					<div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
 						{paged.results.map((quiz) => {
 							const id = quiz.uuid || quiz.quiz_id;
+							const qCount = quizQuestionCount(quiz);
+							const sCount = quizSectionCount(quiz);
 							const imageSrc =
 								resolveQuizImageSrc(quiz.quiz_image) ||
 								resolveQuizImageSrc(quiz.quiz_image_url) ||
@@ -93,11 +102,7 @@ export default function QuizzesPage() {
 								<Card key={id} className="flex flex-col overflow-hidden transition hover:shadow-md">
 									{imageSrc ? (
 										<div className="border-line bg-surface-2 flex h-36 items-center justify-center border-b">
-											<img
-												src={imageSrc}
-												alt=""
-												className="h-full max-h-36 w-full object-contain"
-											/>
+											<img src={imageSrc} alt="" className="object-fit h-full max-h-36 w-full" />
 										</div>
 									) : (
 										<div
@@ -124,11 +129,10 @@ export default function QuizzesPage() {
 										</div>
 
 										<div className="mb-4 flex flex-wrap gap-1.5">
-											<Badge tone="primary">{quiz.questions?.length ?? 0} Qs</Badge>
-											{(quiz.sections?.length ?? 0) > 0 && (
+											<Badge tone="primary">{qCount} Qs</Badge>
+											{sCount > 0 && (
 												<Badge tone="neutral">
-													{quiz.sections.length} section
-													{quiz.sections.length === 1 ? '' : 's'}
+													{sCount} section{sCount === 1 ? '' : 's'}
 												</Badge>
 											)}
 											{quiz.flashcard_quiz || quiz.quizType === 'flashcard' ? (
@@ -138,43 +142,62 @@ export default function QuizzesPage() {
 											)}
 										</div>
 
-										<div className="mt-auto flex items-center gap-2">
-											<Button
-												variant="ghost"
-												size="sm"
-												onClick={() => navigate(`/quizzes/${id}`)}
-												title="View"
-											>
-												<Eye size={14} />
-											</Button>
-											<Button
-												variant="ghost"
-												size="sm"
-												onClick={() => setSettingsQuiz(quiz)}
-												title="Quiz settings"
-												aria-label="Quiz settings"
-											>
-												<SlidersHorizontal size={14} />
-											</Button>
-											<Button
-												variant="ghost"
-												size="sm"
-												onClick={() => navigate(`/quizzes/edit/${id}`)}
-												title="Edit"
-											>
-												<Pencil size={14} />
-											</Button>
-											<Button
-												variant="ghost"
-												size="sm"
-												className="text-danger"
-												onClick={() => setDeleteTarget(id)}
-												title="Delete"
-											>
-												<Trash2 size={14} />
-											</Button>
-											<div className="flex-1" />
-											<Button size="sm" onClick={() => launchAttempt(quiz)}>
+										<div className="mt-auto flex flex-col gap-3">
+											<div className="flex flex-wrap items-center gap-0.5">
+												<Button
+													variant="ghost"
+													size="icon"
+													className="h-8 w-8"
+													onClick={() => navigate(`/quizzes/${id}`)}
+													title="View"
+													aria-label="View"
+												>
+													<Eye size={14} />
+												</Button>
+												<Button
+													variant="ghost"
+													size="icon"
+													className="h-8 w-8"
+													onClick={() => setSettingsQuiz(quiz)}
+													title="Quiz settings"
+													aria-label="Quiz settings"
+												>
+													<SlidersHorizontal size={14} />
+												</Button>
+												{sCount > 0 && (
+													<Button
+														variant="ghost"
+														size="icon"
+														className="h-8 w-8"
+														onClick={() => setRoadmapQuiz(quiz)}
+														title="Create roadmap"
+														aria-label="Create roadmap"
+													>
+														<Map size={14} />
+													</Button>
+												)}
+												<Button
+													variant="ghost"
+													size="icon"
+													className="h-8 w-8"
+													onClick={() => navigate(`/quizzes/edit/${id}`)}
+													title="Edit"
+													aria-label="Edit"
+												>
+													<Pencil size={14} />
+												</Button>
+												<Button
+													variant="ghost"
+													size="icon"
+													className="text-danger h-8 w-8"
+													onClick={() => setDeleteTarget(id)}
+													title="Delete"
+													aria-label="Delete"
+												>
+													<Trash2 size={14} />
+												</Button>
+											</div>
+											<Button size="sm" className="w-full" onClick={() => launchAttempt(quiz)}>
 												<Play size={14} /> Attempt
 											</Button>
 										</div>
@@ -197,6 +220,13 @@ export default function QuizzesPage() {
 				quiz={settingsQuiz}
 				open={!!settingsQuiz}
 				onClose={() => setSettingsQuiz(null)}
+			/>
+
+			<CreateRoadmapFromQuizModal
+				open={!!roadmapQuiz}
+				onClose={() => setRoadmapQuiz(null)}
+				quiz={roadmapQuiz}
+				navigateOnSuccess
 			/>
 
 			<Modal

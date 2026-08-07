@@ -1,8 +1,9 @@
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 
 import { MfaPromptModal, MfaSetupModal } from '../auth/MfaModals';
 import { LoadingScreen } from '../ui';
+import { post } from '../../lib/api';
 import { useAuthStore } from '../../stores/authStore';
 import { CommandPalette } from './CommandPalette';
 import { Sidebar } from './Sidebar';
@@ -10,8 +11,14 @@ import { Topbar } from './Topbar';
 
 export function AppLayout() {
 	const showMfaPrompt = useAuthStore((s) => s.user?.show_mfa_prompt);
+	const user = useAuthStore((s) => s.user);
 	const [promptOpen, setPromptOpen] = useState(Boolean(showMfaPrompt));
 	const [setupOpen, setSetupOpen] = useState(false);
+
+	useEffect(() => {
+		if (!user) return;
+		post('/notifications/refresh-schedule/').catch(() => {});
+	}, [user?.id, user?.uuid]);
 
 	return (
 		<div className="bg-bg flex h-dvh overflow-hidden">
