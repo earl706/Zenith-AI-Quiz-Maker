@@ -1,6 +1,22 @@
 const MATH_TYPES = new Set(['MUL-COM', 'COM', 'IDE-COM']);
 const ID_TYPES = new Set(['IDE', 'IDE-COM']);
 
+/**
+ * Disable OS/browser autocorrect, spellcheck, and form autocomplete on plain
+ * IDE text fields. Does not affect in-app answer_suggestions_enabled UI.
+ * Spread onto <input type="text"> (not IDE-COM / MathLive).
+ */
+export const PLAIN_IDE_TEXT_INPUT_AUTO_OFF = {
+	autoComplete: 'off',
+	autoCorrect: 'off',
+	autoCapitalize: 'off',
+	spellCheck: false,
+	inputMode: 'text',
+	'data-1p-ignore': 'true',
+	'data-lpignore': 'true',
+	'data-form-type': 'other'
+};
+
 const QUESTION_TYPE_LABELS = {
 	MUL: 'Multiple choice',
 	IDE: 'Identification',

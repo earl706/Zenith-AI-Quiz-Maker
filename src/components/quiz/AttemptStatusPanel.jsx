@@ -19,7 +19,8 @@ export default function AttemptStatusPanel({
 	submitting = false,
 	onRetake,
 	onBackToList,
-	quizImage = null
+	quizImage = null,
+	submitButtonRef = null
 }) {
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const progressPct = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0;
@@ -67,6 +68,7 @@ export default function AttemptStatusPanel({
 					</p>
 					{onSubmit && (
 						<Button
+							ref={submitButtonRef}
 							className="w-full cursor-pointer"
 							loading={submitting}
 							disabled={totalQuestions === 0}

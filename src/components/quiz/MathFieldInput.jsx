@@ -83,6 +83,8 @@ function scheduleMathFieldAutoFocus(mf) {
  * so existing MathRenderer / scoring paths stay compatible.
  * Does not rewrite stored values — authors/fixtures own the LaTeX text.
  */
+export { tryFocusMathField };
+
 export default function MathFieldInput({
 	value = '',
 	onChange,
@@ -91,6 +93,7 @@ export default function MathFieldInput({
 	className,
 	disabled = false,
 	autoFocus = false,
+	fieldRef = null,
 	'aria-label': ariaLabel
 }) {
 	const ref = useRef(null);
@@ -106,6 +109,21 @@ export default function MathFieldInput({
 	useEffect(() => {
 		onEnterRef.current = onEnter;
 	}, [onEnter]);
+
+	useEffect(() => {
+		const mf = ref.current;
+		if (typeof fieldRef === 'function') {
+			fieldRef(mf);
+			return () => fieldRef(null);
+		}
+		if (fieldRef && typeof fieldRef === 'object') {
+			fieldRef.current = mf;
+			return () => {
+				fieldRef.current = null;
+			};
+		}
+		return undefined;
+	}, [fieldRef]);
 
 	useEffect(() => {
 		const mf = ref.current;
@@ -131,7 +149,7 @@ export default function MathFieldInput({
 			if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
 			if (!onEnterRef.current) return;
 			event.preventDefault();
-			onEnterRef.current();
+			onEnterRef.current(lastEmitted.current ?? mf.value ?? '');
 		};
 
 		mf.addEventListener('input', handleInput);

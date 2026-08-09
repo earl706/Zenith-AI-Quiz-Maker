@@ -3,7 +3,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import MathFieldInput from './MathFieldInput';
 import QuestionTitle from './QuestionTitle';
 import { resolveQuestionImageSrc } from '../../lib/quizImages';
-import { rankPrefixSuggestions } from './quizHelpers';
+import { PLAIN_IDE_TEXT_INPUT_AUTO_OFF, rankPrefixSuggestions } from './quizHelpers';
 
 const MAX_SUGGESTIONS = 5;
 
@@ -15,7 +15,8 @@ export default function IdentificationAnswerInput({
 	autoFocus = false,
 	disabled = false,
 	answerSuggestionsEnabled = false,
-	suggestionCorpus = []
+	suggestionCorpus = [],
+	inputRef = null
 }) {
 	const isMath = question.question_type === 'IDE-COM';
 	const questionImage = resolveQuestionImageSrc(question);
@@ -49,6 +50,7 @@ export default function IdentificationAnswerInput({
 	const applySuggestion = (text) => {
 		handleIdentificationAnswerChange(answer.id, text);
 		setOpen(false);
+		onEnter?.(text);
 	};
 
 	const handleKeyDown = (event) => {
@@ -80,7 +82,7 @@ export default function IdentificationAnswerInput({
 
 		if (event.key === 'Enter' && !event.shiftKey) {
 			event.preventDefault();
-			onEnter?.();
+			onEnter?.(value);
 		}
 	};
 
@@ -107,6 +109,7 @@ export default function IdentificationAnswerInput({
 					onEnter={onEnter}
 					autoFocus={autoFocus}
 					disabled={disabled}
+					fieldRef={inputRef}
 					placeholder="Type your answer (e.g. x^2)"
 					aria-label="Mathematical answer"
 					className="w-full"
@@ -114,7 +117,9 @@ export default function IdentificationAnswerInput({
 			) : (
 				<div className="relative w-full">
 					<input
+						ref={inputRef}
 						type="text"
+						name={`ide-answer-${answer?.id ?? 'x'}`}
 						value={value}
 						onChange={(event) => {
 							handleIdentificationAnswerChange(answer.id, event.target.value);
@@ -131,8 +136,9 @@ export default function IdentificationAnswerInput({
 						role="combobox"
 						aria-expanded={showList}
 						aria-controls={showList ? listId : undefined}
-						aria-autocomplete="list"
+						aria-autocomplete={suggestionsEnabled ? 'list' : 'none'}
 						aria-activedescendant={showList ? `${listId}-option-${activeIndex}` : undefined}
+						{...PLAIN_IDE_TEXT_INPUT_AUTO_OFF}
 						className="border-line bg-surface-2 text-fg focus:border-primary w-full cursor-text rounded-md border px-3 py-2 text-sm font-medium transition focus:outline-none"
 					/>
 					{showList && (

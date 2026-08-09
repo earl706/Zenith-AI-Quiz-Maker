@@ -9,13 +9,15 @@ import { Button, Input, Modal, Select } from '../ui';
  * Create a mastery roadmap from an owner quiz (one node per section).
  * Pass `quiz` to lock to a single quiz (Quiz detail / list).
  * Pass `sources` for a picker (Roadmap page).
+ * Optional `onCreated(roadmap)` runs after a successful fork (before navigate).
  */
 export default function CreateRoadmapFromQuizModal({
 	open,
 	onClose,
 	quiz = null,
 	sources = [],
-	navigateOnSuccess = false
+	navigateOnSuccess = false,
+	onCreated
 }) {
 	const navigate = useNavigate();
 	const fork = useForkRoadmapFromQuiz();
@@ -59,8 +61,9 @@ export default function CreateRoadmapFromQuizModal({
 				title: title || undefined
 			},
 			{
-				onSuccess: () => {
+				onSuccess: (data) => {
 					toast.success('Roadmap created from quiz.');
+					onCreated?.(data);
 					onClose();
 					if (navigateOnSuccess) navigate('/roadmap');
 				},

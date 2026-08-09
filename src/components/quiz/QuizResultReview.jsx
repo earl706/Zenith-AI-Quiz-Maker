@@ -1,15 +1,194 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { BookOpen, Check, X } from 'lucide-react';
+import { BookOpen, Check, GitBranch, Sparkles, X } from 'lucide-react';
 
 import { cn, formatDurationSeconds } from '../../lib/format';
 import { answersEqual } from '../../lib/mathAnswersEqual';
 import { resolveQuestionImageSrc, resolveQuizImageSrc } from '../../lib/quizImages';
-import { Badge, Card, CardBody } from '../ui';
+import CreateRoadmapFromQuizModal from '../roadmap/CreateRoadmapFromQuizModal';
+import { Badge, Button, Card, CardBody, ProgressRing } from '../ui';
 import MathRenderer from './MathRenderer';
 import { getChoiceData, isIdentification, isMathematical } from './quizHelpers';
 import QuizQuestionListLayout from './QuizQuestionListLayout';
 import { useQuestionDisplayLayout } from './useQuestionDisplayLayout';
+
+function roadmapProgressFromFork(data) {
+	const nodes = data?.nodes || [];
+	const progress = data?.progress || {
+		total: nodes.length,
+		mastered: nodes.filter((n) => n.status === 'mastered').length,
+		percent: 0
+	};
+	return {
+		roadmap: {
+			id: data.id,
+			uuid: data.uuid,
+			title: data.title,
+			color: data.color,
+			status: data.status,
+			progress,
+			progress_before: progress,
+			nodes_delta: []
+		},
+		can_create: false,
+		created_after_attempt: true
+	};
+}
+
+function deltaOutcomeLabel(delta) {
+	switch (delta.outcome) {
+		case 'mastered':
+			return 'Just mastered';
+		case 'qualified':
+			return '+1 qualifying';
+		case 'below_gate':
+			return delta.attempt_accuracy != null
+				? `Below gate — accuracy was ${Math.round(delta.attempt_accuracy)}%`
+				: 'Below gate';
+		case 'locked':
+			return 'Locked';
+		case 'already_mastered':
+			return 'Already mastered';
+		case 'no_score':
+			return 'No section score';
+		default:
+			return null;
+	}
+}
+
+function RoadmapMasteryOverview({ roadmapProgress, quiz, onRoadmapCreated }) {
+	const [createOpen, setCreateOpen] = useState(false);
+	const roadmap = roadmapProgress?.roadmap ?? null;
+	const canCreate = !!roadmapProgress?.can_create;
+	const createdAfter = !!roadmapProgress?.created_after_attempt;
+	const progress = roadmap?.progress;
+	const deltas = useMemo(
+		() => (roadmap?.nodes_delta || []).filter((d) => d.outcome !== 'already_mastered'),
+		[roadmap?.nodes_delta]
+	);
+
+	if (!roadmap && !canCreate) return null;
+
+	if (!roadmap) {
+		return (
+			<>
+				<Card className="overflow-hidden">
+					<div className="from-primary/8 via-surface to-surface space-y-3 bg-linear-to-br p-5">
+						<div className="flex items-start gap-3">
+							<div className="bg-surface-2 text-primary flex h-9 w-9 shrink-0 items-center justify-center rounded-md">
+								<GitBranch size={18} aria-hidden />
+							</div>
+							<div className="min-w-0 flex-1">
+								<p className="text-fg text-sm font-semibold">Roadmap mastery</p>
+								<p className="text-muted mt-0.5 text-xs leading-relaxed">
+									No mastery roadmap for this quiz yet. Create one to track section mastery (N
+									attempts × ≥X% accuracy).
+								</p>
+							</div>
+						</div>
+						{canCreate && (
+							<Button size="sm" onClick={() => setCreateOpen(true)} className="w-full sm:w-auto">
+								Create roadmap
+							</Button>
+						)}
+					</div>
+				</Card>
+				<CreateRoadmapFromQuizModal
+					open={createOpen}
+					onClose={() => setCreateOpen(false)}
+					quiz={quiz}
+					onCreated={onRoadmapCreated}
+				/>
+			</>
+		);
+	}
+
+	return (
+		<Card className="overflow-hidden">
+			<div className="from-primary/8 via-surface to-surface bg-linear-to-br p-5">
+				<div className="flex items-start gap-4">
+					<div className="flex shrink-0 flex-col items-center gap-0.5">
+						<ProgressRing
+							value={progress?.percent || 0}
+							size={52}
+							stroke={5}
+							tone="primary"
+							label={`${Math.round(progress?.percent || 0)}`}
+						/>
+						<p className="text-muted text-[10px] tabular-nums">
+							{progress?.mastered}/{progress?.total}
+						</p>
+					</div>
+					<div className="min-w-0 flex-1">
+						<div className="flex flex-wrap items-center justify-between gap-2">
+							<p className="text-fg truncate text-sm font-semibold">{roadmap.title}</p>
+							<Link
+								to="/roadmap"
+								className="text-primary shrink-0 text-xs font-medium hover:underline"
+							>
+								View roadmap
+							</Link>
+						</div>
+						<p className="text-muted mt-0.5 text-xs">
+							Mastery path
+							{roadmap.progress_before &&
+								roadmap.progress_before.mastered !== progress?.mastered && (
+									<>
+										{' '}
+										· was {roadmap.progress_before.mastered}/{roadmap.progress_before.total}
+									</>
+								)}
+						</p>
+						{createdAfter && (
+							<p className="text-muted mt-2 text-xs leading-relaxed">
+								Created after this attempt — future qualifying attempts will count here.
+							</p>
+						)}
+					</div>
+				</div>
+
+				{deltas.length > 0 && (
+					<ul className="border-line mt-4 space-y-2 border-t pt-3">
+						{deltas.map((delta) => {
+							const label = deltaOutcomeLabel(delta);
+							const tone =
+								delta.outcome === 'mastered' || delta.outcome === 'qualified'
+									? 'success'
+									: delta.outcome === 'below_gate'
+										? 'warning'
+										: 'neutral';
+							return (
+								<li key={delta.id} className="flex items-start gap-2 text-xs">
+									{delta.outcome === 'mastered' ? (
+										<Sparkles size={14} className="text-success mt-0.5 shrink-0" aria-hidden />
+									) : (
+										<GitBranch size={14} className="text-primary mt-0.5 shrink-0" aria-hidden />
+									)}
+									<div className="min-w-0 flex-1">
+										<p className="text-fg truncate font-medium">{delta.title}</p>
+										<p className="text-muted tabular-nums">
+											{delta.qualifying_attempts}/{delta.mastery_attempts_required} at ≥
+											{delta.mastery_accuracy_threshold}%
+										</p>
+									</div>
+									{label && (
+										<Badge
+											tone={tone}
+											className="max-w-44 shrink-0 text-right text-[10px] leading-tight whitespace-normal"
+										>
+											{label}
+										</Badge>
+									)}
+								</li>
+							);
+						})}
+					</ul>
+				)}
+			</div>
+		</Card>
+	);
+}
 
 const RESULT_FILTER_ALL = 'all';
 const RESULT_FILTER_WRONG = 'wrong';
@@ -250,7 +429,10 @@ export default function QuizResultReview({
 	score,
 	accuracy,
 	time,
-	sectionScores = []
+	sectionScores = [],
+	roadmapProgress = null,
+	quiz = null,
+	onRoadmapCreated
 }) {
 	const [questionLayout, setQuestionLayout] = useQuestionDisplayLayout();
 	const [answerFilter, setAnswerFilter] = useState(RESULT_FILTER_ALL);
@@ -317,6 +499,12 @@ export default function QuizResultReview({
 				correctCount={correctCount}
 				total={total}
 				sectionScores={sectionScores}
+			/>
+
+			<RoadmapMasteryOverview
+				roadmapProgress={roadmapProgress}
+				quiz={quiz}
+				onRoadmapCreated={(data) => onRoadmapCreated?.(roadmapProgressFromFork(data))}
 			/>
 
 			{total === 0 ? (

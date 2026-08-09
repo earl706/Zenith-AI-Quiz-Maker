@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { CalendarRange, GitBranch, Lock, Map, Pencil, RefreshCw, Sparkles } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { CalendarRange, Map, RefreshCw, Sparkles } from 'lucide-react';
 
 import { get } from '../lib/api';
 import { cn, formatDate } from '../lib/format';
@@ -10,6 +11,7 @@ import {
 	useForkRoadmap,
 	useForkRoadmapFromQuiz,
 	usePatchRoadmapNode,
+	useResetRoadmapSchedule,
 	useResyncRoadmap
 } from '../lib/studyResources';
 import { toast } from '../stores/toastStore';
@@ -28,6 +30,8 @@ import {
 	Select,
 	StatCard
 } from '../components/ui';
+import { useAttemptLauncher } from '../components/quiz/useAttemptLauncher';
+import RoadmapNodeCard, { resolveNodeQuizUuid } from '../components/roadmap/RoadmapNodeCard';
 import { paginateClient } from '../hooks/useListControls';
 
 const PATH_PAGE_SIZE = 11;
@@ -82,7 +86,7 @@ function useClampedPage(page, setPage, paged) {
 	}, [page, paged.page, setPage]);
 }
 
-function WeekPanel({ week, onEdit }) {
+function WeekPanel({ week, onEdit, sourceQuizUuid, onViewQuiz, onAttemptSection }) {
 	if (!week) {
 		return <p className="text-muted text-xs">No schedule yet.</p>;
 	}
@@ -109,7 +113,15 @@ function WeekPanel({ week, onEdit }) {
 						</p>
 						{(d.nodes || []).length ? (
 							(d.nodes || []).map((n) => (
-								<RoadmapNodeCard key={n.id} node={n} onEdit={onEdit} compact />
+								<RoadmapNodeCard
+									key={n.id}
+									node={n}
+									onEdit={onEdit}
+									compact
+									sourceQuizUuid={sourceQuizUuid}
+									onViewQuiz={onViewQuiz}
+									onAttemptSection={onAttemptSection}
+								/>
 							))
 						) : (
 							<p className="text-muted text-[10px] leading-tight">No sections due</p>
@@ -166,65 +178,6 @@ function groupDaysIntoWeeks(days = []) {
 		});
 	}
 	return weeks;
-}
-
-function RoadmapNodeCard({ node, onEdit, compact = false }) {
-	const meta = (
-		<>
-			{node.qualifying_attempts}/{node.mastery_attempts_required} at ≥
-			{node.mastery_accuracy_threshold}%
-			{node.due_date ? ` · ${formatDate(node.due_date, 'MMM d')}` : ''}
-		</>
-	);
-	const icon =
-		node.status === 'locked' ? (
-			<Lock size={compact ? 12 : 16} className="text-muted shrink-0" />
-		) : node.status === 'mastered' ? (
-			<Sparkles size={compact ? 12 : 16} className="text-success shrink-0" />
-		) : (
-			<GitBranch size={compact ? 12 : 16} className="text-primary shrink-0" />
-		);
-
-	if (compact) {
-		return (
-			<div className="border-line flex min-h-0 items-center gap-1.5 rounded border px-2 py-0.5">
-				{icon}
-				<p className="text-fg min-w-0 flex-1 truncate text-xs leading-tight">
-					<span className="font-medium">{node.title}</span>
-					<span className="text-muted font-normal"> · {meta}</span>
-				</p>
-				<Button
-					size="sm"
-					variant="ghost"
-					className="h-6 w-6 shrink-0 p-0"
-					aria-label={`Edit requirements for ${node.title}`}
-					onClick={() => onEdit?.(node)}
-				>
-					<Pencil size={12} />
-				</Button>
-			</div>
-		);
-	}
-
-	return (
-		<div className="border-line flex items-center gap-3 rounded-md border p-3">
-			{icon}
-			<div className="min-w-0 flex-1">
-				<p className="text-fg truncate text-sm font-medium">{node.title}</p>
-				<p className="text-muted text-xs">{meta}</p>
-			</div>
-			<div className="flex shrink-0 items-center gap-1">
-				<Button
-					size="sm"
-					variant="ghost"
-					aria-label={`Edit requirements for ${node.title}`}
-					onClick={() => onEdit?.(node)}
-				>
-					<Pencil size={14} />
-				</Button>
-			</div>
-		</div>
-	);
 }
 
 function ForkModal({ open, onClose, catalog, quizSources }) {
@@ -462,7 +415,7 @@ function NodeMasteryModal({ open, onClose, roadmapId, node }) {
 						onChange={(e) => setManualDue(e.target.checked)}
 						className="accent-primary"
 					/>
-					Keep this due date (don&apos;t auto-reschedule)
+					Keep this due date (don&apos;t move on Reset schedule)
 				</label>
 			</div>
 		</Modal>
@@ -550,18 +503,114 @@ function BulkMasteryModal({ open, onClose, roadmap }) {
 	);
 }
 
+function DeadlineModal({ open, onClose, roadmap }) {
+	const update = roadmapsApi.useUpdate();
+	const [deadline, setDeadline] = useState('');
+
+	useEffect(() => {
+		if (!open || !roadmap) return;
+		setDeadline(roadmap.deadline ? String(roadmap.deadline).slice(0, 10) : '');
+	}, [open, roadmap]);
+
+	const save = () => {
+		if (roadmap?.id == null) return;
+		update.mutate(
+			{ id: roadmap.id, deadline: deadline || null },
+			{
+				onSuccess: () => {
+					toast.success('Deadline updated.');
+					onClose();
+				},
+				onError: (err) => toast.error(err.response?.data?.detail || 'Could not update deadline.')
+			}
+		);
+	};
+
+	return (
+		<Modal
+			open={open}
+			onClose={onClose}
+			title="Edit deadline"
+			size="sm"
+			footer={
+				<>
+					<Button variant="secondary" onClick={onClose}>
+						Cancel
+					</Button>
+					<Button loading={update.isPending} onClick={save}>
+						Save
+					</Button>
+				</>
+			}
+		>
+			<div className="space-y-3">
+				<p className="text-muted text-xs">
+					Shortening the deadline clamps auto-scheduled due dates that fall past it. Existing dates
+					are not reshuffled — use Reset schedule to redistribute evenly.
+				</p>
+				<Input
+					label="Deadline"
+					type="date"
+					value={deadline}
+					onChange={(e) => setDeadline(e.target.value)}
+				/>
+			</div>
+		</Modal>
+	);
+}
+
+function ResetScheduleModal({ open, onClose, onConfirm, pending }) {
+	const close = () => {
+		if (!pending) onClose?.();
+	};
+
+	return (
+		<Modal
+			open={open}
+			onClose={close}
+			title="Reset schedule?"
+			size="sm"
+			footer={
+				<>
+					<Button variant="secondary" onClick={close} disabled={pending}>
+						Cancel
+					</Button>
+					<Button loading={pending} onClick={onConfirm}>
+						Reset schedule
+					</Button>
+				</>
+			}
+		>
+			<p className="text-muted text-sm leading-relaxed">
+				Redistribute all auto-scheduled sections evenly from today through the deadline? Pinned due
+				dates are kept. This cannot be undone.
+			</p>
+		</Modal>
+	);
+}
+
 function RoadmapDetail({ roadmap, onBack }) {
+	const navigate = useNavigate();
+	const { launchAttempt, attemptModal } = useAttemptLauncher();
 	const plan = roadmap.daily_plan || roadmap.weekly_plan;
 	const todayNodes = plan?.tasks_today?.nodes || [];
 	const weekBuckets = useMemo(() => groupDaysIntoWeeks(plan?.days || []), [plan?.days]);
 	const nodes = roadmap.nodes || [];
 	const [editNode, setEditNode] = useState(null);
 	const [bulkOpen, setBulkOpen] = useState(false);
+	const [deadlineOpen, setDeadlineOpen] = useState(false);
+	const [resetScheduleOpen, setResetScheduleOpen] = useState(false);
 	const [mobileTab, setMobileTab] = useState('path');
 	const [pathPage, setPathPage] = useState(1);
 	const [todayPage, setTodayPage] = useState(1);
 	const [weekPage, setWeekPage] = useState(1);
 	const resync = useResyncRoadmap();
+	const resetSchedule = useResetRoadmapSchedule();
+	const sourceQuizUuid = roadmap.linked_quiz_uuid
+		? String(roadmap.linked_quiz_uuid)
+		: roadmap.source_quiz_uuid
+			? String(roadmap.source_quiz_uuid)
+			: null;
 
 	const currentWeekIndex = useMemo(() => {
 		const idx = weekBuckets.findIndex((w) => w.is_current);
@@ -607,7 +656,66 @@ function RoadmapDetail({ roadmap, onBack }) {
 		});
 	};
 
-	const pathPanel = (
+	const handleResetSchedule = () => {
+		resetSchedule.mutate(roadmap.id, {
+			onSuccess: () => {
+				toast.success('Schedule reset.');
+				setResetScheduleOpen(false);
+			},
+			onError: (err) => toast.error(err.response?.data?.detail || 'Could not reset schedule.')
+		});
+	};
+
+	const handleViewQuiz = (node) => {
+		const quizUuid = resolveNodeQuizUuid(node, sourceQuizUuid);
+		if (!quizUuid) return;
+		navigate(`/quizzes/${quizUuid}`);
+	};
+
+	const handleAttemptSection = (node) => {
+		const quizUuid = resolveNodeQuizUuid(node, sourceQuizUuid);
+		if (!quizUuid) return;
+		const sectionId = node.section_id;
+		const sections = nodes
+			.filter((n) => n.section_id)
+			.map((n) => ({
+				id: n.section_id,
+				title: n.title,
+				order: n.order ?? 0
+			}));
+		const quiz = {
+			uuid: quizUuid,
+			quiz_title: roadmap.title || 'Quiz',
+			sections:
+				sections.length > 0
+					? sections
+					: sectionId
+						? [{ id: sectionId, title: node.title, order: node.order ?? 0 }]
+						: []
+		};
+		launchAttempt(quiz, {
+			initialSectionIds: sectionId ? [sectionId] : [],
+			highlightedSectionId: sectionId ?? undefined,
+			presetHint: sectionId
+				? 'Pre-selected from this roadmap section — you can change the selection below.'
+				: undefined
+		});
+	};
+
+	const handleUnlinkedQuiz = () => {
+		toast.error(
+			'No matching owner quiz for this roadmap. Create the quiz from Templates, or create the roadmap from My quiz so View/Attempt can link.'
+		);
+	};
+
+	const nodeCardProps = {
+		sourceQuizUuid,
+		onViewQuiz: handleViewQuiz,
+		onAttemptSection: handleAttemptSection,
+		onUnlinkedQuiz: handleUnlinkedQuiz
+	};
+
+	const renderPathPanel = () => (
 		<Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
 			<CardHeader
 				className="shrink-0 p-3"
@@ -635,9 +743,15 @@ function RoadmapDetail({ roadmap, onBack }) {
 				}
 			/>
 			<CardBody className="flex min-h-0 flex-1 flex-col gap-1.5 overflow-hidden p-3 pt-0">
-				<div className="grid grid-cols-1 gap-1 sm:grid-cols-1">
+				<div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
 					{pagedPath.results.map((node) => (
-						<RoadmapNodeCard key={node.id} node={node} onEdit={setEditNode} compact />
+						<RoadmapNodeCard
+							key={node.id}
+							node={node}
+							onEdit={setEditNode}
+							compact
+							{...nodeCardProps}
+						/>
 					))}
 					{!pagedPath.results.length && (
 						<p className="text-muted col-span-full text-xs">No sections yet.</p>
@@ -667,7 +781,7 @@ function RoadmapDetail({ roadmap, onBack }) {
 		</Card>
 	);
 
-	const todayPanel = (
+	const renderTodayPanel = () => (
 		<Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
 			<CardHeader
 				className="shrink-0 p-3"
@@ -675,16 +789,22 @@ function RoadmapDetail({ roadmap, onBack }) {
 				subtitle={<span className="text-[10px]">Due today + overdue</span>}
 			/>
 			<CardBody className="flex min-h-0 flex-1 flex-col gap-1 overflow-hidden p-3 pt-0">
-				<div className="space-y-1">
+				<div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
 					{!pagedToday.results.length ? (
 						<p className="text-muted text-xs">Nothing due today — you may be ahead or done.</p>
 					) : (
 						pagedToday.results.map((n) => (
-							<RoadmapNodeCard key={n.id} node={n} onEdit={openNodeEditor} compact />
+							<RoadmapNodeCard
+								key={n.id}
+								node={n}
+								onEdit={openNodeEditor}
+								compact
+								{...nodeCardProps}
+							/>
 						))
 					)}
 				</div>
-				<div className="mt-auto">
+				<div className="mt-auto shrink-0">
 					<CompactPager
 						page={pagedToday.page}
 						totalPages={pagedToday.total_pages}
@@ -697,7 +817,7 @@ function RoadmapDetail({ roadmap, onBack }) {
 		</Card>
 	);
 
-	const weekPanel = (
+	const renderWeekPanel = () => (
 		<Card className="flex min-h-0 flex-1 flex-col overflow-hidden">
 			<CardHeader
 				className="shrink-0 p-3"
@@ -706,7 +826,7 @@ function RoadmapDetail({ roadmap, onBack }) {
 			/>
 			<CardBody className="flex min-h-0 flex-1 flex-col gap-1 overflow-hidden p-3 pt-0">
 				<div className="min-h-0 flex-1 overflow-y-auto">
-					<WeekPanel week={pagedWeeks.results[0]} onEdit={openNodeEditor} />
+					<WeekPanel week={pagedWeeks.results[0]} onEdit={openNodeEditor} {...nodeCardProps} />
 				</div>
 				<div className="shrink-0">
 					<CompactPager
@@ -723,6 +843,7 @@ function RoadmapDetail({ roadmap, onBack }) {
 
 	return (
 		<div className="flex h-[calc(100dvh-8rem)] min-h-0 flex-col gap-2 overflow-hidden">
+			{attemptModal}
 			<div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
 				<Button variant="ghost" className="h-8 px-2 text-sm" onClick={onBack}>
 					← All roadmaps
@@ -741,16 +862,34 @@ function RoadmapDetail({ roadmap, onBack }) {
 							Resync from quiz
 						</Button>
 					)}
-					{roadmap.deadline && <Badge tone="warning">Due {formatDate(roadmap.deadline)}</Badge>}
+					<Button
+						size="sm"
+						variant="secondary"
+						className="h-8"
+						onClick={() => setResetScheduleOpen(true)}
+						title="Evenly redistribute auto-scheduled due dates from today"
+					>
+						<CalendarRange size={14} className="mr-1" />
+						Reset schedule
+					</Button>
+					<Button
+						size="sm"
+						variant="ghost"
+						className="h-8"
+						onClick={() => setDeadlineOpen(true)}
+						title="Edit roadmap deadline"
+					>
+						{roadmap.deadline ? `Due ${formatDate(roadmap.deadline)}` : 'Set deadline'}
+					</Button>
 				</div>
 			</div>
 
 			{/* Desktop: two-column single-screen dashboard */}
 			<div className="hidden min-h-0 flex-1 gap-3 overflow-hidden lg:grid lg:grid-cols-2">
-				{pathPanel}
+				{renderPathPanel()}
 				<div className="flex min-h-0 flex-col gap-3 overflow-hidden">
-					{todayPanel}
-					{weekPanel}
+					{renderTodayPanel()}
+					{renderWeekPanel()}
 				</div>
 			</div>
 
@@ -771,9 +910,9 @@ function RoadmapDetail({ roadmap, onBack }) {
 						</button>
 					))}
 				</div>
-				{mobileTab === 'path' && pathPanel}
-				{mobileTab === 'today' && todayPanel}
-				{mobileTab === 'week' && weekPanel}
+				{mobileTab === 'path' && renderPathPanel()}
+				{mobileTab === 'today' && renderTodayPanel()}
+				{mobileTab === 'week' && renderWeekPanel()}
 			</div>
 
 			<NodeMasteryModal
@@ -783,6 +922,13 @@ function RoadmapDetail({ roadmap, onBack }) {
 				node={editNode}
 			/>
 			<BulkMasteryModal open={bulkOpen} onClose={() => setBulkOpen(false)} roadmap={roadmap} />
+			<DeadlineModal open={deadlineOpen} onClose={() => setDeadlineOpen(false)} roadmap={roadmap} />
+			<ResetScheduleModal
+				open={resetScheduleOpen}
+				onClose={() => setResetScheduleOpen(false)}
+				onConfirm={handleResetSchedule}
+				pending={resetSchedule.isPending}
+			/>
 		</div>
 	);
 }

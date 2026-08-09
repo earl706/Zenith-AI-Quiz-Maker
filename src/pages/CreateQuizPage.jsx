@@ -37,7 +37,8 @@ import {
 	questionsGroupedBySection,
 	PER_QUESTION_TIMER_DEFAULT,
 	clampPerQuestionSeconds,
-	parseOptionalTimerSeconds
+	parseOptionalTimerSeconds,
+	PLAIN_IDE_TEXT_INPUT_AUTO_OFF
 } from '../components/quiz/quizHelpers';
 import {
 	QUESTION_LAYOUT_SECTION,
@@ -1260,11 +1261,13 @@ export default function CreateQuizPage() {
 															</button>
 															<input
 																type="text"
+																name={`ide-correct-${question.id}`}
 																value={question.choices[0]}
 																onChange={(e) =>
 																	handleChoicesChange(question.id, 0, e.target.value)
 																}
 																placeholder="Answer"
+																{...PLAIN_IDE_TEXT_INPUT_AUTO_OFF}
 																className="border-line bg-surface text-fg focus:border-primary flex-1 rounded-md border px-2.5 py-1.5 text-sm focus:outline-none"
 																required
 																disabled={reviewing}

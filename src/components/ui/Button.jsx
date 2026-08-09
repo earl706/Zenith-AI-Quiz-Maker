@@ -1,3 +1,5 @@
+import { forwardRef } from 'react';
+
 import { cn } from '../../lib/format';
 
 const VARIANTS = {
@@ -15,17 +17,13 @@ const SIZES = {
 	icon: 'h-9 w-9 justify-center'
 };
 
-export function Button({
-	variant = 'primary',
-	size = 'md',
-	className,
-	loading = false,
-	disabled,
-	children,
-	...props
-}) {
+export const Button = forwardRef(function Button(
+	{ variant = 'primary', size = 'md', className, loading = false, disabled, children, ...props },
+	ref
+) {
 	return (
 		<button
+			ref={ref}
 			className={cn(
 				'inline-flex cursor-pointer items-center rounded-md font-medium transition-all duration-150',
 				'focus-visible:outline-primary focus-visible:outline-2 focus-visible:outline-offset-2',
@@ -44,4 +42,4 @@ export function Button({
 			{children}
 		</button>
 	);
-}
+});

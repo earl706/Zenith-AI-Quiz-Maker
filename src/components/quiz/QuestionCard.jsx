@@ -14,13 +14,22 @@ export default function QuestionCard({
 	handleIdentificationAnswerChange,
 	answerSuggestionsEnabled = false,
 	suggestionCorpus = [],
-	autoFocus = false
+	autoFocus = false,
+	onIdentificationRevealed,
+	inputRef = null
 }) {
 	const [revealed, setRevealed] = useState(false);
 	const answer = answers.find((a) => a.id === question.id);
 	const questionImage = resolveQuestionImageSrc(question);
 	const hasAnswer = String(answer?.userAnswer ?? '').trim() !== '';
 	const identification = question.question_type === 'IDE' || question.question_type === 'IDE-COM';
+
+	const revealIfAnswered = (committedText) => {
+		const text = committedText != null ? committedText : answer?.userAnswer;
+		if (!String(text ?? '').trim() || revealed) return;
+		setRevealed(true);
+		onIdentificationRevealed?.(question.id);
+	};
 
 	return (
 		<div className="space-y-3">
@@ -29,11 +38,12 @@ export default function QuestionCard({
 					answer={answer}
 					question={question}
 					handleIdentificationAnswerChange={handleIdentificationAnswerChange}
-					onEnter={() => hasAnswer && setRevealed(true)}
+					onEnter={revealIfAnswered}
 					autoFocus={autoFocus && !revealed}
 					disabled={revealed}
 					answerSuggestionsEnabled={answerSuggestionsEnabled}
 					suggestionCorpus={suggestionCorpus}
+					inputRef={inputRef}
 				/>
 			) : (
 				<div className="border-line bg-surface flex w-full flex-col items-center rounded-md border p-6">
@@ -101,7 +111,7 @@ export default function QuestionCard({
 				<button
 					type="button"
 					disabled={!hasAnswer}
-					onClick={() => setRevealed(true)}
+					onClick={() => revealIfAnswered()}
 					className="bg-primary text-primary-fg disabled:bg-muted/30 disabled:text-muted w-full rounded-md px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed"
 				>
 					Check answer

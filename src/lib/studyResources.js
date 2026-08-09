@@ -52,6 +52,19 @@ export function useResyncRoadmap() {
 	});
 }
 
+export function useResetRoadmapSchedule() {
+	const qc = useQueryClient();
+	return useMutation({
+		mutationFn: (roadmapId) => post(`/roadmaps/${roadmapId}/reset-schedule/`),
+		onSuccess: (data, roadmapId) => {
+			qc.invalidateQueries({ queryKey: ['roadmaps'] });
+			if (roadmapId != null) {
+				qc.setQueryData(['roadmaps', 'detail', roadmapId], data);
+			}
+		}
+	});
+}
+
 export function usePatchRoadmapNode() {
 	const qc = useQueryClient();
 	return useMutation({

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Target } from 'lucide-react';
 
@@ -12,11 +12,18 @@ import QuizResultReview from '../components/quiz/QuizResultReview';
 import AttemptStatusPanel from '../components/quiz/AttemptStatusPanel';
 import QuizQuestionListLayout from '../components/quiz/QuizQuestionListLayout';
 import { useAttemptLauncher } from '../components/quiz/useAttemptLauncher';
-import { useQuestionDisplayLayout } from '../components/quiz/useQuestionDisplayLayout';
+import {
+	QUESTION_LAYOUT_SECTION,
+	useQuestionDisplayLayout,
+	useSectionPageIndex
+} from '../components/quiz/useQuestionDisplayLayout';
+import { tryFocusMathField } from '../components/quiz/MathFieldInput';
 import {
 	answersById,
 	buildAnswerRecords,
+	canUseSectionQuestionLayout,
 	countAnswered,
+	groupQuestionsByApiSection,
 	identificationAnswerCorpus,
 	isIdentification,
 	parseAttemptScopeFromSearch,
@@ -25,10 +32,24 @@ import {
 	sortQuestionsBySectionOrder
 } from '../components/quiz/quizHelpers';
 
+/** After checking an IDE answer in list mode, wait briefly then focus the next IDE field. */
+const LIST_ID_FOCUS_ADVANCE_MS = 2000;
+
 function parseQuizPayload(data) {
 	const quizData = data.data || data;
 	const questions = data.questions || quizData.questions || [];
 	return { quizData, questions };
+}
+
+function focusAttemptTarget(el) {
+	if (!el) return;
+	const tag = el.tagName?.toLowerCase?.();
+	if (tag === 'math-field') {
+		tryFocusMathField(el);
+	} else {
+		el.focus?.();
+	}
+	el.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
 }
 
 export default function QuizAttempt() {
@@ -48,6 +69,7 @@ export default function QuizAttempt() {
 	const [score, setScore] = useState(0);
 	const [accuracy, setAccuracy] = useState(0);
 	const [sectionScores, setSectionScores] = useState([]);
+	const [roadmapProgress, setRoadmapProgress] = useState(null);
 	const [quizResults, setQuizResults] = useState(false);
 	const [answers, setAnswers] = useState([]);
 	const [quizData, setQuizData] = useState({
@@ -67,6 +89,57 @@ export default function QuizAttempt() {
 		return match?.id ?? null;
 	}, [questions]);
 	const [questionLayout, setQuestionLayout] = useQuestionDisplayLayout();
+
+	const sections = quizData.sections || [];
+	const sectionGroups = useMemo(
+		() => groupQuestionsByApiSection(questions, sections),
+		[questions, sections]
+	);
+	const sectionLayoutAvailable = canUseSectionQuestionLayout(sections) && sectionGroups.length >= 2;
+	const [sectionPage, setSectionPage] = useSectionPageIndex(sectionGroups);
+	const visibleQuestions = useMemo(() => {
+		if (questionLayout === QUESTION_LAYOUT_SECTION && sectionLayoutAvailable) {
+			return sectionGroups[sectionPage]?.questions ?? [];
+		}
+		return questions;
+	}, [questionLayout, sectionLayoutAvailable, sectionGroups, sectionPage, questions]);
+
+	const inputRefs = useRef(new Map());
+	const submitButtonRef = useRef(null);
+	const focusAdvanceTimer = useRef(null);
+	const visibleQuestionsRef = useRef(visibleQuestions);
+	visibleQuestionsRef.current = visibleQuestions;
+
+	const registerInputRef = useCallback((questionId, el) => {
+		if (el) inputRefs.current.set(questionId, el);
+		else inputRefs.current.delete(questionId);
+	}, []);
+
+	const handleIdentificationRevealed = useCallback((questionId) => {
+		if (focusAdvanceTimer.current) {
+			clearTimeout(focusAdvanceTimer.current);
+			focusAdvanceTimer.current = null;
+		}
+		focusAdvanceTimer.current = setTimeout(() => {
+			focusAdvanceTimer.current = null;
+			const visible = visibleQuestionsRef.current;
+			const ideIds = visible.filter((q) => isIdentification(q.question_type)).map((q) => q.id);
+			const index = ideIds.indexOf(questionId);
+			const nextId = index >= 0 ? ideIds[index + 1] : undefined;
+			if (nextId != null) {
+				focusAttemptTarget(inputRefs.current.get(nextId));
+				return;
+			}
+			focusAttemptTarget(submitButtonRef.current);
+		}, LIST_ID_FOCUS_ADVANCE_MS);
+	}, []);
+
+	useEffect(
+		() => () => {
+			if (focusAdvanceTimer.current) clearTimeout(focusAdvanceTimer.current);
+		},
+		[]
+	);
 
 	const handleAnswerChange = useCallback((qid, field, value) => {
 		setAnswers((prev) => prev.map((a) => (a.id === qid ? { ...a, [field]: value } : a)));
@@ -122,6 +195,7 @@ export default function QuizAttempt() {
 				setScore(0);
 				setAccuracy(0);
 				setSectionScores([]);
+				setRoadmapProgress(null);
 				setQuizResults(false);
 				setTime(0);
 				setIsRunning(true);
@@ -154,6 +228,10 @@ export default function QuizAttempt() {
 	}, [isRunning]);
 
 	const submitAnswers = async () => {
+		if (focusAdvanceTimer.current) {
+			clearTimeout(focusAdvanceTimer.current);
+			focusAdvanceTimer.current = null;
+		}
 		if (questions.length === 0) {
 			toast.error('This quiz has no questions.');
 			return;
@@ -165,6 +243,7 @@ export default function QuizAttempt() {
 			setScore(response.data.score);
 			setAccuracy(response.data.accuracy);
 			setSectionScores(response.data.section_scores || []);
+			setRoadmapProgress(response.data.roadmap_progress || null);
 			setQuizResults(true);
 			setIsRunning(false);
 		} catch {
@@ -175,8 +254,8 @@ export default function QuizAttempt() {
 	};
 
 	const handleRetake = () => {
-		const sections = Array.isArray(quizData.sections) ? quizData.sections : [];
-		if (sections.length === 0) {
+		const quizSections = Array.isArray(quizData.sections) ? quizData.sections : [];
+		if (quizSections.length === 0) {
 			loadQuiz();
 			return;
 		}
@@ -238,6 +317,9 @@ export default function QuizAttempt() {
 							accuracy={accuracy}
 							time={time}
 							sectionScores={sectionScores}
+							roadmapProgress={roadmapProgress}
+							quiz={quizData.uuid || id ? { ...quizData, uuid: quizData.uuid || id } : null}
+							onRoadmapCreated={setRoadmapProgress}
 						/>
 					) : quizData.flashcard_quiz ? (
 						<FlashcardAttempt
@@ -258,6 +340,8 @@ export default function QuizAttempt() {
 							sections={quizData.sections || []}
 							layout={questionLayout}
 							onLayoutChange={setQuestionLayout}
+							sectionPage={sectionPage}
+							onSectionPageChange={setSectionPage}
 							renderQuestion={(question) => (
 								<QuestionCard
 									key={question.id}
@@ -268,6 +352,12 @@ export default function QuizAttempt() {
 									answerSuggestionsEnabled={quizData.answer_suggestions_enabled !== false}
 									suggestionCorpus={suggestionCorpus}
 									autoFocus={firstIdentificationId != null && question.id === firstIdentificationId}
+									onIdentificationRevealed={handleIdentificationRevealed}
+									inputRef={
+										isIdentification(question.question_type)
+											? (el) => registerInputRef(question.id, el)
+											: null
+									}
 								/>
 							)}
 						/>
@@ -288,6 +378,7 @@ export default function QuizAttempt() {
 					onRetake={handleRetake}
 					onBackToList={() => navigate('/quizzes')}
 					quizImage={quizData.quiz_image || quizData.quiz_image_url || null}
+					submitButtonRef={submitButtonRef}
 				/>
 			</div>
 		</div>
