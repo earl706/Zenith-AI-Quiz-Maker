@@ -6,6 +6,16 @@ import { CalendarRange, Map, RefreshCw, Sparkles } from 'lucide-react';
 import { get } from '../lib/api';
 import { cn, formatDate } from '../lib/format';
 import {
+	buildCapacityPayload,
+	DEFAULT_ESTIMATED_MINUTES,
+	DEFAULT_HOURS_PER_DAY,
+	DEFAULT_HOURS_PER_WEEK,
+	DEFAULT_STUDY_DAYS,
+	formatDuration,
+	formatMinutes,
+	toastIfDeadlineExtended
+} from '../lib/roadmapCapacity';
+import {
 	roadmapsApi,
 	useBulkRoadmapMastery,
 	useForkRoadmap,
@@ -31,6 +41,9 @@ import {
 	StatCard
 } from '../components/ui';
 import { useAttemptLauncher } from '../components/quiz/useAttemptLauncher';
+import { ToggleChip } from '../components/quiz/quizAuthoringUi';
+import RoadmapCapacityFields from '../components/roadmap/RoadmapCapacityFields';
+import RoadmapCapacityStrip from '../components/roadmap/RoadmapCapacityStrip';
 import RoadmapNodeCard, { resolveNodeQuizUuid } from '../components/roadmap/RoadmapNodeCard';
 import { paginateClient } from '../hooks/useListControls';
 
@@ -110,6 +123,7 @@ function WeekPanel({ week, onEdit, sourceQuizUuid, onViewQuiz, onAttemptSection 
 						<p className="text-muted text-[10px] leading-tight font-medium tracking-wide uppercase">
 							{formatDate(d.date, 'EEE MMM d')}
 							{d.is_today ? ' · today' : d.is_past ? ' · past' : ''}
+							{d.planned_minutes ? ` · ${formatMinutes(d.planned_minutes)}` : ''}
 						</p>
 						{(d.nodes || []).length ? (
 							(d.nodes || []).map((n) => (
@@ -154,12 +168,49 @@ function parseMasteryGates(attemptsStr, accuracyStr) {
 }
 
 function masteryGateError(err) {
-	const data = err.response?.data;
+	const data = err?.response?.data;
 	return (
 		data?.mastery_attempts_required?.[0] ||
 		data?.mastery_accuracy_threshold?.[0] ||
+		data?.require_flashcard?.[0] ||
+		data?.require_random_question_order?.[0] ||
+		data?.require_per_question_timer?.[0] ||
 		data?.detail ||
 		'Could not update mastery requirements.'
+	);
+}
+
+function AttemptSettingsToggles({
+	requireFlashcard,
+	setRequireFlashcard,
+	requireRandomOrder,
+	setRequireRandomOrder,
+	requireTimer,
+	setRequireTimer
+}) {
+	return (
+		<div className="space-y-1.5">
+			<p className="text-muted text-xs">
+				Qualifying attempts only count when the quiz has these settings on.
+			</p>
+			<div className="flex flex-wrap gap-1.5">
+				<ToggleChip
+					active={requireFlashcard}
+					onClick={() => setRequireFlashcard(!requireFlashcard)}
+				>
+					Flashcard
+				</ToggleChip>
+				<ToggleChip
+					active={requireRandomOrder}
+					onClick={() => setRequireRandomOrder(!requireRandomOrder)}
+				>
+					Shuffle questions
+				</ToggleChip>
+				<ToggleChip active={requireTimer} onClick={() => setRequireTimer(!requireTimer)}>
+					Per-question timer
+				</ToggleChip>
+			</div>
+		</div>
 	);
 }
 
@@ -188,9 +239,16 @@ function ForkModal({ open, onClose, catalog, quizSources }) {
 	const [quizUuid, setQuizUuid] = useState('');
 	const [deadline, setDeadline] = useState('');
 	const [title, setTitle] = useState('');
+	const [hoursPerWeek, setHoursPerWeek] = useState(DEFAULT_HOURS_PER_WEEK);
+	const [hoursPerDay, setHoursPerDay] = useState(DEFAULT_HOURS_PER_DAY);
+	const [studyDays, setStudyDays] = useState(DEFAULT_STUDY_DAYS);
+	const [defaultEstimatedMinutes, setDefaultEstimatedMinutes] = useState(DEFAULT_ESTIMATED_MINUTES);
+	const [sectionEstimates, setSectionEstimates] = useState({});
 
 	const selectedTemplate = catalog.find((c) => c.slug === slug);
 	const selectedQuiz = quizSources.find((q) => q.uuid === quizUuid);
+	const selectedSections =
+		source === 'template' ? selectedTemplate?.sections || [] : selectedQuiz?.sections || [];
 	const pending = forkTemplate.isPending || forkQuiz.isPending;
 
 	useEffect(() => {
@@ -200,7 +258,26 @@ function ForkModal({ open, onClose, catalog, quizSources }) {
 		setQuizUuid('');
 		setDeadline('');
 		setTitle('');
+		setHoursPerWeek(DEFAULT_HOURS_PER_WEEK);
+		setHoursPerDay(DEFAULT_HOURS_PER_DAY);
+		setStudyDays(DEFAULT_STUDY_DAYS);
+		setDefaultEstimatedMinutes(DEFAULT_ESTIMATED_MINUTES);
+		setSectionEstimates({});
 	}, [open]);
+
+	useEffect(() => {
+		setSectionEstimates({});
+	}, [slug, quizUuid, source]);
+
+	const capacityBody = () =>
+		buildCapacityPayload({
+			hoursPerWeek,
+			hoursPerDay,
+			studyDays,
+			defaultEstimatedMinutes,
+			sectionEstimates,
+			sections: selectedSections
+		});
 
 	const submit = () => {
 		if (source === 'template') {
@@ -209,11 +286,13 @@ function ForkModal({ open, onClose, catalog, quizSources }) {
 				{
 					template_slug: slug,
 					deadline: deadline || null,
-					title: title || undefined
+					title: title || undefined,
+					...capacityBody()
 				},
 				{
-					onSuccess: () => {
+					onSuccess: (data) => {
 						toast.success('Roadmap created from template.');
+						toastIfDeadlineExtended(data, toast);
 						onClose();
 					},
 					onError: (err) => toast.error(err.response?.data?.detail || 'Could not fork roadmap.')
@@ -226,11 +305,13 @@ function ForkModal({ open, onClose, catalog, quizSources }) {
 			{
 				quiz_uuid: quizUuid,
 				deadline: deadline || null,
-				title: title || undefined
+				title: title || undefined,
+				...capacityBody()
 			},
 			{
-				onSuccess: () => {
+				onSuccess: (data) => {
 					toast.success('Roadmap created from quiz.');
+					toastIfDeadlineExtended(data, toast);
 					onClose();
 				},
 				onError: (err) =>
@@ -252,7 +333,7 @@ function ForkModal({ open, onClose, catalog, quizSources }) {
 
 	return (
 		<Modal open={open} onClose={onClose} title="Create a mastery roadmap" size="lg">
-			<div className="space-y-3">
+			<div className="max-h-[70vh] space-y-3 overflow-y-auto pr-1">
 				<div className="border-line flex gap-1 rounded-md border p-0.5">
 					<button
 						type="button"
@@ -306,6 +387,21 @@ function ForkModal({ open, onClose, catalog, quizSources }) {
 					value={deadline}
 					onChange={(e) => setDeadline(e.target.value)}
 				/>
+				<RoadmapCapacityFields
+					hoursPerWeek={hoursPerWeek}
+					onHoursPerWeek={setHoursPerWeek}
+					hoursPerDay={hoursPerDay}
+					onHoursPerDay={setHoursPerDay}
+					studyDays={studyDays}
+					onStudyDays={setStudyDays}
+					defaultEstimatedMinutes={defaultEstimatedMinutes}
+					onDefaultEstimatedMinutes={setDefaultEstimatedMinutes}
+					sectionEstimates={sectionEstimates}
+					onSectionEstimate={(key, value) =>
+						setSectionEstimates((prev) => ({ ...prev, [key]: value }))
+					}
+					sections={selectedSections}
+				/>
 				<div className="flex justify-end gap-2 pt-2">
 					<Button variant="ghost" onClick={onClose}>
 						Cancel
@@ -323,6 +419,10 @@ function NodeMasteryModal({ open, onClose, roadmapId, node }) {
 	const patchNode = usePatchRoadmapNode();
 	const [attempts, setAttempts] = useState('2');
 	const [accuracy, setAccuracy] = useState('80');
+	const [requireFlashcard, setRequireFlashcard] = useState(true);
+	const [requireRandomOrder, setRequireRandomOrder] = useState(true);
+	const [requireTimer, setRequireTimer] = useState(true);
+	const [estimatedMinutes, setEstimatedMinutes] = useState(DEFAULT_ESTIMATED_MINUTES);
 	const [dueDate, setDueDate] = useState('');
 	const [manualDue, setManualDue] = useState(false);
 
@@ -330,6 +430,10 @@ function NodeMasteryModal({ open, onClose, roadmapId, node }) {
 		if (!open || !node) return;
 		setAttempts(String(node.mastery_attempts_required ?? 2));
 		setAccuracy(String(node.mastery_accuracy_threshold ?? 80));
+		setRequireFlashcard(node.require_flashcard !== false);
+		setRequireRandomOrder(node.require_random_question_order !== false);
+		setRequireTimer(node.require_per_question_timer !== false);
+		setEstimatedMinutes(String(node.estimated_minutes ?? 30));
 		setDueDate(node.due_date ? String(node.due_date).slice(0, 10) : '');
 		setManualDue(!!node.due_date_override);
 	}, [open, node]);
@@ -341,11 +445,20 @@ function NodeMasteryModal({ open, onClose, roadmapId, node }) {
 			toast.error(parsed.error);
 			return;
 		}
+		const est = Number.parseInt(estimatedMinutes, 10);
+		if (!Number.isFinite(est) || est < 1 || est > 1440) {
+			toast.error('Estimated minutes must be between 1 and 1440.');
+			return;
+		}
 		const body = {
 			roadmapId,
 			nodeId: node.id,
 			mastery_attempts_required: parsed.mastery_attempts_required,
 			mastery_accuracy_threshold: parsed.mastery_accuracy_threshold,
+			require_flashcard: requireFlashcard,
+			require_random_question_order: requireRandomOrder,
+			require_per_question_timer: requireTimer,
+			estimated_minutes: est,
 			due_date: dueDate || null,
 			due_date_override: manualDue && !!dueDate
 		};
@@ -379,7 +492,8 @@ function NodeMasteryModal({ open, onClose, roadmapId, node }) {
 				<p className="text-fg text-sm font-medium">{node?.title}</p>
 				<p className="text-muted text-xs">
 					Master after enough qualifying attempts at or above the accuracy gate. Current progress:{' '}
-					{node?.qualifying_attempts ?? 0} qualifying.
+					{node?.qualifying_attempts ?? 0} qualifying
+					{node?.spent_seconds != null ? ` · spent ${formatDuration(node.spent_seconds)}` : ''}.
 				</p>
 				<div className="grid grid-cols-2 gap-3">
 					<Input
@@ -399,6 +513,22 @@ function NodeMasteryModal({ open, onClose, roadmapId, node }) {
 						onChange={(e) => setAccuracy(e.target.value)}
 					/>
 				</div>
+				<AttemptSettingsToggles
+					requireFlashcard={requireFlashcard}
+					setRequireFlashcard={setRequireFlashcard}
+					requireRandomOrder={requireRandomOrder}
+					setRequireRandomOrder={setRequireRandomOrder}
+					requireTimer={requireTimer}
+					setRequireTimer={setRequireTimer}
+				/>
+				<Input
+					label="Estimated minutes"
+					type="number"
+					min={1}
+					max={1440}
+					value={estimatedMinutes}
+					onChange={(e) => setEstimatedMinutes(e.target.value)}
+				/>
 				<Input
 					label="Due date"
 					type="date"
@@ -427,12 +557,18 @@ function BulkMasteryModal({ open, onClose, roadmap }) {
 	const nodeCount = roadmap?.nodes?.length ?? 0;
 	const [attempts, setAttempts] = useState('2');
 	const [accuracy, setAccuracy] = useState('80');
+	const [requireFlashcard, setRequireFlashcard] = useState(true);
+	const [requireRandomOrder, setRequireRandomOrder] = useState(true);
+	const [requireTimer, setRequireTimer] = useState(true);
 
 	useEffect(() => {
 		if (!open || !roadmap?.nodes?.length) return;
 		const first = roadmap.nodes[0];
 		setAttempts(String(first.mastery_attempts_required ?? 2));
 		setAccuracy(String(first.mastery_accuracy_threshold ?? 80));
+		setRequireFlashcard(first.require_flashcard !== false);
+		setRequireRandomOrder(first.require_random_question_order !== false);
+		setRequireTimer(first.require_per_question_timer !== false);
 	}, [open, roadmap]);
 
 	const save = () => {
@@ -446,7 +582,10 @@ function BulkMasteryModal({ open, onClose, roadmap }) {
 			{
 				roadmapId: roadmap.id,
 				mastery_attempts_required: parsed.mastery_attempts_required,
-				mastery_accuracy_threshold: parsed.mastery_accuracy_threshold
+				mastery_accuracy_threshold: parsed.mastery_accuracy_threshold,
+				require_flashcard: requireFlashcard,
+				require_random_question_order: requireRandomOrder,
+				require_per_question_timer: requireTimer
 			},
 			{
 				onSuccess: () => {
@@ -477,8 +616,8 @@ function BulkMasteryModal({ open, onClose, roadmap }) {
 		>
 			<div className="space-y-3">
 				<p className="text-muted text-xs">
-					Applies the same N attempts × ≥X% accuracy requirement to every section on this roadmap (
-					{nodeCount} nodes).
+					Applies the same N attempts × ≥X% accuracy requirement and attempt-settings gates to every
+					section on this roadmap ({nodeCount} nodes).
 				</p>
 				<div className="grid grid-cols-2 gap-3">
 					<Input
@@ -498,30 +637,56 @@ function BulkMasteryModal({ open, onClose, roadmap }) {
 						onChange={(e) => setAccuracy(e.target.value)}
 					/>
 				</div>
+				<AttemptSettingsToggles
+					requireFlashcard={requireFlashcard}
+					setRequireFlashcard={setRequireFlashcard}
+					requireRandomOrder={requireRandomOrder}
+					setRequireRandomOrder={setRequireRandomOrder}
+					requireTimer={requireTimer}
+					setRequireTimer={setRequireTimer}
+				/>
 			</div>
 		</Modal>
 	);
 }
 
-function DeadlineModal({ open, onClose, roadmap }) {
+function CapacitySettingsModal({ open, onClose, roadmap }) {
 	const update = roadmapsApi.useUpdate();
 	const [deadline, setDeadline] = useState('');
+	const [hoursPerWeek, setHoursPerWeek] = useState(DEFAULT_HOURS_PER_WEEK);
+	const [hoursPerDay, setHoursPerDay] = useState(DEFAULT_HOURS_PER_DAY);
+	const [studyDays, setStudyDays] = useState(DEFAULT_STUDY_DAYS);
 
 	useEffect(() => {
 		if (!open || !roadmap) return;
 		setDeadline(roadmap.deadline ? String(roadmap.deadline).slice(0, 10) : '');
+		setHoursPerWeek(String(roadmap.hours_per_week ?? 5));
+		setHoursPerDay(String(roadmap.hours_per_day ?? 1));
+		setStudyDays(
+			Array.isArray(roadmap.study_days) && roadmap.study_days.length
+				? roadmap.study_days.map(Number)
+				: DEFAULT_STUDY_DAYS
+		);
 	}, [open, roadmap]);
 
 	const save = () => {
 		if (roadmap?.id == null) return;
 		update.mutate(
-			{ id: roadmap.id, deadline: deadline || null },
 			{
-				onSuccess: () => {
-					toast.success('Deadline updated.');
+				id: roadmap.id,
+				deadline: deadline || null,
+				hours_per_week: Number(hoursPerWeek) || 5,
+				hours_per_day: Number(hoursPerDay) || 1,
+				study_days: studyDays
+			},
+			{
+				onSuccess: (data) => {
+					toast.success('Study capacity updated — schedule recalculated.');
+					toastIfDeadlineExtended(data, toast);
 					onClose();
 				},
-				onError: (err) => toast.error(err.response?.data?.detail || 'Could not update deadline.')
+				onError: (err) =>
+					toast.error(err.response?.data?.detail || 'Could not update study capacity.')
 			}
 		);
 	};
@@ -530,29 +695,41 @@ function DeadlineModal({ open, onClose, roadmap }) {
 		<Modal
 			open={open}
 			onClose={onClose}
-			title="Edit deadline"
-			size="sm"
+			title="Deadline & study capacity"
+			size="md"
 			footer={
 				<>
 					<Button variant="secondary" onClick={onClose}>
 						Cancel
 					</Button>
 					<Button loading={update.isPending} onClick={save}>
-						Save
+						Save & reschedule
 					</Button>
 				</>
 			}
 		>
 			<div className="space-y-3">
 				<p className="text-muted text-xs">
-					Shortening the deadline clamps auto-scheduled due dates that fall past it. Existing dates
-					are not reshuffled — use Reset schedule to redistribute evenly.
+					Changing hours/week, hours/day, or study days re-packs section due dates from today. If
+					the plan cannot fit, the deadline is extended automatically. Edit per-section estimates on
+					each section.
 				</p>
 				<Input
 					label="Deadline"
 					type="date"
 					value={deadline}
 					onChange={(e) => setDeadline(e.target.value)}
+				/>
+				<RoadmapCapacityFields
+					hoursPerWeek={hoursPerWeek}
+					onHoursPerWeek={setHoursPerWeek}
+					hoursPerDay={hoursPerDay}
+					onHoursPerDay={setHoursPerDay}
+					studyDays={studyDays}
+					onStudyDays={setStudyDays}
+					defaultEstimatedMinutes={DEFAULT_ESTIMATED_MINUTES}
+					onDefaultEstimatedMinutes={() => {}}
+					showSectionEstimates={false}
 				/>
 			</div>
 		</Modal>
@@ -582,8 +759,9 @@ function ResetScheduleModal({ open, onClose, onConfirm, pending }) {
 			}
 		>
 			<p className="text-muted text-sm leading-relaxed">
-				Redistribute all auto-scheduled sections evenly from today through the deadline? Pinned due
-				dates are kept. This cannot be undone.
+				Re-pack all auto-scheduled sections onto your study days using hours/week and hours/day from
+				today? Pinned due dates are kept. If work cannot fit before the deadline, the deadline is
+				extended. This cannot be undone.
 			</p>
 		</Modal>
 	);
@@ -593,12 +771,13 @@ function RoadmapDetail({ roadmap, onBack }) {
 	const navigate = useNavigate();
 	const { launchAttempt, attemptModal } = useAttemptLauncher();
 	const plan = roadmap.daily_plan || roadmap.weekly_plan;
+	const budget = plan?.time_budget;
 	const todayNodes = plan?.tasks_today?.nodes || [];
 	const weekBuckets = useMemo(() => groupDaysIntoWeeks(plan?.days || []), [plan?.days]);
 	const nodes = roadmap.nodes || [];
 	const [editNode, setEditNode] = useState(null);
 	const [bulkOpen, setBulkOpen] = useState(false);
-	const [deadlineOpen, setDeadlineOpen] = useState(false);
+	const [capacityOpen, setCapacityOpen] = useState(false);
 	const [resetScheduleOpen, setResetScheduleOpen] = useState(false);
 	const [mobileTab, setMobileTab] = useState('path');
 	const [pathPage, setPathPage] = useState(1);
@@ -658,8 +837,9 @@ function RoadmapDetail({ roadmap, onBack }) {
 
 	const handleResetSchedule = () => {
 		resetSchedule.mutate(roadmap.id, {
-			onSuccess: () => {
+			onSuccess: (data) => {
 				toast.success('Schedule reset.');
+				toastIfDeadlineExtended(data, toast);
 				setResetScheduleOpen(false);
 			},
 			onError: (err) => toast.error(err.response?.data?.detail || 'Could not reset schedule.')
@@ -867,7 +1047,7 @@ function RoadmapDetail({ roadmap, onBack }) {
 						variant="secondary"
 						className="h-8"
 						onClick={() => setResetScheduleOpen(true)}
-						title="Evenly redistribute auto-scheduled due dates from today"
+						title="Re-pack due dates using study capacity from today"
 					>
 						<CalendarRange size={14} className="mr-1" />
 						Reset schedule
@@ -876,13 +1056,15 @@ function RoadmapDetail({ roadmap, onBack }) {
 						size="sm"
 						variant="ghost"
 						className="h-8"
-						onClick={() => setDeadlineOpen(true)}
-						title="Edit roadmap deadline"
+						onClick={() => setCapacityOpen(true)}
+						title="Edit deadline and study capacity"
 					>
 						{roadmap.deadline ? `Due ${formatDate(roadmap.deadline)}` : 'Set deadline'}
 					</Button>
 				</div>
 			</div>
+
+			{budget ? <RoadmapCapacityStrip budget={budget} progress={roadmap.progress} /> : null}
 
 			{/* Desktop: two-column single-screen dashboard */}
 			<div className="hidden min-h-0 flex-1 gap-3 overflow-hidden lg:grid lg:grid-cols-2">
@@ -922,7 +1104,11 @@ function RoadmapDetail({ roadmap, onBack }) {
 				node={editNode}
 			/>
 			<BulkMasteryModal open={bulkOpen} onClose={() => setBulkOpen(false)} roadmap={roadmap} />
-			<DeadlineModal open={deadlineOpen} onClose={() => setDeadlineOpen(false)} roadmap={roadmap} />
+			<CapacitySettingsModal
+				open={capacityOpen}
+				onClose={() => setCapacityOpen(false)}
+				roadmap={roadmap}
+			/>
 			<ResetScheduleModal
 				open={resetScheduleOpen}
 				onClose={() => setResetScheduleOpen(false)}

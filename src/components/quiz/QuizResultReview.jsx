@@ -36,6 +36,19 @@ function roadmapProgressFromFork(data) {
 	};
 }
 
+function settingsFailureLabel(key) {
+	switch (key) {
+		case 'flashcard':
+			return 'flashcard';
+		case 'random_question_order':
+			return 'shuffle questions';
+		case 'per_question_timer':
+			return 'per-question timer';
+		default:
+			return key;
+	}
+}
+
 function deltaOutcomeLabel(delta) {
 	switch (delta.outcome) {
 		case 'mastered':
@@ -46,6 +59,14 @@ function deltaOutcomeLabel(delta) {
 			return delta.attempt_accuracy != null
 				? `Below gate — accuracy was ${Math.round(delta.attempt_accuracy)}%`
 				: 'Below gate';
+		case 'settings_not_met': {
+			const failures = Array.isArray(delta.settings_failures) ? delta.settings_failures : [];
+			const needed = failures.map(settingsFailureLabel).filter(Boolean);
+			if (needed.length) {
+				return `Didn’t count — need ${needed.join(', ')}`;
+			}
+			return 'Didn’t count — quiz settings don’t match';
+		}
 		case 'locked':
 			return 'Locked';
 		case 'already_mastered':
@@ -155,7 +176,7 @@ function RoadmapMasteryOverview({ roadmapProgress, quiz, onRoadmapCreated }) {
 							const tone =
 								delta.outcome === 'mastered' || delta.outcome === 'qualified'
 									? 'success'
-									: delta.outcome === 'below_gate'
+									: delta.outcome === 'below_gate' || delta.outcome === 'settings_not_met'
 										? 'warning'
 										: 'neutral';
 							return (

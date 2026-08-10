@@ -1,9 +1,18 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import {
+	buildCapacityPayload,
+	DEFAULT_ESTIMATED_MINUTES,
+	DEFAULT_HOURS_PER_DAY,
+	DEFAULT_HOURS_PER_WEEK,
+	DEFAULT_STUDY_DAYS,
+	toastIfDeadlineExtended
+} from '../../lib/roadmapCapacity';
 import { useForkRoadmapFromQuiz } from '../../lib/studyResources';
 import { toast } from '../../stores/toastStore';
 import { Button, Input, Modal, Select } from '../ui';
+import RoadmapCapacityFields from './RoadmapCapacityFields';
 
 /**
  * Create a mastery roadmap from an owner quiz (one node per section).
@@ -24,6 +33,11 @@ export default function CreateRoadmapFromQuizModal({
 	const [quizUuid, setQuizUuid] = useState('');
 	const [deadline, setDeadline] = useState('');
 	const [title, setTitle] = useState('');
+	const [hoursPerWeek, setHoursPerWeek] = useState(DEFAULT_HOURS_PER_WEEK);
+	const [hoursPerDay, setHoursPerDay] = useState(DEFAULT_HOURS_PER_DAY);
+	const [studyDays, setStudyDays] = useState(DEFAULT_STUDY_DAYS);
+	const [defaultEstimatedMinutes, setDefaultEstimatedMinutes] = useState(DEFAULT_ESTIMATED_MINUTES);
+	const [sectionEstimates, setSectionEstimates] = useState({});
 
 	const locked = quiz != null;
 	const options = locked
@@ -32,6 +46,7 @@ export default function CreateRoadmapFromQuizModal({
 					uuid: String(quiz.uuid || quiz.quiz_id || ''),
 					title: quiz.quiz_title || 'Quiz',
 					section_count: Array.isArray(quiz.sections) ? quiz.sections.length : quiz.section_count,
+					sections: Array.isArray(quiz.sections) ? quiz.sections : [],
 					default_mastery_attempts: 5,
 					default_mastery_accuracy: 95
 				}
@@ -39,11 +54,17 @@ export default function CreateRoadmapFromQuizModal({
 		: sources;
 
 	const selected = options.find((o) => o.uuid === quizUuid) || (locked ? options[0] : null);
+	const sections = selected?.sections || [];
 
 	useEffect(() => {
 		if (!open) return;
 		setDeadline('');
 		setTitle('');
+		setHoursPerWeek(DEFAULT_HOURS_PER_WEEK);
+		setHoursPerDay(DEFAULT_HOURS_PER_DAY);
+		setStudyDays(DEFAULT_STUDY_DAYS);
+		setDefaultEstimatedMinutes(DEFAULT_ESTIMATED_MINUTES);
+		setSectionEstimates({});
 		if (locked) {
 			setQuizUuid(String(quiz.uuid || quiz.quiz_id || ''));
 		} else {
@@ -58,11 +79,20 @@ export default function CreateRoadmapFromQuizModal({
 			{
 				quiz_uuid: uuid,
 				deadline: deadline || null,
-				title: title || undefined
+				title: title || undefined,
+				...buildCapacityPayload({
+					hoursPerWeek,
+					hoursPerDay,
+					studyDays,
+					defaultEstimatedMinutes,
+					sectionEstimates,
+					sections
+				})
 			},
 			{
 				onSuccess: (data) => {
 					toast.success('Roadmap created from quiz.');
+					toastIfDeadlineExtended(data, toast);
 					onCreated?.(data);
 					onClose();
 					if (navigateOnSuccess) navigate('/roadmap');
@@ -110,6 +140,21 @@ export default function CreateRoadmapFromQuizModal({
 					type="date"
 					value={deadline}
 					onChange={(e) => setDeadline(e.target.value)}
+				/>
+				<RoadmapCapacityFields
+					hoursPerWeek={hoursPerWeek}
+					onHoursPerWeek={setHoursPerWeek}
+					hoursPerDay={hoursPerDay}
+					onHoursPerDay={setHoursPerDay}
+					studyDays={studyDays}
+					onStudyDays={setStudyDays}
+					defaultEstimatedMinutes={defaultEstimatedMinutes}
+					onDefaultEstimatedMinutes={setDefaultEstimatedMinutes}
+					sectionEstimates={sectionEstimates}
+					onSectionEstimate={(key, value) =>
+						setSectionEstimates((prev) => ({ ...prev, [key]: value }))
+					}
+					sections={sections}
 				/>
 				<div className="flex justify-end gap-2 pt-2">
 					<Button variant="ghost" onClick={onClose}>
