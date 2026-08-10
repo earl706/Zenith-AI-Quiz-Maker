@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
+import { get } from '../../lib/api';
 import { Button, Input, Modal } from '../ui';
 
 const DEFAULT_SAMPLE = 10;
@@ -9,6 +10,33 @@ function normalizeInitialIds(initialSectionIds, allIds) {
 	const allowed = new Set(allIds);
 	const next = initialSectionIds.filter((id) => allowed.has(id));
 	return next.length ? next : null;
+}
+
+function sectionNeedsCount(section) {
+	return section?.question_count == null && section?.questions_count == null;
+}
+
+function sectionQuestionCount(section) {
+	const raw = section?.question_count ?? section?.questions_count;
+	const n = Number(raw);
+	return Number.isFinite(n) ? n : null;
+}
+
+function mergeSectionCounts(sections, apiSections) {
+	if (!Array.isArray(apiSections) || !apiSections.length) return sections;
+	const byId = new Map(
+		apiSections.filter((s) => s?.id != null).map((s) => [s.id, sectionQuestionCount(s)])
+	);
+	return sections.map((section) => {
+		const count = byId.get(section.id);
+		if (count == null) return section;
+		return { ...section, question_count: count };
+	});
+}
+
+function formatQuestionCount(count) {
+	if (count == null) return null;
+	return `${count} question${count === 1 ? '' : 's'}`;
 }
 
 const DEFAULT_PRESET_HINT =
@@ -21,23 +49,59 @@ const DEFAULT_PRESET_HINT =
  * initialSectionIds — when set, opens with only those sections checked (not "All").
  * highlightedSectionId — subtle hint for the section that drove the pre-selection.
  * presetHint — optional override for the preset helper line under Quick start.
+ * quizId — used to hydrate per-section question_count when callers omit it.
  */
 export default function SectionAttemptModal({
 	open,
 	onClose,
 	sections = [],
 	quizTitle = 'Quiz',
+	quizId = null,
 	onConfirm,
 	initialSectionIds = null,
 	highlightedSectionId = null,
 	presetHint = null
 }) {
+	const [hydratedSections, setHydratedSections] = useState(sections);
+
+	useEffect(() => {
+		setHydratedSections(sections);
+	}, [sections]);
+
+	useEffect(() => {
+		if (!open || !quizId) return;
+		const list = Array.isArray(sections) ? sections : [];
+		if (!list.length || !list.some(sectionNeedsCount)) return;
+
+		let cancelled = false;
+		(async () => {
+			try {
+				let apiSections = null;
+				try {
+					const summary = await get(`/quizzes/quiz/summary/${quizId}/`);
+					apiSections = summary?.quiz?.sections;
+				} catch {
+					const detail = await get(`/quizzes/quiz/${quizId}/`);
+					apiSections = detail?.data?.sections || detail?.sections;
+				}
+				if (cancelled || !apiSections) return;
+				setHydratedSections((prev) => mergeSectionCounts(prev.length ? prev : list, apiSections));
+			} catch {
+				/* keep titles without counts */
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [open, quizId, sections]);
+
 	const sorted = useMemo(
 		() =>
-			[...(sections || [])].sort(
+			[...(hydratedSections || [])].sort(
 				(a, b) => (a.order ?? 0) - (b.order ?? 0) || (a.id ?? 0) - (b.id ?? 0)
 			),
-		[sections]
+		[hydratedSections]
 	);
 
 	const hasSections = sorted.length > 0;
@@ -51,6 +115,18 @@ export default function SectionAttemptModal({
 	const [selected, setSelected] = useState(() => presetIds ?? allIds);
 	const [allSelected, setAllSelected] = useState(() => !presetIds);
 	const [sampleCount, setSampleCount] = useState(String(DEFAULT_SAMPLE));
+
+	const totalQuestions = useMemo(() => {
+		let sum = 0;
+		let known = 0;
+		for (const section of sorted) {
+			const count = sectionQuestionCount(section);
+			if (count == null) continue;
+			sum += count;
+			known += 1;
+		}
+		return known === sorted.length && sorted.length > 0 ? sum : null;
+	}, [sorted]);
 
 	const toggleAll = () => {
 		if (allSelected) {
@@ -189,13 +265,19 @@ export default function SectionAttemptModal({
 							onChange={toggleAll}
 							className="h-4 w-4 accent-[var(--primary)]"
 						/>
-						<span className="text-fg text-sm font-medium">All sections</span>
+						<span className="text-fg min-w-0 flex-1 text-sm font-medium">All sections</span>
+						{totalQuestions != null && (
+							<span className="text-muted shrink-0 text-xs tabular-nums">
+								{formatQuestionCount(totalQuestions)}
+							</span>
+						)}
 					</label>
 
 					<ul className="grid max-h-64 grid-cols-2 gap-2 overflow-y-auto">
 						{sorted.map((section) => {
 							const checked = allSelected || selected.includes(section.id);
 							const isFocused = focusId != null && section.id === focusId;
+							const countLabel = formatQuestionCount(sectionQuestionCount(section));
 							return (
 								<li key={section.id} className="min-w-0">
 									<label
@@ -211,10 +293,8 @@ export default function SectionAttemptModal({
 											className="h-4 w-4 shrink-0 accent-[var(--primary)]"
 										/>
 										<span className="text-fg min-w-0 flex-1 truncate text-sm">{section.title}</span>
-										{section.question_count != null && (
-											<span className="text-muted shrink-0 text-xs">
-												{section.question_count} Q
-											</span>
+										{countLabel && (
+											<span className="text-muted shrink-0 text-xs tabular-nums">{countLabel}</span>
 										)}
 									</label>
 								</li>

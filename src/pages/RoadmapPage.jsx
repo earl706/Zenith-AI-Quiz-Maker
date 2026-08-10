@@ -47,7 +47,7 @@ import RoadmapCapacityStrip from '../components/roadmap/RoadmapCapacityStrip';
 import RoadmapNodeCard, { resolveNodeQuizUuid } from '../components/roadmap/RoadmapNodeCard';
 import { paginateClient } from '../hooks/useListControls';
 
-const PATH_PAGE_SIZE = 11;
+const PATH_PAGE_SIZE = 9;
 const TODAY_PAGE_SIZE = 4;
 const WEEK_PAGE_SIZE = 1;
 

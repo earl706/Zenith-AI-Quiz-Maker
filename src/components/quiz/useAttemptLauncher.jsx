@@ -8,6 +8,29 @@ function attemptLaunchState() {
 	return { attemptLaunchAt: Date.now() };
 }
 
+/** Attach question_count from nested questions when API omitted section counts. */
+function sectionsWithQuestionCounts(quiz) {
+	const sections = Array.isArray(quiz?.sections) ? quiz.sections : [];
+	if (!sections.length) return sections;
+	if (!sections.some((s) => s?.question_count == null && s?.questions_count == null)) {
+		return sections;
+	}
+	const questions = Array.isArray(quiz?.questions) ? quiz.questions : [];
+	if (!questions.length) return sections;
+	const counts = new Map();
+	for (const q of questions) {
+		const sid = q?.section_id ?? q?.section ?? q?.sectionId;
+		if (sid == null) continue;
+		counts.set(sid, (counts.get(sid) || 0) + 1);
+	}
+	if (!counts.size) return sections;
+	return sections.map((section) => {
+		if (section?.question_count != null || section?.questions_count != null) return section;
+		const count = counts.get(section.id);
+		return count == null ? section : { ...section, question_count: count };
+	});
+}
+
 /**
  * Always opens a pre-attempt modal (sections when present),
  * unless options.skipModal is set with a non-empty initialSectionIds list.
@@ -28,7 +51,7 @@ export function useAttemptLauncher() {
 			if (!quiz) return;
 			const id = quiz.uuid || quiz.quiz_id || quiz.id;
 			if (!id) return;
-			const sections = Array.isArray(quiz.sections) ? quiz.sections : [];
+			const sections = sectionsWithQuestionCounts(quiz);
 			const initialSectionIds = Array.isArray(options.initialSectionIds)
 				? options.initialSectionIds.filter(Boolean)
 				: [];
@@ -82,6 +105,7 @@ export function useAttemptLauncher() {
 			open
 			onClose={closeModal}
 			sections={target.sections || []}
+			quizId={target.id}
 			quizTitle={target.title || 'Quiz'}
 			onConfirm={confirmScope}
 			initialSectionIds={target.initialSectionIds}

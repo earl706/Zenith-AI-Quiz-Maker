@@ -3,9 +3,24 @@ import { Link, useNavigate } from 'react-router-dom';
 import { BookOpen } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../stores/authStore';
+import { defaultRememberMe, isDesktopApp } from '../lib/desktop';
 import { Button, Input } from '../components/ui';
 import PinInput from '../components/auth/PinInput';
 
+function RememberMeCheckbox({ checked, onChange }) {
+	if (isDesktopApp()) return null;
+	return (
+		<label className="text-muted flex cursor-pointer items-center gap-2 text-sm">
+			<input
+				type="checkbox"
+				checked={checked}
+				onChange={(e) => onChange(e.target.checked)}
+				className="accent-primary h-4 w-4"
+			/>
+			Remember me for 90 days
+		</label>
+	);
+}
 export function AuthShell({ children }) {
 	return (
 		<div className="bg-bg flex min-h-screen">
@@ -65,10 +80,14 @@ function MfaForm() {
 	const verifyMfa = useAuthStore((s) => s.verifyMfa);
 	const clearMfa = useAuthStore((s) => s.clearMfa);
 	const error = useAuthStore((s) => s.error);
+	const pendingRemember = useAuthStore((s) => s.pendingRemember);
 	const [code, setCode] = useState('');
 	const [recoveryCode, setRecoveryCode] = useState('');
 	const [useRecovery, setUseRecovery] = useState(false);
 	const [loading, setLoading] = useState(false);
+	const [remember, setRemember] = useState(
+		pendingRemember !== undefined ? !!pendingRemember : defaultRememberMe()
+	);
 
 	const runVerify = async ({ totp, recovery } = {}) => {
 		if (loading) return;
@@ -76,7 +95,8 @@ function MfaForm() {
 		try {
 			await verifyMfa({
 				code: recovery ? undefined : totp,
-				recoveryCode: recovery || undefined
+				recoveryCode: recovery || undefined,
+				remember
 			});
 			navigate('/', { replace: true });
 		} catch {
@@ -124,6 +144,7 @@ function MfaForm() {
 						/>
 					</div>
 				)}
+				<RememberMeCheckbox checked={remember} onChange={setRemember} />
 				{error && <p className="bg-danger/10 text-danger rounded-md px-3 py-2 text-sm">{error}</p>}
 				{useRecovery && (
 					<Button type="submit" className="w-full" loading={loading}>
@@ -163,6 +184,7 @@ export function LoginPage() {
 	const mfaRequired = useAuthStore((s) => s.mfaRequired);
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
+	const [remember, setRemember] = useState(defaultRememberMe());
 	const [loading, setLoading] = useState(false);
 
 	if (mfaRequired) return <MfaForm />;
@@ -171,7 +193,7 @@ export function LoginPage() {
 		e.preventDefault();
 		setLoading(true);
 		try {
-			await login(email, password);
+			await login(email, password, { remember });
 			const user = useAuthStore.getState().user;
 			if (user) navigate('/', { replace: true });
 		} catch (err) {
@@ -205,6 +227,7 @@ export function LoginPage() {
 					autoComplete="off"
 					required
 				/>
+				<RememberMeCheckbox checked={remember} onChange={setRemember} />
 				{error && <p className="bg-danger/10 text-danger rounded-md px-3 py-2 text-sm">{error}</p>}
 				<Button type="submit" className="w-full" loading={loading}>
 					Sign in
