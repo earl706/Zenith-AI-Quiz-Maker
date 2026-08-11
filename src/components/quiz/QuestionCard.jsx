@@ -15,6 +15,7 @@ export default function QuestionCard({
 	answerSuggestionsEnabled = false,
 	suggestionCorpus = [],
 	autoFocus = false,
+	onAnswered,
 	onIdentificationRevealed,
 	inputRef = null
 }) {
@@ -28,6 +29,7 @@ export default function QuestionCard({
 		const text = committedText != null ? committedText : answer?.userAnswer;
 		if (!String(text ?? '').trim() || revealed) return;
 		setRevealed(true);
+		onAnswered?.(question.id);
 		onIdentificationRevealed?.(question.id);
 	};
 
@@ -77,7 +79,9 @@ export default function QuestionCard({
 									disabled={revealed}
 									onClick={() => {
 										handleAnswerChange(question.id, 'userAnswer', choiceText);
+										if (revealed) return;
 										setRevealed(true);
+										onAnswered?.(question.id);
 									}}
 									className={`w-full cursor-pointer rounded-md p-3 text-center font-semibold transition ${
 										answer.userAnswer === choiceText

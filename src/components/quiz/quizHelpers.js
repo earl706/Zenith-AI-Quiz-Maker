@@ -93,13 +93,19 @@ export function applyGeneratedSections(quizData, mapQuestion) {
 
 export function getChoiceData(choice) {
 	if (typeof choice === 'object' && choice !== null) {
+		const text = choice.text == null ? '' : String(choice.text);
+		const image =
+			choice.image_display ||
+			(typeof choice.image === 'string' ? choice.image : null) ||
+			choice.image_url ||
+			null;
 		return {
-			text: choice.text || choice,
-			image: choice.image || choice.image_url || null,
+			text,
+			image: image || null,
 			id: choice.id
 		};
 	}
-	return { text: choice, image: null, id: undefined };
+	return { text: choice == null ? '' : String(choice), image: null, id: undefined };
 }
 
 export function isMathematical(questionType) {
@@ -287,6 +293,115 @@ export function groupQuestionsByApiSection(questions, sections) {
 
 export function canUseSectionQuestionLayout(sections) {
 	return Array.isArray(sections) && sections.length >= 2;
+}
+
+/** Flat question list from section groups (preserves within-group order). */
+export function flattenGroupedQuestions(groups) {
+	return (groups || []).flatMap((g) => g.questions || []);
+}
+
+/**
+ * Replace one section's question order (from drag-reorder) and flatten back.
+ * sectionKey null = ungrouped / no-sections list.
+ */
+export function reorderQuestionsInSection(questions, sections, sectionKey, orderedGroupQuestions) {
+	const groups = questionsGroupedBySection(questions, sections);
+	const matchKey = sectionKey ?? null;
+	let found = false;
+	for (const group of groups) {
+		const key = group.section?.clientKey ?? null;
+		if (key === matchKey) {
+			group.questions = orderedGroupQuestions;
+			found = true;
+			break;
+		}
+	}
+	return found ? flattenGroupedQuestions(groups) : questions;
+}
+
+/**
+ * Swap a question with its neighbor inside the same section (or the single
+ * ungrouped list when there are no sections). direction: -1 up, +1 down.
+ */
+export function moveQuestionWithinSection(questions, sections, questionId, direction) {
+	const groups = questionsGroupedBySection(questions, sections);
+	for (const group of groups) {
+		const idx = group.questions.findIndex((q) => q.id === questionId);
+		if (idx < 0) continue;
+		const swapWith = idx + direction;
+		if (swapWith < 0 || swapWith >= group.questions.length) return questions;
+		const next = [...group.questions];
+		[next[idx], next[swapWith]] = [next[swapWith], next[idx]];
+		group.questions = next;
+		return flattenGroupedQuestions(groups);
+	}
+	return questions;
+}
+
+/**
+ * Move a question to the previous/next section (appends to destination).
+ * Empty source sections are allowed. Returns { questions, targetKey }.
+ */
+export function transferQuestionToAdjacentSection(questions, sections, questionId, direction) {
+	if (!sections?.length) return { questions, targetKey: null };
+
+	const groups = questionsGroupedBySection(questions, sections);
+	let fromGi = -1;
+	let fromQi = -1;
+	for (let gi = 0; gi < groups.length; gi += 1) {
+		const qi = groups[gi].questions.findIndex((q) => q.id === questionId);
+		if (qi >= 0) {
+			fromGi = gi;
+			fromQi = qi;
+			break;
+		}
+	}
+	if (fromGi < 0) return { questions, targetKey: null };
+
+	const sectionKeys = sections.map((s) => s.clientKey);
+	const fromKey =
+		groups[fromGi].section?.clientKey ?? groups[fromGi].questions[fromQi]?.sectionKey ?? null;
+	const fromSecIdx = fromKey != null ? sectionKeys.indexOf(fromKey) : -1;
+	const toSecIdx =
+		fromSecIdx >= 0 ? fromSecIdx + direction : direction > 0 ? 0 : sectionKeys.length - 1;
+	if (toSecIdx < 0 || toSecIdx >= sectionKeys.length) {
+		return { questions, targetKey: null };
+	}
+
+	const targetKey = sectionKeys[toSecIdx];
+	const [moved] = groups[fromGi].questions.splice(fromQi, 1);
+	const updated = { ...moved, sectionKey: targetKey };
+	const toGi = groups.findIndex((g) => g.section?.clientKey === targetKey);
+	if (toGi >= 0) groups[toGi].questions.push(updated);
+	else return { questions, targetKey: null };
+
+	return { questions: flattenGroupedQuestions(groups), targetKey };
+}
+
+/** Button enablement for adjacent-section transfer. */
+export function questionAuthoringMoveState(questions, sections, questionId) {
+	const groups = questionsGroupedBySection(questions, sections);
+	let group = null;
+	for (const g of groups) {
+		const idx = g.questions.findIndex((q) => q.id === questionId);
+		if (idx >= 0) {
+			group = g;
+			break;
+		}
+	}
+	if (!group) {
+		return { canTransferPrev: false, canTransferNext: false };
+	}
+
+	const sectionKeys = (sections || []).map((s) => s.clientKey);
+	const fromKey = group.section?.clientKey ?? null;
+	const fromSecIdx = fromKey != null ? sectionKeys.indexOf(fromKey) : -1;
+	const hasSections = sectionKeys.length >= 2;
+
+	return {
+		canTransferPrev: hasSections && (fromSecIdx > 0 || fromSecIdx < 0),
+		canTransferNext: hasSections && (fromSecIdx >= 0 ? fromSecIdx < sectionKeys.length - 1 : true)
+	};
 }
 
 export function buildAnswerRecords(questions) {

@@ -1214,6 +1214,7 @@ export default function RoadmapPage() {
 									size="sm"
 									variant="ghost"
 									className="text-danger"
+									disabled={remove.isPending}
 									onClick={(e) => {
 										e.stopPropagation();
 										remove.mutate(r.id);

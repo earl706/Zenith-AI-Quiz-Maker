@@ -14,10 +14,10 @@ function isMathFieldFocused(mf) {
 	return false;
 }
 
-function tryFocusMathField(mf) {
+function tryFocusMathField(mf, { preventScroll = false } = {}) {
 	if (!mf || mf.disabled) return false;
 	try {
-		mf.focus?.();
+		mf.focus?.(preventScroll ? { preventScroll: true } : undefined);
 	} catch {
 		return false;
 	}

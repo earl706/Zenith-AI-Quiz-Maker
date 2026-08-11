@@ -32,8 +32,8 @@ import {
 	sortQuestionsBySectionOrder
 } from '../components/quiz/quizHelpers';
 
-/** After checking an IDE answer in list mode, wait briefly then focus the next IDE field. */
-const LIST_ID_FOCUS_ADVANCE_MS = 2000;
+/** After checking an answer in list mode, wait briefly then focus the next question. */
+const LIST_FOCUS_ADVANCE_MS = 2000;
 
 function parseQuizPayload(data) {
 	const quizData = data.data || data;
@@ -41,15 +41,33 @@ function parseQuizPayload(data) {
 	return { quizData, questions };
 }
 
-function focusAttemptTarget(el) {
+function getAttemptScroller() {
+	return document.getElementById('main-content');
+}
+
+/** Center an element in the app main scroller (nested overflow; works in Tauri WebKit). */
+function scrollAttemptElementToCenter(el, { behavior = 'smooth' } = {}) {
+	if (!el) return;
+	const scroller = getAttemptScroller();
+	if (!scroller) {
+		el.scrollIntoView?.({ behavior, block: 'center' });
+		return;
+	}
+	const scrollerRect = scroller.getBoundingClientRect();
+	const elRect = el.getBoundingClientRect();
+	const delta = elRect.top + elRect.height / 2 - (scrollerRect.top + scrollerRect.height / 2);
+	if (Math.abs(delta) < 1) return;
+	scroller.scrollBy({ top: delta, behavior });
+}
+
+function focusAttemptControl(el) {
 	if (!el) return;
 	const tag = el.tagName?.toLowerCase?.();
 	if (tag === 'math-field') {
-		tryFocusMathField(el);
+		tryFocusMathField(el, { preventScroll: true });
 	} else {
-		el.focus?.();
+		el.focus?.({ preventScroll: true });
 	}
-	el.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
 }
 
 export default function QuizAttempt() {
@@ -105,6 +123,7 @@ export default function QuizAttempt() {
 	}, [questionLayout, sectionLayoutAvailable, sectionGroups, sectionPage, questions]);
 
 	const inputRefs = useRef(new Map());
+	const cardRefs = useRef(new Map());
 	const submitButtonRef = useRef(null);
 	const focusAdvanceTimer = useRef(null);
 	const visibleQuestionsRef = useRef(visibleQuestions);
@@ -115,24 +134,52 @@ export default function QuizAttempt() {
 		else inputRefs.current.delete(questionId);
 	}, []);
 
-	const handleIdentificationRevealed = useCallback((questionId) => {
-		if (focusAdvanceTimer.current) {
-			clearTimeout(focusAdvanceTimer.current);
-			focusAdvanceTimer.current = null;
-		}
-		focusAdvanceTimer.current = setTimeout(() => {
-			focusAdvanceTimer.current = null;
-			const visible = visibleQuestionsRef.current;
-			const ideIds = visible.filter((q) => isIdentification(q.question_type)).map((q) => q.id);
-			const index = ideIds.indexOf(questionId);
-			const nextId = index >= 0 ? ideIds[index + 1] : undefined;
-			if (nextId != null) {
-				focusAttemptTarget(inputRefs.current.get(nextId));
-				return;
-			}
-			focusAttemptTarget(submitButtonRef.current);
-		}, LIST_ID_FOCUS_ADVANCE_MS);
+	const registerCardRef = useCallback((questionId, el) => {
+		if (el) cardRefs.current.set(questionId, el);
+		else cardRefs.current.delete(questionId);
 	}, []);
+
+	const focusQuestionCard = useCallback((questionId) => {
+		const card = cardRefs.current.get(questionId);
+		if (!card) return;
+
+		const ideInput = inputRefs.current.get(questionId);
+		if (ideInput && !ideInput.disabled) {
+			focusAttemptControl(ideInput);
+		} else {
+			const nextControl = card.querySelector(
+				'input:not([disabled]), textarea:not([disabled]), math-field:not([disabled]), button:not([disabled])'
+			);
+			focusAttemptControl(nextControl);
+		}
+		// Layout may still be settling (feedback block); center after paint.
+		requestAnimationFrame(() => scrollAttemptElementToCenter(card));
+	}, []);
+
+	const handleListFocusCapture = useCallback((event) => {
+		const card = event.target?.closest?.('[data-attempt-question-id]');
+		if (!card || !event.currentTarget.contains(card)) return;
+		scrollAttemptElementToCenter(card);
+	}, []);
+
+	const handleQuestionAnswered = useCallback(
+		(questionId) => {
+			if (focusAdvanceTimer.current) {
+				clearTimeout(focusAdvanceTimer.current);
+				focusAdvanceTimer.current = null;
+			}
+			focusAdvanceTimer.current = setTimeout(() => {
+				focusAdvanceTimer.current = null;
+				const visible = visibleQuestionsRef.current;
+				const index = visible.findIndex((q) => q.id === questionId);
+				const next = index >= 0 ? visible[index + 1] : undefined;
+				if (next?.id != null) {
+					focusQuestionCard(next.id);
+				}
+			}, LIST_FOCUS_ADVANCE_MS);
+		},
+		[focusQuestionCard]
+	);
 
 	useEffect(
 		() => () => {
@@ -335,32 +382,41 @@ export default function QuizAttempt() {
 							perQuestionTimeSeconds={quizData.per_question_time_seconds ?? 30}
 						/>
 					) : (
-						<QuizQuestionListLayout
-							questions={questions}
-							sections={quizData.sections || []}
-							layout={questionLayout}
-							onLayoutChange={setQuestionLayout}
-							sectionPage={sectionPage}
-							onSectionPageChange={setSectionPage}
-							renderQuestion={(question) => (
-								<QuestionCard
-									key={question.id}
-									question={question}
-									answers={answers}
-									handleAnswerChange={handleAnswerChange}
-									handleIdentificationAnswerChange={handleIdentificationAnswerChange}
-									answerSuggestionsEnabled={quizData.answer_suggestions_enabled !== false}
-									suggestionCorpus={suggestionCorpus}
-									autoFocus={firstIdentificationId != null && question.id === firstIdentificationId}
-									onIdentificationRevealed={handleIdentificationRevealed}
-									inputRef={
-										isIdentification(question.question_type)
-											? (el) => registerInputRef(question.id, el)
-											: null
-									}
-								/>
-							)}
-						/>
+						<div onFocusCapture={handleListFocusCapture}>
+							<QuizQuestionListLayout
+								questions={questions}
+								sections={quizData.sections || []}
+								layout={questionLayout}
+								onLayoutChange={setQuestionLayout}
+								sectionPage={sectionPage}
+								onSectionPageChange={setSectionPage}
+								renderQuestion={(question) => (
+									<div
+										key={question.id}
+										data-attempt-question-id={question.id}
+										ref={(el) => registerCardRef(question.id, el)}
+									>
+										<QuestionCard
+											question={question}
+											answers={answers}
+											handleAnswerChange={handleAnswerChange}
+											handleIdentificationAnswerChange={handleIdentificationAnswerChange}
+											answerSuggestionsEnabled={quizData.answer_suggestions_enabled !== false}
+											suggestionCorpus={suggestionCorpus}
+											autoFocus={
+												firstIdentificationId != null && question.id === firstIdentificationId
+											}
+											onAnswered={handleQuestionAnswered}
+											inputRef={
+												isIdentification(question.question_type)
+													? (el) => registerInputRef(question.id, el)
+													: null
+											}
+										/>
+									</div>
+								)}
+							/>
+						</div>
 					)}
 				</div>
 

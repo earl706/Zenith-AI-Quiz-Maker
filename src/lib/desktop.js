@@ -8,12 +8,12 @@ export function isDesktopApp() {
 	return Boolean(window.__TAURI__ || window.__TAURI_INTERNALS__);
 }
 
-/** Desktop always remembers; web uses the checkbox (default on). */
+/** Default Remember me checkbox state (on for web and desktop). */
 export function defaultRememberMe() {
 	return true;
 }
 
+/** Map checkbox state to API remember flag (false only when explicitly unchecked). */
 export function effectiveRememberMe(rememberChecked) {
-	if (isDesktopApp()) return true;
 	return rememberChecked !== false;
 }

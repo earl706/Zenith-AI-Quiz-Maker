@@ -1,4 +1,5 @@
-import { Check, Plus, X, Image as ImageIcon } from 'lucide-react';
+import { Check, Plus, X, Image as ImageIcon, GripVertical } from 'lucide-react';
+import { Reorder, useDragControls } from 'framer-motion';
 
 import { cn } from '../../lib/format';
 import { resolveQuizImageSrc } from '../../lib/quizImages';
@@ -54,6 +55,107 @@ export function ToggleChip({ active, onClick, children, className }) {
 			</span>
 			{children}
 		</button>
+	);
+}
+
+/** Adjacent-section transfer controls (in-section reorder is drag-only). */
+export function QuestionOrderControls({
+	canTransferPrev,
+	canTransferNext,
+	onTransferPrev,
+	onTransferNext,
+	showTransfer = true
+}) {
+	if (!showTransfer) return null;
+	return (
+		<div className="flex flex-wrap items-center gap-1">
+			<button
+				type="button"
+				disabled={!canTransferPrev}
+				onClick={onTransferPrev}
+				aria-label="Move question to previous section"
+				title="Previous section"
+				className="border-line bg-surface text-muted hover:text-fg disabled:text-muted/40 inline-flex cursor-pointer items-center rounded-md border px-2 py-1 text-[0.65rem] font-medium disabled:cursor-not-allowed"
+			>
+				← Sec
+			</button>
+			<button
+				type="button"
+				disabled={!canTransferNext}
+				onClick={onTransferNext}
+				aria-label="Move question to next section"
+				title="Next section"
+				className="border-line bg-surface text-muted hover:text-fg disabled:text-muted/40 inline-flex cursor-pointer items-center rounded-md border px-2 py-1 text-[0.65rem] font-medium disabled:cursor-not-allowed"
+			>
+				Sec →
+			</button>
+		</div>
+	);
+}
+
+function ReorderableQuestionItem({ question, dragEnabled, children }) {
+	const controls = useDragControls();
+	const dragHandle = dragEnabled ? (
+		<button
+			type="button"
+			aria-label="Drag to reorder within section"
+			title="Drag to reorder"
+			className="border-line bg-surface text-muted hover:text-fg inline-flex cursor-grab items-center justify-center rounded-md border p-1.5 active:cursor-grabbing"
+			style={{ touchAction: 'none' }}
+			onPointerDown={(event) => {
+				event.preventDefault();
+				controls.start(event);
+			}}
+		>
+			<GripVertical size={14} aria-hidden />
+		</button>
+	) : null;
+
+	return (
+		<Reorder.Item
+			value={question}
+			as="div"
+			dragListener={false}
+			dragControls={controls}
+			className="relative"
+		>
+			{children({ dragHandle })}
+		</Reorder.Item>
+	);
+}
+
+/**
+ * In-section question list with Framer Motion drag reorder (handle only).
+ * When disabled (e.g. AI review), renders a static stack.
+ */
+export function AuthoringQuestionReorderList({ items, onReorder, disabled = false, children }) {
+	if (disabled) {
+		return (
+			<div className="space-y-3">
+				{items.map((question) => (
+					<div key={question.id}>{children(question, { dragHandle: null })}</div>
+				))}
+			</div>
+		);
+	}
+
+	return (
+		<Reorder.Group
+			axis="y"
+			values={items}
+			onReorder={onReorder}
+			className="flex list-none flex-col gap-3 p-0"
+		>
+			{items.map((question) => (
+				<ReorderableQuestionItem
+					key={question.id}
+					question={question}
+					dragEnabled={items.length > 1}
+				>
+					{(bind) => children(question, bind)}
+				</ReorderableQuestionItem>
+			))}
+		</Reorder.Group>
 	);
 }
 

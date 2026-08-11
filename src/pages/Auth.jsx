@@ -3,12 +3,11 @@ import { Link, useNavigate } from 'react-router-dom';
 import { BookOpen } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../stores/authStore';
-import { defaultRememberMe, isDesktopApp } from '../lib/desktop';
+import { defaultRememberMe } from '../lib/desktop';
 import { Button, Input } from '../components/ui';
 import PinInput from '../components/auth/PinInput';
 
 function RememberMeCheckbox({ checked, onChange }) {
-	if (isDesktopApp()) return null;
 	return (
 		<label className="text-muted flex cursor-pointer items-center gap-2 text-sm">
 			<input
