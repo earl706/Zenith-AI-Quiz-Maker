@@ -11,12 +11,16 @@ import {
 	Clock,
 	HelpCircle,
 	SlidersHorizontal,
-	Map as MapIcon
+	Map as MapIcon,
+	Merge,
+	Download
 } from 'lucide-react';
 
 import { get } from '../lib/api';
+import { downloadQuizAsJson } from '../lib/exportQuizJson';
 import { formatDate, formatDurationSeconds, fromNow } from '../lib/format';
 import { resolveQuizImageSrc } from '../lib/quizImages';
+import { normalizeQuizList } from '../lib/resources';
 import { toast } from '../stores/toastStore';
 import { PageHeader } from '../components/layout/PageHeader';
 import CreateRoadmapFromQuizModal from '../components/roadmap/CreateRoadmapFromQuizModal';
@@ -30,6 +34,7 @@ import {
 	ProgressRing
 } from '../components/ui';
 import MathRenderer from '../components/quiz/MathRenderer';
+import MergeQuizzesModal from '../components/quiz/MergeQuizzesModal';
 import QuestionTitle from '../components/quiz/QuestionTitle';
 import { PersistedQuizSettingsModal } from '../components/quiz/QuizSettingsModal';
 import QuizQuestionListLayout from '../components/quiz/QuizQuestionListLayout';
@@ -82,6 +87,7 @@ export default function QuizPage() {
 	const [questionLayout, setQuestionLayout] = useQuestionDisplayLayout();
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [roadmapOpen, setRoadmapOpen] = useState(false);
+	const [mergeOpen, setMergeOpen] = useState(false);
 
 	const { data, isLoading, isError, refetch } = useQuery({
 		queryKey: ['quizzes', 'summary', id],
@@ -97,7 +103,19 @@ export default function QuizPage() {
 		retry: false
 	});
 
+	const { data: quizListData } = useQuery({
+		queryKey: ['quizzes', 'list'],
+		queryFn: () => get('/quizzes/quiz/'),
+		staleTime: 60_000,
+		enabled: mergeOpen
+	});
+
 	const { quiz, questions, attempts, meta } = parseQuizSummary(data);
+	const mergeCandidates = useMemo(() => {
+		const list = normalizeQuizList(quizListData);
+		if (list.length) return list;
+		return quiz ? [quiz] : [];
+	}, [quizListData, quiz]);
 	const settingsQuiz = useMemo(() => {
 		if (!quiz) return null;
 		const nested = Array.isArray(quiz.questions) ? quiz.questions : [];
@@ -140,6 +158,15 @@ export default function QuizPage() {
 			initialSectionIds: [sectionId],
 			highlightedSectionId: sectionId
 		});
+	};
+
+	const handleExportJson = () => {
+		try {
+			const { filename } = downloadQuizAsJson(quiz, orderedQuestions);
+			toast.success(`Exported ${filename}`);
+		} catch (error) {
+			toast.error(error?.message || 'Could not export quiz JSON.');
+		}
 	};
 
 	if (isLoading) return <LoadingScreen />;
@@ -216,6 +243,16 @@ export default function QuizPage() {
 						>
 							<SlidersHorizontal size={16} />
 						</Button>
+						<Button
+							variant="ghost"
+							size="icon"
+							className="cursor-pointer"
+							aria-label="Export JSON"
+							title="Export JSON"
+							onClick={handleExportJson}
+						>
+							<Download size={16} />
+						</Button>
 						{sections.length > 0 && (
 							<Button
 								variant="secondary"
@@ -225,6 +262,13 @@ export default function QuizPage() {
 								<MapIcon size={14} /> Roadmap
 							</Button>
 						)}
+						<Button
+							variant="secondary"
+							onClick={() => setMergeOpen(true)}
+							title="Merge this quiz into another"
+						>
+							<Merge size={14} /> Merge into…
+						</Button>
 						<Button variant="secondary" onClick={() => navigate(`/quizzes/edit/${id}`)}>
 							<Pencil size={14} /> Edit
 						</Button>
@@ -246,6 +290,18 @@ export default function QuizPage() {
 				onClose={() => setRoadmapOpen(false)}
 				quiz={quiz}
 				navigateOnSuccess
+			/>
+			<MergeQuizzesModal
+				open={mergeOpen}
+				onClose={() => setMergeOpen(false)}
+				quizzes={mergeCandidates}
+				initialSourceUuid={id}
+				onMerged={(result) => {
+					refetch();
+					if (result?.target_uuid) {
+						navigate(`/quizzes/${result.target_uuid}`);
+					}
+				}}
 			/>
 			{quiz.quiz_image && (
 				<div className="border-line bg-surface mb-6 overflow-hidden rounded-md border">

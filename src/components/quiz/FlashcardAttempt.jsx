@@ -218,7 +218,7 @@ export default function FlashcardAttempt({
 								disabled={!canJump || submitting}
 								onClick={() => canJump && goTo(i)}
 								className={cn(
-									'h-2 w-2 rounded-full transition',
+									'h-2 w-2 cursor-pointer rounded-full transition',
 									i === index
 										? 'bg-primary scale-125'
 										: filled

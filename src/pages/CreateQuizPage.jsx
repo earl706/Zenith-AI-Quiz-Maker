@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 
 import { api } from '../lib/api';
+import { isTemplateStyleQuizJson } from '../lib/exportQuizJson';
 import { cn } from '../lib/format';
 import { resolveQuizImageSrc } from '../lib/quizImages';
 import { invalidateQuizQueries } from '../lib/resources';
@@ -365,15 +366,20 @@ export default function CreateQuizPage() {
 		reader.onload = (e) => {
 			try {
 				const data = JSON.parse(e.target.result);
-				if (!data.quiz_title || !Array.isArray(data.questions) || data.questions.length === 0) {
+				const title = data.quiz_title || data.title;
+				if (!title || !Array.isArray(data.questions) || data.questions.length === 0) {
 					setImportError('Invalid quiz JSON structure.');
 					return;
 				}
-				setQuizTitle(data.quiz_title);
+
+				const templateStyle = isTemplateStyleQuizJson(data);
+				setQuizTitle(title);
 				setSelectedColor(data.tag_color || colors[0].hex);
-				setQuizType(data.quizType || 'list');
-				setRandomQuestionOrder(!!data.randomQuestions);
-				setRandomQuestionChoices(data.questions.some((q) => q.randomChoices === true));
+				setQuizType(
+					data.quizType ||
+						(data.flashcard_quiz === true || data.flashcard_quiz === 'true' ? 'flashcard' : 'list')
+				);
+				setRandomQuestionOrder(!!(data.randomQuestions ?? data.random_question_order));
 				setPerQuestionTimerEnabled(!!(data.perQuestionTimer ?? data.per_question_timer_enabled));
 				setPerQuestionTimeSeconds(
 					clampPerQuestionSeconds(
@@ -385,7 +391,79 @@ export default function CreateQuizPage() {
 					(data.answerSuggestions ?? data.answer_suggestions_enabled) !== false
 				);
 				setQuizImage(null);
+
+				if (templateStyle) {
+					const sectionList = Array.isArray(data.sections) ? data.sections : [];
+					const nextSections = sectionList.map((sec, i) =>
+						createSection({
+							title: sec.title || `Section ${i + 1}`,
+							order: sec.order ?? i
+						})
+					);
+					const mappedQuestions = data.questions.map((q, idx) => {
+						const flags = flagsFromQuestionType(q.question_type);
+						const rawChoices = Array.isArray(q.choices) ? q.choices : [];
+						const choices = rawChoices.map((c) =>
+							typeof c === 'object' && c !== null ? c.text || '' : String(c || '')
+						);
+						const choiceImageUrls = rawChoices.map((c) =>
+							typeof c === 'object' && c !== null ? c.image_url || '' : ''
+						);
+						while (choices.length < (flags.identification ? 1 : 4)) choices.push('');
+						while (choiceImageUrls.length < choices.length) choiceImageUrls.push('');
+						const qUrl = q.question_image_url || '';
+						const hasChoiceImages = !!q.has_choice_images || choiceImageUrls.some(Boolean);
+						const sectionIndex =
+							typeof q.section_index === 'number'
+								? q.section_index
+								: Number.isFinite(Number(q.section_index))
+									? Number(q.section_index)
+									: null;
+						return {
+							id: idx + 1,
+							title: q.title || q.question || '',
+							choices,
+							choiceImages: choices.map(() => null),
+							choiceImagePreviews: choiceImageUrls.map((u) => resolveQuizImageSrc(u) || u || null),
+							choiceImageUrls,
+							correctAnswerIndex:
+								typeof q.correct_answer_index === 'number'
+									? q.correct_answer_index
+									: typeof q.correctAnswerIndex === 'number'
+										? q.correctAnswerIndex
+										: 0,
+							mathematical: flags.mathematical,
+							identification: flags.identification,
+							randomChoices: !!(q.random_choices ?? q.randomChoices),
+							hasChoiceImages,
+							showChoiceImages: hasChoiceImages,
+							question_image: null,
+							question_image_preview: resolveQuizImageSrc(qUrl) || qUrl || null,
+							question_image_url: qUrl,
+							explanation: q.explanation || '',
+							workedSolution: q.worked_solution || q.workedSolution || '',
+							sourceCitation: q.source_citation || q.sourceCitation || '',
+							sectionKey:
+								sectionIndex != null && nextSections[sectionIndex]
+									? nextSections[sectionIndex].clientKey
+									: nextSections[0]?.clientKey || null,
+							perQuestionTimeSeconds: parseOptionalTimerSeconds(
+								q.per_question_time_seconds ?? q.perQuestionTimeSeconds
+							)
+						};
+					});
+					setRandomQuestionChoices(mappedQuestions.some((q) => q.randomChoices === true));
+					const cover = data.cover_image_url || data.quiz_image_url || '';
+					setQuizImageUrl(cover);
+					setQuizImagePreview(resolveQuizImageSrc(cover) || cover || null);
+					setSections(nextSections);
+					setQuestions(mappedQuestions);
+					return;
+				}
+
+				setQuizImageUrl('');
 				setQuizImagePreview(null);
+				setRandomQuestionChoices(data.questions.some((q) => q.randomChoices === true));
 
 				const mappedQuestions = data.questions.map((q, idx) => {
 					let choices;
@@ -1277,7 +1355,7 @@ export default function CreateQuizPage() {
 																	type="button"
 																	aria-label="Mark as correct"
 																	className={cn(
-																		'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition',
+																		'flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 transition',
 																		question.correctAnswerIndex === 0
 																			? 'border-primary bg-primary'
 																			: 'border-line bg-surface'

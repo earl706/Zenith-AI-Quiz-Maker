@@ -10,6 +10,7 @@ import QuestionCard from '../components/quiz/QuestionCard';
 import FlashcardAttempt from '../components/quiz/FlashcardAttempt';
 import QuizResultReview from '../components/quiz/QuizResultReview';
 import AttemptStatusPanel from '../components/quiz/AttemptStatusPanel';
+import { PersistedQuizSettingsModal } from '../components/quiz/QuizSettingsModal';
 import QuizQuestionListLayout from '../components/quiz/QuizQuestionListLayout';
 import { useAttemptLauncher } from '../components/quiz/useAttemptLauncher';
 import {
@@ -39,6 +40,70 @@ function parseQuizPayload(data) {
 	const quizData = data.data || data;
 	const questions = data.questions || quizData.questions || [];
 	return { quizData, questions };
+}
+
+function masterySettingsFailures(roadmapProgress) {
+	const deltas = roadmapProgress?.roadmap?.nodes_delta || [];
+	const keys = new Set();
+	for (const delta of deltas) {
+		if (delta?.outcome !== 'settings_not_met') continue;
+		for (const key of delta.settings_failures || []) {
+			if (key) keys.add(key);
+		}
+	}
+	return [...keys];
+}
+
+function preferSettingsFromFailures(failures) {
+	if (!failures?.length) return null;
+	const prefer = {};
+	if (failures.includes('flashcard')) prefer.flashcard = true;
+	if (failures.includes('random_question_order')) prefer.random_question_order = true;
+	if (failures.includes('per_question_timer')) prefer.per_question_timer = true;
+	return Object.keys(prefer).length ? prefer : null;
+}
+
+function retakeSettingsHint(roadmapProgress, failures) {
+	if (!roadmapProgress?.roadmap && !roadmapProgress?.can_create) return null;
+	const labels = [];
+	if (failures.includes('flashcard')) labels.push('flashcard');
+	if (failures.includes('random_question_order')) labels.push('shuffle questions');
+	if (failures.includes('per_question_timer')) labels.push('per-question timer');
+	if (labels.length) {
+		return `This attempt didn’t count for mastery — enable ${labels.join(', ')}, save, then continue to retake.`;
+	}
+	if (roadmapProgress?.roadmap) {
+		return 'Mastery only counts when quiz settings match this roadmap’s gates (flashcard, shuffle questions, and/or per-question timer). Save, then continue to retake.';
+	}
+	return 'Save quiz settings, then choose how to start your next attempt.';
+}
+
+function mergeQuizAfterSettingsSave(quiz, payload, id) {
+	const next = {
+		...quiz,
+		uuid: quiz?.uuid || id,
+		quiz_title: payload.quiz_title ?? quiz?.quiz_title,
+		tag_color: payload.tag_color ?? quiz?.tag_color,
+		flashcard_quiz: !!payload.flashcard_quiz,
+		random_question_order: !!payload.random_question_order,
+		per_question_timer_enabled: !!payload.per_question_timer_enabled,
+		per_question_time_seconds: payload.per_question_time_seconds ?? quiz?.per_question_time_seconds,
+		answer_suggestions_enabled:
+			payload.answer_suggestions_enabled ?? quiz?.answer_suggestions_enabled
+	};
+	if ('quiz_image' in payload || 'quiz_image_url' in payload) {
+		if (payload.quiz_image) {
+			next.quiz_image = payload.quiz_image;
+			next.quiz_image_url = '';
+		} else if (payload.quiz_image_url) {
+			next.quiz_image = payload.quiz_image_url;
+			next.quiz_image_url = payload.quiz_image_url;
+		} else {
+			next.quiz_image = null;
+			next.quiz_image_url = '';
+		}
+	}
+	return next;
 }
 
 function getAttemptScroller() {
@@ -89,6 +154,7 @@ export default function QuizAttempt() {
 	const [sectionScores, setSectionScores] = useState([]);
 	const [roadmapProgress, setRoadmapProgress] = useState(null);
 	const [quizResults, setQuizResults] = useState(false);
+	const [retakeSettingsOpen, setRetakeSettingsOpen] = useState(false);
 	const [answers, setAnswers] = useState([]);
 	const [quizData, setQuizData] = useState({
 		quiz_title: '',
@@ -301,22 +367,49 @@ export default function QuizAttempt() {
 	};
 
 	const handleRetake = () => {
-		const quizSections = Array.isArray(quizData.sections) ? quizData.sections : [];
-		if (quizSections.length === 0) {
-			loadQuiz();
-			return;
-		}
-		const initialSectionIds = scope.fullQuiz ? [] : scope.sectionIds;
-		launchAttempt(
-			{ ...quizData, uuid: quizData.uuid || id },
-			{
-				initialSectionIds,
-				highlightedSectionId:
-					!scope.fullQuiz && scope.sectionIds.length === 1 ? scope.sectionIds[0] : undefined,
-				presetHint: 'Pre-selected from your last attempt — you can change the selection below.'
-			}
-		);
+		setRetakeSettingsOpen(true);
 	};
+
+	const handleRetakeSettingsSaved = (payload) => {
+		const nextQuiz = mergeQuizAfterSettingsSave(quizData, payload, id);
+		setQuizData(nextQuiz);
+		const launchQuiz = {
+			...nextQuiz,
+			uuid: nextQuiz.uuid || id,
+			questions: nextQuiz.questions?.length ? nextQuiz.questions : questions
+		};
+		const initialSectionIds = scope.fullQuiz ? [] : scope.sectionIds;
+		launchAttempt(launchQuiz, {
+			initialSectionIds,
+			highlightedSectionId:
+				!scope.fullQuiz && scope.sectionIds.length === 1 ? scope.sectionIds[0] : undefined,
+			presetHint: 'Pre-selected from your last attempt — you can change the selection below.'
+		});
+	};
+
+	const settingsFailures = useMemo(
+		() => masterySettingsFailures(roadmapProgress),
+		[roadmapProgress]
+	);
+	const retakePreferSettings = useMemo(
+		() => preferSettingsFromFailures(settingsFailures),
+		[settingsFailures]
+	);
+	const retakeHint = useMemo(
+		() => retakeSettingsHint(roadmapProgress, settingsFailures),
+		[roadmapProgress, settingsFailures]
+	);
+	const settingsQuiz = useMemo(
+		() => ({
+			...quizData,
+			uuid: quizData.uuid || id,
+			questions:
+				Array.isArray(quizData.questions) && quizData.questions.length
+					? quizData.questions
+					: questions
+		}),
+		[quizData, questions, id]
+	);
 
 	if (loading) {
 		return (
@@ -339,6 +432,16 @@ export default function QuizAttempt() {
 	return (
 		<div>
 			{attemptModal}
+			<PersistedQuizSettingsModal
+				quiz={settingsQuiz}
+				open={retakeSettingsOpen}
+				onClose={() => setRetakeSettingsOpen(false)}
+				onSaved={handleRetakeSettingsSaved}
+				title="Adjust settings to retake"
+				hint={retakeHint}
+				submitLabel="Save & continue"
+				preferSettings={retakePreferSettings}
+			/>
 			<PageHeader
 				title={quizData.quiz_title || 'Quiz attempt'}
 				icon={Target}

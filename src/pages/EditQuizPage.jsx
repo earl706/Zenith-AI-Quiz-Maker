@@ -1019,7 +1019,7 @@ export default function EditQuizPage() {
 																	aria-label="Mark as correct"
 																	disabled={reviewing}
 																	className={cn(
-																		'flex h-4 w-4 shrink-0 items-center justify-center rounded-full border-2 transition',
+																		'flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 transition',
 																		question.correctAnswerIndex === 0
 																			? 'border-primary bg-primary'
 																			: 'border-line bg-surface'

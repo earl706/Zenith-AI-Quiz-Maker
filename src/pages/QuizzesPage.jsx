@@ -1,10 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { BookOpen, Plus, Pencil, Trash2, Play, Eye, SlidersHorizontal, Map } from 'lucide-react';
+import {
+	BookOpen,
+	Plus,
+	Pencil,
+	Trash2,
+	Play,
+	Eye,
+	SlidersHorizontal,
+	Map,
+	Merge,
+	CheckSquare
+} from 'lucide-react';
 
 import { get, del } from '../lib/api';
-import { formatDate } from '../lib/format';
+import { cn, formatDate } from '../lib/format';
 import { resolveQuizImageSrc } from '../lib/quizImages';
 import {
 	invalidateQuizQueries,
@@ -24,6 +35,7 @@ import {
 	LoadingScreen,
 	Pagination
 } from '../components/ui';
+import MergeQuizzesModal from '../components/quiz/MergeQuizzesModal';
 import { PersistedQuizSettingsModal } from '../components/quiz/QuizSettingsModal';
 import { useAttemptLauncher } from '../components/quiz/useAttemptLauncher';
 import { LIST_PAGE_SIZE, paginateClient } from '../hooks/useListControls';
@@ -33,6 +45,9 @@ export default function QuizzesPage() {
 	const [deleteTarget, setDeleteTarget] = useState(null);
 	const [settingsQuiz, setSettingsQuiz] = useState(null);
 	const [roadmapQuiz, setRoadmapQuiz] = useState(null);
+	const [mergeOpen, setMergeOpen] = useState(false);
+	const [selectMode, setSelectMode] = useState(false);
+	const [selected, setSelected] = useState(() => new Set());
 	const [page, setPage] = useState(1);
 	const { launchAttempt, attemptModal } = useAttemptLauncher();
 
@@ -45,6 +60,10 @@ export default function QuizzesPage() {
 
 	const quizList = normalizeQuizList(data);
 	const paged = useMemo(() => paginateClient(quizList, page, LIST_PAGE_SIZE), [quizList, page]);
+	const selectedQuizzes = useMemo(
+		() => quizList.filter((q) => selected.has(String(q.uuid || q.quiz_id))),
+		[quizList, selected]
+	);
 
 	useEffect(() => {
 		if (paged.page !== page) setPage(paged.page);
@@ -60,6 +79,20 @@ export default function QuizzesPage() {
 		onError: () => toast.error('Could not delete quiz.')
 	});
 
+	const toggleSelected = (id) => {
+		setSelected((prev) => {
+			const next = new Set(prev);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			return next;
+		});
+	};
+
+	const exitSelectMode = () => {
+		setSelectMode(false);
+		setSelected(new Set());
+	};
+
 	if (isLoading) return <LoadingScreen />;
 
 	return (
@@ -70,9 +103,24 @@ export default function QuizzesPage() {
 				icon={BookOpen}
 				description="Manage and attempt your quizzes."
 				actions={
-					<Button onClick={() => navigate('/create-quiz')}>
-						<Plus size={16} /> New Quiz
-					</Button>
+					<div className="flex flex-wrap items-center gap-1.5">
+						{quizList.length >= 2 && (
+							<Button
+								variant={selectMode ? 'secondary' : 'ghost'}
+								onClick={() => (selectMode ? exitSelectMode() : setSelectMode(true))}
+							>
+								<CheckSquare size={16} /> {selectMode ? 'Done' : 'Select'}
+							</Button>
+						)}
+						{selectMode && selected.size >= 2 && (
+							<Button onClick={() => setMergeOpen(true)}>
+								<Merge size={16} /> Merge ({selected.size})
+							</Button>
+						)}
+						<Button onClick={() => navigate('/create-quiz')}>
+							<Plus size={16} /> New Quiz
+						</Button>
+					</div>
 				}
 			/>
 
@@ -89,17 +137,41 @@ export default function QuizzesPage() {
 				/>
 			) : (
 				<>
+					{selectMode && (
+						<p className="text-muted mb-3 text-xs">
+							Select two or more quizzes, then Merge. You’ll choose the target and resolve section
+							title conflicts.
+						</p>
+					)}
 					<div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
 						{paged.results.map((quiz) => {
-							const id = quiz.uuid || quiz.quiz_id;
+							const id = String(quiz.uuid || quiz.quiz_id);
 							const qCount = quizQuestionCount(quiz);
 							const sCount = quizSectionCount(quiz);
 							const imageSrc =
 								resolveQuizImageSrc(quiz.quiz_image) ||
 								resolveQuizImageSrc(quiz.quiz_image_url) ||
 								null;
+							const isSelected = selected.has(id);
 							return (
-								<Card key={id} className="flex flex-col overflow-hidden transition hover:shadow-md">
+								<Card
+									key={id}
+									className={cn(
+										'flex flex-col overflow-hidden transition hover:shadow-md',
+										selectMode && isSelected && 'ring-primary/40 ring-2'
+									)}
+								>
+									{selectMode && (
+										<label className="border-line bg-surface-2 flex cursor-pointer items-center gap-2 border-b px-3 py-2 text-xs">
+											<input
+												type="checkbox"
+												checked={isSelected}
+												onChange={() => toggleSelected(id)}
+												className="accent-primary"
+											/>
+											<span className="text-muted">{isSelected ? 'Selected' : 'Select'}</span>
+										</label>
+									)}
 									{imageSrc ? (
 										<div className="border-line bg-surface-2 flex h-36 items-center justify-center border-b">
 											<img src={imageSrc} alt="" className="object-fit h-full max-h-36 w-full" />
@@ -227,6 +299,13 @@ export default function QuizzesPage() {
 				onClose={() => setRoadmapQuiz(null)}
 				quiz={roadmapQuiz}
 				navigateOnSuccess
+			/>
+
+			<MergeQuizzesModal
+				open={mergeOpen}
+				onClose={() => setMergeOpen(false)}
+				quizzes={selectedQuizzes.length >= 2 ? selectedQuizzes : quizList}
+				onMerged={() => exitSelectMode()}
 			/>
 
 			<Modal

@@ -121,7 +121,7 @@ export default function AttemptStatusPanel({
 						<div className="border-line flex flex-col gap-2 border-t pt-4">
 							{onRetake && (
 								<Button className="w-full cursor-pointer" onClick={onRetake}>
-									<RotateCcw size={14} /> Retake quiz
+									<RotateCcw size={14} /> Adjust & retake
 								</Button>
 							)}
 							{onBackToList && (

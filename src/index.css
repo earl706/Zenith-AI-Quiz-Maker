@@ -78,6 +78,21 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Clickable defaults; Tailwind cursor-* utilities still override (e.g. cursor-grab). */
+@layer base {
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']):not([disabled]),
+  summary {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [role='button'][aria-disabled='true'],
+  [role='button'][disabled] {
+    cursor: not-allowed;
+  }
+}
+
 /* Respect users who prefer reduced motion (accessibility). */
 @media (prefers-reduced-motion: reduce) {
   *,

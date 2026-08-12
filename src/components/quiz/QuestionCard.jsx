@@ -116,7 +116,7 @@ export default function QuestionCard({
 					type="button"
 					disabled={!hasAnswer}
 					onClick={() => revealIfAnswered()}
-					className="bg-primary text-primary-fg disabled:bg-muted/30 disabled:text-muted w-full rounded-md px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed"
+					className="bg-primary text-primary-fg disabled:bg-muted/30 disabled:text-muted w-full cursor-pointer rounded-md px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed"
 				>
 					Check answer
 				</button>

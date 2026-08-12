@@ -31,6 +31,7 @@ export default function QuizSettingsModal({
 	open,
 	onClose,
 	title = 'Quiz settings',
+	hint = null,
 	quizTitle,
 	onQuizTitleChange,
 	quizImagePreview,
@@ -66,6 +67,11 @@ export default function QuizSettingsModal({
 		<>
 			<Modal open={open} onClose={onClose} title={title} size="md" footer={footer}>
 				<div className="space-y-3">
+					{hint && (
+						<p className="border-primary/20 bg-primary/5 text-fg rounded-md border px-3 py-2 text-xs leading-relaxed">
+							{hint}
+						</p>
+					)}
 					<Input
 						label="Title"
 						value={quizTitle}
@@ -187,7 +193,7 @@ export default function QuizSettingsModal({
 	);
 }
 
-function draftFromQuiz(quiz) {
+function draftFromQuiz(quiz, preferSettings = null) {
 	const coverUrl = String(quiz?.quiz_image_url || '').trim();
 	const coverDisplay = quiz?.quiz_image || coverUrl || null;
 	const preview =
@@ -198,12 +204,16 @@ function draftFromQuiz(quiz) {
 			? quiz.any_random_choices
 			: questions.some((q) => !!q.random_choices);
 
+	const preferFlashcard = !!preferSettings?.flashcard;
+	const preferRandomOrder = !!preferSettings?.random_question_order;
+	const preferTimer = !!preferSettings?.per_question_timer;
+
 	return {
 		quizTitle: quiz?.quiz_title || '',
-		quizType: quiz?.flashcard_quiz ? 'flashcard' : 'list',
-		randomQuestionOrder: !!quiz?.random_question_order,
+		quizType: preferFlashcard || quiz?.flashcard_quiz ? 'flashcard' : 'list',
+		randomQuestionOrder: preferRandomOrder || !!quiz?.random_question_order,
 		randomQuestionChoices: anyShuffleChoices,
-		perQuestionTimerEnabled: !!quiz?.per_question_timer_enabled,
+		perQuestionTimerEnabled: preferTimer || !!quiz?.per_question_timer_enabled,
 		perQuestionTimeSeconds: clampPerQuestionSeconds(
 			quiz?.per_question_time_seconds,
 			PER_QUESTION_TIMER_DEFAULT
@@ -226,14 +236,26 @@ function draftFromQuiz(quiz) {
  * Settings modal that loads from a quiz row and PUTs quiz-level settings.
  * Shuffle-choices uses write-only random_choices_all (bulk DB update) — no
  * detail hydrate and no nested questions payload.
+ *
+ * preferSettings — optional { flashcard, random_question_order, per_question_timer }
+ *   turns those options on when opening (e.g. roadmap mastery gates).
  */
-export function PersistedQuizSettingsModal({ quiz, open, onClose, onSaved }) {
-	const [draft, setDraft] = useState(() => draftFromQuiz(quiz));
+export function PersistedQuizSettingsModal({
+	quiz,
+	open,
+	onClose,
+	onSaved,
+	title = 'Quiz settings',
+	hint = null,
+	submitLabel = 'Save changes',
+	preferSettings = null
+}) {
+	const [draft, setDraft] = useState(() => draftFromQuiz(quiz, preferSettings));
 	const [saving, setSaving] = useState(false);
 
 	useEffect(() => {
-		if (open && quiz) setDraft(draftFromQuiz(quiz));
-	}, [open, quiz]);
+		if (open && quiz) setDraft(draftFromQuiz(quiz, preferSettings));
+	}, [open, quiz, preferSettings]);
 
 	const handleQuizImageUpload = (event) => {
 		const file = event.target.files?.[0];
@@ -325,6 +347,8 @@ export function PersistedQuizSettingsModal({ quiz, open, onClose, onSaved }) {
 		<QuizSettingsModal
 			open={open}
 			onClose={onClose}
+			title={title}
+			hint={hint}
 			quizTitle={draft.quizTitle}
 			onQuizTitleChange={(v) => setDraft((d) => ({ ...d, quizTitle: v }))}
 			quizImagePreview={draft.quizImagePreview}
@@ -352,7 +376,7 @@ export function PersistedQuizSettingsModal({ quiz, open, onClose, onSaved }) {
 			onSelectedColorChange={(v) => setDraft((d) => ({ ...d, selectedColor: v }))}
 			footer={
 				<Button className="w-full cursor-pointer sm:w-auto" loading={saving} onClick={handleSave}>
-					Save changes
+					{submitLabel}
 				</Button>
 			}
 		/>
