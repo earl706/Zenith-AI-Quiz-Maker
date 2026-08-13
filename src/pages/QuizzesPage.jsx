@@ -58,7 +58,7 @@ export default function QuizzesPage() {
 		refetchOnMount: true
 	});
 
-	const quizList = normalizeQuizList(data);
+	const quizList = useMemo(() => normalizeQuizList(data), [data]);
 	const paged = useMemo(() => paginateClient(quizList, page, LIST_PAGE_SIZE), [quizList, page]);
 	const selectedQuizzes = useMemo(
 		() => quizList.filter((q) => selected.has(String(q.uuid || q.quiz_id))),

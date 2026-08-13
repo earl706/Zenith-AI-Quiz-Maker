@@ -31,7 +31,6 @@ export function Pagination({ page = 1, totalPages = 1, count = 0, pageSize = 10,
 					aria-label="Previous page"
 				>
 					<ChevronLeft size={16} />
-					Prev
 				</button>
 				{pages.map((p, i) => {
 					const prev = pages[i - 1];
@@ -62,7 +61,6 @@ export function Pagination({ page = 1, totalPages = 1, count = 0, pageSize = 10,
 					className="border-line text-muted hover:text-fg flex h-9 cursor-pointer items-center gap-1 rounded-md border px-2.5 text-sm disabled:cursor-default disabled:opacity-40"
 					aria-label="Next page"
 				>
-					Next
 					<ChevronRight size={16} />
 				</button>
 			</div>

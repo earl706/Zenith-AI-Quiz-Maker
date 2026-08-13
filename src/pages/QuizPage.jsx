@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -18,7 +18,7 @@ import {
 
 import { get } from '../lib/api';
 import { downloadQuizAsJson } from '../lib/exportQuizJson';
-import { formatDate, formatDurationSeconds, fromNow } from '../lib/format';
+import { cn, formatDate, formatDurationSeconds, fromNow } from '../lib/format';
 import { resolveQuizImageSrc } from '../lib/quizImages';
 import { normalizeQuizList } from '../lib/resources';
 import { toast } from '../stores/toastStore';
@@ -31,6 +31,7 @@ import {
 	CardBody,
 	EmptyState,
 	LoadingScreen,
+	Pagination,
 	ProgressRing
 } from '../components/ui';
 import MathRenderer from '../components/quiz/MathRenderer';
@@ -55,7 +56,9 @@ import {
 	sortQuestionsBySectionOrder
 } from '../components/quiz/quizHelpers';
 import { useAttemptLauncher } from '../components/quiz/useAttemptLauncher';
+import { paginateClient } from '../hooks/useListControls';
 
+const ATTEMPTS_PAGE_SIZE = 5;
 function parseQuizSummary(payload) {
 	if (!payload || typeof payload !== 'object') {
 		return { quiz: null, questions: [], attempts: [], meta: {} };
@@ -88,6 +91,7 @@ export default function QuizPage() {
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [roadmapOpen, setRoadmapOpen] = useState(false);
 	const [mergeOpen, setMergeOpen] = useState(false);
+	const [attemptsPage, setAttemptsPage] = useState(1);
 
 	const { data, isLoading, isError, refetch } = useQuery({
 		queryKey: ['quizzes', 'summary', id],
@@ -111,6 +115,10 @@ export default function QuizPage() {
 	});
 
 	const { quiz, questions, attempts, meta } = parseQuizSummary(data);
+	const pagedAttempts = useMemo(
+		() => paginateClient(attempts, attemptsPage, ATTEMPTS_PAGE_SIZE),
+		[attempts, attemptsPage]
+	);
 	const mergeCandidates = useMemo(() => {
 		const list = normalizeQuizList(quizListData);
 		if (list.length) return list;
@@ -141,6 +149,14 @@ export default function QuizPage() {
 		});
 		return map;
 	}, [orderedQuestions]);
+
+	useEffect(() => {
+		setAttemptsPage(1);
+	}, [id]);
+
+	useEffect(() => {
+		if (pagedAttempts.page !== attemptsPage) setAttemptsPage(pagedAttempts.page);
+	}, [pagedAttempts.page, attemptsPage]);
 
 	const handleHeaderAttempt = () => {
 		if (!viewingSectionLayout) {
@@ -401,7 +417,13 @@ export default function QuizPage() {
 											)}
 
 											{choices.length > 0 && (
-												<div className="flex flex-wrap justify-center gap-2">
+												<div
+													className={
+														math
+															? 'flex w-full flex-col items-stretch gap-3'
+															: 'flex flex-wrap justify-center gap-2'
+													}
+												>
 													{choices.map((choice, ci) => {
 														const {
 															text: choiceText,
@@ -413,7 +435,12 @@ export default function QuizPage() {
 														return (
 															<div
 																key={choiceId ?? ci}
-																className="bg-surface-2 flex max-w-full min-w-30 flex-col items-center gap-2 rounded-md px-4 py-2.5 sm:max-w-3xl"
+																className={cn(
+																	'bg-surface-2 flex flex-col items-center gap-2 rounded-md',
+																	math
+																		? 'w-full max-w-full min-w-0 px-5 py-4'
+																		: 'max-w-full min-w-30 px-4 py-2.5 sm:max-w-3xl'
+																)}
 															>
 																{choiceImage && (
 																	<img
@@ -424,8 +451,10 @@ export default function QuizPage() {
 																)}
 																{choiceText &&
 																	(math ? (
-																		<div className="max-w-full overflow-x-auto text-center whitespace-nowrap">
-																			<MathRenderer expression={choiceText} displayMode={false} />
+																		<div className="w-full min-w-0 overflow-x-auto py-1 text-center">
+																			<div className="inline-block min-w-min px-1">
+																				<MathRenderer expression={choiceText} displayMode />
+																			</div>
 																		</div>
 																	) : (
 																		<span className="text-fg text-center text-sm font-medium">
@@ -457,7 +486,7 @@ export default function QuizPage() {
 						</Card>
 					) : (
 						<div className="space-y-3">
-							{attempts.map((attempt) => {
+							{pagedAttempts.results.map((attempt) => {
 								const key = attempt.uuid || attempt.id;
 								const { score, total, accuracy, complete, sectionScores } =
 									getAttemptStats(attempt);
@@ -529,6 +558,13 @@ export default function QuizPage() {
 									</Card>
 								);
 							})}
+							<Pagination
+								page={pagedAttempts.page}
+								totalPages={pagedAttempts.total_pages}
+								count={pagedAttempts.count}
+								pageSize={pagedAttempts.page_size}
+								onPageChange={setAttemptsPage}
+							/>
 						</div>
 					)}
 				</aside>
