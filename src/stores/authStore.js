@@ -3,6 +3,12 @@ import { create } from 'zustand';
 import { api, tokenStore } from '../lib/api';
 import { effectiveRememberMe } from '../lib/desktop';
 
+function isTransientAuthError(err) {
+	if (!err?.response) return true;
+	const status = err.response.status;
+	return status >= 500 || status === 429;
+}
+
 const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8001/api';
 
 function applySession(set, data) {
@@ -160,17 +166,31 @@ export const useAuthStore = create((set, get) => ({
 	},
 
 	async bootstrap() {
-		if (!tokenStore.access) {
+		if (!tokenStore.access && !tokenStore.refresh) {
 			set({ status: 'unauthenticated' });
 			return;
 		}
 		set({ status: 'loading' });
-		try {
-			const { data } = await api.get('/auth/me/');
-			set({ user: data, status: 'authenticated' });
-		} catch {
-			tokenStore.clear();
-			set({ user: null, status: 'unauthenticated' });
+		const attempts = 8;
+		for (let i = 0; i < attempts; i += 1) {
+			try {
+				const { data } = await api.get('/auth/me/');
+				set({ user: data, status: 'authenticated', error: null });
+				return;
+			} catch (err) {
+				const status = err.response?.status;
+				if (status === 401 || status === 403) {
+					tokenStore.clear();
+					set({ user: null, status: 'unauthenticated' });
+					return;
+				}
+				if (i < attempts - 1 && isTransientAuthError(err)) {
+					await new Promise((resolve) => setTimeout(resolve, 400));
+					continue;
+				}
+				set({ user: null, status: 'unauthenticated' });
+				return;
+			}
 		}
 	},
 

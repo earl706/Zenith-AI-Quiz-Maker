@@ -2,21 +2,80 @@ import axios from 'axios';
 
 const ACCESS_KEY = 'app.access';
 const REFRESH_KEY = 'app.refresh';
+const COOKIE_MAX_AGE = 90 * 24 * 60 * 60;
+
+function cookieGet(name) {
+	if (typeof document === 'undefined') return null;
+	const prefix = `${name}=`;
+	const found = document.cookie.split('; ').find((row) => row.startsWith(prefix));
+	if (!found) return null;
+	try {
+		return decodeURIComponent(found.slice(prefix.length));
+	} catch {
+		return found.slice(prefix.length);
+	}
+}
+
+function cookieSet(name, value) {
+	if (typeof document === 'undefined') return;
+	document.cookie = `${name}=${encodeURIComponent(value)}; path=/; max-age=${COOKIE_MAX_AGE}; SameSite=Lax`;
+}
+
+function cookieClear(name) {
+	if (typeof document === 'undefined') return;
+	document.cookie = `${name}=; path=/; max-age=0; SameSite=Lax`;
+}
+
+function readToken(key) {
+	try {
+		const fromStorage = localStorage.getItem(key);
+		if (fromStorage) return fromStorage;
+	} catch {
+		/* private mode / blocked storage */
+	}
+	const fromCookie = cookieGet(key);
+	if (fromCookie) {
+		try {
+			localStorage.setItem(key, fromCookie);
+		} catch {
+			/* ignore */
+		}
+	}
+	return fromCookie;
+}
+
+function writeToken(key, value) {
+	try {
+		localStorage.setItem(key, value);
+	} catch {
+		/* ignore */
+	}
+	cookieSet(key, value);
+}
+
+function removeToken(key) {
+	try {
+		localStorage.removeItem(key);
+	} catch {
+		/* ignore */
+	}
+	cookieClear(key);
+}
 
 export const tokenStore = {
 	get access() {
-		return localStorage.getItem(ACCESS_KEY);
+		return readToken(ACCESS_KEY);
 	},
 	get refresh() {
-		return localStorage.getItem(REFRESH_KEY);
+		return readToken(REFRESH_KEY);
 	},
 	set({ access, refresh }) {
-		if (access) localStorage.setItem(ACCESS_KEY, access);
-		if (refresh) localStorage.setItem(REFRESH_KEY, refresh);
+		if (access) writeToken(ACCESS_KEY, access);
+		if (refresh) writeToken(REFRESH_KEY, refresh);
 	},
 	clear() {
-		localStorage.removeItem(ACCESS_KEY);
-		localStorage.removeItem(REFRESH_KEY);
+		removeToken(ACCESS_KEY);
+		removeToken(REFRESH_KEY);
 	}
 };
 
@@ -30,27 +89,52 @@ api.interceptors.request.use((config) => {
 	return config;
 });
 
+const ANON_AUTH_PATHS = [
+	'/auth/login/',
+	'/auth/register/',
+	'/auth/refresh/',
+	'/auth/mfa/verify/',
+	'/auth/oauth/',
+	'/auth/email/verify/',
+	'/auth/email/resend/'
+];
+
+function isAnonymousAuthRequest(url = '') {
+	return ANON_AUTH_PATHS.some((path) => String(url).includes(path));
+}
+
 let refreshPromise = null;
+
+export async function refreshAccessToken() {
+	const refresh = tokenStore.refresh;
+	if (!refresh) throw new Error('No refresh token');
+	const { data } = await axios.post(`${baseURL}/auth/refresh/`, { refresh });
+	tokenStore.set({
+		access: data.access,
+		...(data.refresh ? { refresh: data.refresh } : {})
+	});
+	return data.access;
+}
 
 api.interceptors.response.use(
 	(response) => response,
 	async (error) => {
 		const original = error.config;
 		const status = error.response?.status;
-		const isAuthCall = original?.url?.includes('/auth/');
 
-		if (status === 401 && !original._retry && !isAuthCall && tokenStore.refresh) {
+		if (
+			status === 401 &&
+			original &&
+			!original._retry &&
+			!isAnonymousAuthRequest(original.url) &&
+			tokenStore.refresh
+		) {
 			original._retry = true;
 			try {
-				refreshPromise =
-					refreshPromise || axios.post(`${baseURL}/auth/refresh/`, { refresh: tokenStore.refresh });
-				const { data } = await refreshPromise;
+				refreshPromise = refreshPromise || refreshAccessToken();
+				const access = await refreshPromise;
 				refreshPromise = null;
-				tokenStore.set({
-					access: data.access,
-					...(data.refresh ? { refresh: data.refresh } : {})
-				});
-				original.headers.Authorization = `Bearer ${data.access}`;
+				original.headers.Authorization = `Bearer ${access}`;
 				return api(original);
 			} catch (refreshError) {
 				refreshPromise = null;

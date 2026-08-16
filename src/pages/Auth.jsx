@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { BookOpen } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../stores/authStore';
 import { defaultRememberMe } from '../lib/desktop';
-import { Button, Input } from '../components/ui';
+import { Button, Input, LoadingScreen } from '../components/ui';
 import PinInput from '../components/auth/PinInput';
 
 function RememberMeCheckbox({ checked, onChange }) {
@@ -181,12 +181,20 @@ export function LoginPage() {
 	const login = useAuthStore((s) => s.login);
 	const error = useAuthStore((s) => s.error);
 	const mfaRequired = useAuthStore((s) => s.mfaRequired);
+	const status = useAuthStore((s) => s.status);
+	const user = useAuthStore((s) => s.user);
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
 	const [remember, setRemember] = useState(defaultRememberMe());
 	const [loading, setLoading] = useState(false);
 
 	if (mfaRequired) return <MfaForm />;
+	if (status === 'idle' || status === 'loading') {
+		return <LoadingScreen label="Restoring your session…" />;
+	}
+	if (status === 'authenticated' && user) {
+		return <Navigate to="/" replace />;
+	}
 
 	const submit = async (e) => {
 		e.preventDefault();

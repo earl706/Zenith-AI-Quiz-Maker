@@ -26,10 +26,23 @@ const QUESTION_TYPE_LABELS = {
 };
 
 let sectionKeyCounter = 0;
+let questionClientIdCounter = 0;
 
 export function createSectionKey() {
 	sectionKeyCounter += 1;
 	return `sec-${Date.now()}-${sectionKeyCounter}`;
+}
+
+export function createQuestionClientId() {
+	questionClientIdCounter += 1;
+	return `new-${Date.now()}-${questionClientIdCounter}`;
+}
+
+/** Coerce API section PK / nested object to a comparable id. */
+export function canonicalSectionId(value) {
+	if (value == null || value === '') return null;
+	if (typeof value === 'object') return value.id ?? value.pk ?? null;
+	return value;
 }
 
 export function createSection(overrides = {}) {
@@ -215,40 +228,93 @@ export function normalizeQuizSections(quizOrSections) {
 		);
 }
 
+/**
+ * Map an API question onto an authoring section clientKey.
+ * Tries section PK (number/string/nested object) then section_index.
+ */
+export function lookupAuthoringSectionKey(question, sections) {
+	if (!sections?.length) return null;
+	const byId = new Map();
+	for (const section of sections) {
+		if (section?.id == null) continue;
+		byId.set(section.id, section.clientKey);
+		byId.set(String(section.id), section.clientKey);
+		const asNum = Number(section.id);
+		if (Number.isFinite(asNum)) byId.set(asNum, section.clientKey);
+	}
+	const rawId = canonicalSectionId(question?.section ?? question?.section_id);
+	if (rawId != null) {
+		if (byId.has(rawId)) return byId.get(rawId);
+		if (byId.has(String(rawId))) return byId.get(String(rawId));
+		const asNum = Number(rawId);
+		if (Number.isFinite(asNum) && byId.has(asNum)) return byId.get(asNum);
+	}
+	const idx =
+		typeof question?.section_index === 'number'
+			? question.section_index
+			: typeof question?.sectionIndex === 'number'
+				? question.sectionIndex
+				: null;
+	if (idx != null && idx >= 0 && idx < sections.length) return sections[idx].clientKey;
+	return null;
+}
+
+/** Persistable section index; quizzes with sections never omit membership. */
+export function resolveAuthoringSectionIndex(question, sections) {
+	if (!sections?.length) return null;
+	if (question?.sectionKey) {
+		const idx = sections.findIndex((s) => s.clientKey === question.sectionKey);
+		if (idx >= 0) return idx;
+	}
+	return 0;
+}
+
+/**
+ * Re-attach questions whose sectionKey is missing or stale.
+ * Prevents the unlabeled trailing "Questions" orphan group.
+ */
+export function stampAuthoringSectionKeys(questions, sections) {
+	if (!sections?.length) {
+		return (questions || []).map((q) => ({ ...q, sectionKey: null }));
+	}
+	const keys = new Set(sections.map((s) => s.clientKey));
+	const fallback = sections[0].clientKey;
+	return (questions || []).map((q) => ({
+		...q,
+		sectionKey: q.sectionKey && keys.has(q.sectionKey) ? q.sectionKey : fallback
+	}));
+}
+
 export function questionsGroupedBySection(questions, sections) {
 	if (!sections?.length) {
 		return [{ section: null, questions: questions || [] }];
 	}
 	const byKey = new Map(sections.map((s) => [s.clientKey, []]));
-	const orphan = [];
+	const fallbackKey = sections[0].clientKey;
 	for (const q of questions || []) {
-		if (q.sectionKey && byKey.has(q.sectionKey)) byKey.get(q.sectionKey).push(q);
-		else orphan.push(q);
+		const key = q.sectionKey && byKey.has(q.sectionKey) ? q.sectionKey : fallbackKey;
+		byKey.get(key).push(q);
 	}
-	const groups = sections.map((section) => ({
+	return sections.map((section) => ({
 		section,
 		questions: byKey.get(section.clientKey) || []
 	}));
-	if (orphan.length) {
-		groups.push({ section: null, questions: orphan });
-	}
-	return groups;
 }
 
 /** Stable quiz display/attempt order: section.order, then question.order, then id. */
 export function sortQuestionsBySectionOrder(questions = [], sections = []) {
-	const sectionOrder = new Map([...(sections || [])].map((s) => [s.id, s.order ?? 0]));
+	const sectionOrder = new Map([...(sections || [])].map((s) => [String(s.id), s.order ?? 0]));
 	return [...(questions || [])].sort((a, b) => {
-		const aSid = a.section ?? a.section_id ?? null;
-		const bSid = b.section ?? b.section_id ?? null;
+		const aSid = canonicalSectionId(a.section ?? a.section_id);
+		const bSid = canonicalSectionId(b.section ?? b.section_id);
 		const aSecOrder =
 			aSid == null
 				? Number.POSITIVE_INFINITY
-				: (sectionOrder.get(aSid) ?? Number.POSITIVE_INFINITY);
+				: (sectionOrder.get(String(aSid)) ?? Number.POSITIVE_INFINITY);
 		const bSecOrder =
 			bSid == null
 				? Number.POSITIVE_INFINITY
-				: (sectionOrder.get(bSid) ?? Number.POSITIVE_INFINITY);
+				: (sectionOrder.get(String(bSid)) ?? Number.POSITIVE_INFINITY);
 		if (aSecOrder !== bSecOrder) return aSecOrder - bSecOrder;
 		const aOrder = a.order ?? 0;
 		const bOrder = b.order ?? 0;
@@ -270,11 +336,11 @@ export function groupQuestionsByApiSection(questions, sections) {
 	const sorted = [...sections].sort(
 		(a, b) => (a.order ?? 0) - (b.order ?? 0) || (a.id ?? 0) - (b.id ?? 0)
 	);
-	const byId = new Map(sorted.map((s) => [s.id, []]));
+	const byId = new Map(sorted.map((s) => [String(s.id), []]));
 	const orphan = [];
 	for (const q of questions || []) {
-		const sid = q.section ?? q.section_id ?? null;
-		if (sid != null && byId.has(sid)) byId.get(sid).push(q);
+		const sid = canonicalSectionId(q.section ?? q.section_id);
+		if (sid != null && byId.has(String(sid))) byId.get(String(sid)).push(q);
 		else orphan.push(q);
 	}
 	const sortWithin = (list) =>
@@ -283,7 +349,7 @@ export function groupQuestionsByApiSection(questions, sections) {
 		);
 	const groups = sorted.map((section) => ({
 		section,
-		questions: sortWithin(byId.get(section.id) || [])
+		questions: sortWithin(byId.get(String(section.id)) || [])
 	}));
 	if (orphan.length) {
 		groups.push({ section: null, questions: sortWithin(orphan) });
@@ -301,25 +367,6 @@ export function flattenGroupedQuestions(groups) {
 }
 
 /**
- * Replace one section's question order (from drag-reorder) and flatten back.
- * sectionKey null = ungrouped / no-sections list.
- */
-export function reorderQuestionsInSection(questions, sections, sectionKey, orderedGroupQuestions) {
-	const groups = questionsGroupedBySection(questions, sections);
-	const matchKey = sectionKey ?? null;
-	let found = false;
-	for (const group of groups) {
-		const key = group.section?.clientKey ?? null;
-		if (key === matchKey) {
-			group.questions = orderedGroupQuestions;
-			found = true;
-			break;
-		}
-	}
-	return found ? flattenGroupedQuestions(groups) : questions;
-}
-
-/**
  * Swap a question with its neighbor inside the same section (or the single
  * ungrouped list when there are no sections). direction: -1 up, +1 down.
  */
@@ -332,10 +379,59 @@ export function moveQuestionWithinSection(questions, sections, questionId, direc
 		if (swapWith < 0 || swapWith >= group.questions.length) return questions;
 		const next = [...group.questions];
 		[next[idx], next[swapWith]] = [next[swapWith], next[idx]];
-		group.questions = next;
+		const sectionKey = group.section?.clientKey ?? null;
+		group.questions = sectionKey
+			? next.map((q) => ({ ...q, sectionKey }))
+			: next;
 		return flattenGroupedQuestions(groups);
 	}
 	return questions;
+}
+
+/**
+ * Move a question to the first (`start`) or last (`end`) slot in its section.
+ */
+export function moveQuestionToSectionEdge(questions, sections, questionId, edge) {
+	const groups = questionsGroupedBySection(questions, sections);
+	for (const group of groups) {
+		const idx = group.questions.findIndex((q) => q.id === questionId);
+		if (idx < 0) continue;
+		const last = group.questions.length - 1;
+		const target = edge === 'end' ? last : 0;
+		if (idx === target || last < 0) return questions;
+		const next = [...group.questions];
+		const [moved] = next.splice(idx, 1);
+		next.splice(target, 0, moved);
+		const sectionKey = group.section?.clientKey ?? null;
+		group.questions = sectionKey ? next.map((q) => ({ ...q, sectionKey })) : next;
+		return flattenGroupedQuestions(groups);
+	}
+	return questions;
+}
+
+export function questionAuthoringCardId(questionId) {
+	return `authoring-q-${questionId}`;
+}
+
+/** Center a question card in #main-content after in-section reorder. */
+export function scrollAuthoringQuestionIntoView(questionId) {
+	if (questionId == null || typeof document === 'undefined') return;
+	const run = () => {
+		const el = document.getElementById(questionAuthoringCardId(questionId));
+		if (!el) return;
+		const scroller = document.getElementById('main-content');
+		if (!scroller) {
+			el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+			return;
+		}
+		const scrollerRect = scroller.getBoundingClientRect();
+		const elRect = el.getBoundingClientRect();
+		const delta =
+			elRect.top + elRect.height / 2 - (scrollerRect.top + scrollerRect.height / 2);
+		if (Math.abs(delta) < 1) return;
+		scroller.scrollBy({ top: delta, behavior: 'smooth' });
+	};
+	requestAnimationFrame(() => requestAnimationFrame(run));
 }
 
 /**
@@ -378,19 +474,25 @@ export function transferQuestionToAdjacentSection(questions, sections, questionI
 	return { questions: flattenGroupedQuestions(groups), targetKey };
 }
 
-/** Button enablement for adjacent-section transfer. */
+/** Button enablement for in-section up/down and adjacent-section transfer. */
 export function questionAuthoringMoveState(questions, sections, questionId) {
 	const groups = questionsGroupedBySection(questions, sections);
 	let group = null;
+	let idx = -1;
 	for (const g of groups) {
-		const idx = g.questions.findIndex((q) => q.id === questionId);
+		idx = g.questions.findIndex((q) => q.id === questionId);
 		if (idx >= 0) {
 			group = g;
 			break;
 		}
 	}
 	if (!group) {
-		return { canTransferPrev: false, canTransferNext: false };
+		return {
+			canMoveUp: false,
+			canMoveDown: false,
+			canTransferPrev: false,
+			canTransferNext: false
+		};
 	}
 
 	const sectionKeys = (sections || []).map((s) => s.clientKey);
@@ -399,6 +501,8 @@ export function questionAuthoringMoveState(questions, sections, questionId) {
 	const hasSections = sectionKeys.length >= 2;
 
 	return {
+		canMoveUp: idx > 0,
+		canMoveDown: idx >= 0 && idx < group.questions.length - 1,
 		canTransferPrev: hasSections && (fromSecIdx > 0 || fromSecIdx < 0),
 		canTransferNext: hasSections && (fromSecIdx >= 0 ? fromSecIdx < sectionKeys.length - 1 : true)
 	};

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
 	Check,
@@ -31,13 +31,21 @@ import MathInput from '../components/quiz/MathInput';
 import {
 	canUseSectionQuestionLayout,
 	createSection,
+	createQuestionClientId,
+	flattenGroupedQuestions,
+	lookupAuthoringSectionKey,
 	normalizeQuizSections,
 	questionTypeFromFlags,
 	questionsGroupedBySection,
+	resolveAuthoringSectionIndex,
 	sortQuestionsBySectionOrder,
+	stampAuthoringSectionKeys,
 	transferQuestionToAdjacentSection,
 	questionAuthoringMoveState,
-	reorderQuestionsInSection,
+	moveQuestionWithinSection,
+	moveQuestionToSectionEdge,
+	scrollAuthoringQuestionIntoView,
+	questionAuthoringCardId,
 	PER_QUESTION_TIMER_DEFAULT,
 	clampPerQuestionSeconds,
 	parseOptionalTimerSeconds,
@@ -55,7 +63,6 @@ import {
 	QUIZ_TAG_COLORS,
 	ToggleChip,
 	QuestionOrderControls,
-	AuthoringQuestionReorderList,
 	ImageDropzone,
 	ChoiceImageControl,
 	QuestionTimerOverrideField
@@ -113,6 +120,8 @@ export default function EditQuizPage() {
 	const [originalQuizImage, setOriginalQuizImage] = useState(null);
 	const [questions, setQuestions] = useState([]);
 	const [sections, setSections] = useState([]);
+	const sectionsRef = useRef(sections);
+	sectionsRef.current = sections;
 	const [isPublic, setIsPublic] = useState(false);
 	const [imagePreview, setImagePreview] = useState(null);
 	const [settingsOpen, setSettingsOpen] = useState(false);
@@ -200,9 +209,6 @@ export default function EditQuizPage() {
 
 				const loadedSections = normalizeQuizSections(quizData);
 				setSections(loadedSections);
-				const sectionKeyById = new Map(
-					loadedSections.filter((s) => s.id != null).map((s) => [s.id, s.clientKey])
-				);
 
 				const orderedQuestions = sortQuestionsBySectionOrder(questionsData, loadedSections);
 
@@ -281,12 +287,12 @@ export default function EditQuizPage() {
 						explanation: question.explanation || '',
 						workedSolution: question.worked_solution || '',
 						sourceCitation: question.source_citation || '',
-						sectionKey: sectionKeyById.get(question.section) || null,
+						sectionKey: lookupAuthoringSectionKey(question, loadedSections),
 						perQuestionTimeSeconds: parseOptionalTimerSeconds(question.per_question_time_seconds)
 					};
 				});
 
-				setQuestions(transformedQuestions);
+				setQuestions(stampAuthoringSectionKeys(transformedQuestions, loadedSections));
 				setRandomQuestionChoices(transformedQuestions.some((q) => q.randomChoices));
 				setLoading(false);
 			} catch {
@@ -384,7 +390,7 @@ export default function EditQuizPage() {
 			sectionKey ?? (sections.length > 0 ? sections[sections.length - 1].clientKey : null);
 		setQuestions((qs) => [
 			...qs,
-			getDefaultQuestion(`new-${Date.now()}`, randomQuestionChoices, key)
+			getDefaultQuestion(createQuestionClientId(), randomQuestionChoices, key)
 		]);
 	};
 
@@ -427,15 +433,21 @@ export default function EditQuizPage() {
 		});
 	};
 
-	const reorderSectionQuestions = (sectionKey, ordered) => {
-		setQuestions((qs) => reorderQuestionsInSection(qs, sections, sectionKey, ordered));
+	const moveQuestionInSection = (questionId, direction) => {
+		setQuestions((qs) => moveQuestionWithinSection(qs, sectionsRef.current, questionId, direction));
+		scrollAuthoringQuestionIntoView(questionId);
+	};
+
+	const moveQuestionToEdge = (questionId, edge) => {
+		setQuestions((qs) => moveQuestionToSectionEdge(qs, sectionsRef.current, questionId, edge));
+		scrollAuthoringQuestionIntoView(questionId);
 	};
 
 	const transferQuestion = (questionId, direction) => {
 		setQuestions((qs) => {
 			const { questions: next, targetKey } = transferQuestionToAdjacentSection(
 				qs,
-				sections,
+				sectionsRef.current,
 				questionId,
 				direction
 			);
@@ -648,8 +660,16 @@ export default function EditQuizPage() {
 				quizData.quiz_image_url = '';
 			}
 
+			const sectionsForSave = sectionsRef.current;
+			const questionsForSave = flattenGroupedQuestions(
+				questionsGroupedBySection(
+					stampAuthoringSectionKeys(questions, sectionsForSave),
+					sectionsForSave
+				)
+			);
+
 			quizData.questions = await Promise.all(
-				questions.map(async (question, qi) => {
+				questionsForSave.map(async (question, qi) => {
 					const choices = question.choices || [];
 					const correctIndex = Math.max(
 						0,
@@ -695,15 +715,13 @@ export default function EditQuizPage() {
 								? clampPerQuestionSeconds(question.perQuestionTimeSeconds)
 								: null
 					};
-					if (sections.length > 0 && question.sectionKey) {
-						const sectionIndex = sections.findIndex((s) => s.clientKey === question.sectionKey);
-						if (sectionIndex >= 0) {
+					if (sectionsForSave.length > 0) {
+						const sectionIndex = resolveAuthoringSectionIndex(question, sectionsForSave);
+						if (sectionIndex != null) {
 							qData.section_index = sectionIndex;
-							const sec = sections[sectionIndex];
+							const sec = sectionsForSave[sectionIndex];
 							if (sec.id) qData.section = sec.id;
 						}
-					} else {
-						qData.section = null;
 					}
 					if (question.question_image) {
 						qData.question_image = await toSaveableImage(question.question_image);
@@ -883,17 +901,16 @@ export default function EditQuizPage() {
 								)}
 							</div>
 						)}
-						<AuthoringQuestionReorderList
-							items={groupQuestions}
-							disabled={reviewing}
-							onReorder={(ordered) => reorderSectionQuestions(section?.clientKey ?? null, ordered)}
-						>
-							{(question, { dragHandle }) => {
+						<div className="space-y-3">
+							{groupQuestions.map((question) => {
 								const index = authoringQuestions.findIndex((q) => q.id === question.id);
 								const reviewMeta = aiProposal.metaFor(question.id);
 								const isRemoved = question._reviewKind === 'removed';
 								return (
-									<Card className={cn('overflow-hidden', reviewCardClassName(reviewMeta))}>
+									<Card
+										id={questionAuthoringCardId(question.id)}
+										className={cn('overflow-hidden', reviewCardClassName(reviewMeta))}
+									>
 										<CardHeader
 											className="px-4 py-3"
 											title={`Q${index + 1}`}
@@ -907,10 +924,13 @@ export default function EditQuizPage() {
 														/>
 													) : (
 														<>
-															{dragHandle}
 															<QuestionOrderControls
 																{...questionAuthoringMoveState(questions, sections, question.id)}
 																showTransfer={sections.length >= 2}
+																onMoveToStart={() => moveQuestionToEdge(question.id, 'start')}
+																onMoveUp={() => moveQuestionInSection(question.id, -1)}
+																onMoveDown={() => moveQuestionInSection(question.id, 1)}
+																onMoveToEnd={() => moveQuestionToEdge(question.id, 'end')}
 																onTransferPrev={() => transferQuestion(question.id, -1)}
 																onTransferNext={() => transferQuestion(question.id, 1)}
 															/>
@@ -1172,8 +1192,8 @@ export default function EditQuizPage() {
 										</CardBody>
 									</Card>
 								);
-							}}
-						</AuthoringQuestionReorderList>
+							})}
+						</div>
 						{section && !reviewing && (
 							<Button
 								type="button"
