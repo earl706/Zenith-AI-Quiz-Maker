@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
 	Check,
+	ChevronDown,
+	ChevronUp,
 	Plus,
 	X,
 	Save,
@@ -875,18 +877,22 @@ export default function EditQuizPage() {
 										<Button
 											type="button"
 											variant="ghost"
-											size="sm"
+											size="icon"
 											onClick={() => moveSection(section.clientKey, -1)}
+											aria-label="Move section up"
+											title="Move section up"
 										>
-											Up
+											<ChevronUp size={15} />
 										</Button>
 										<Button
 											type="button"
 											variant="ghost"
-											size="sm"
+											size="icon"
 											onClick={() => moveSection(section.clientKey, 1)}
+											aria-label="Move section down"
+											title="Move section down"
 										>
-											Down
+											<ChevronDown size={15} />
 										</Button>
 										<Button
 											type="button"

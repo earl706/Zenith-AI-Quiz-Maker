@@ -1,4 +1,15 @@
-import { Check, Plus, X, Image as ImageIcon } from 'lucide-react';
+import {
+	Check,
+	ChevronDown,
+	ChevronUp,
+	ChevronsDown,
+	ChevronsLeft,
+	ChevronsRight,
+	ChevronsUp,
+	Image as ImageIcon,
+	Plus,
+	X
+} from 'lucide-react';
 
 import { cn } from '../../lib/format';
 import { resolveQuizImageSrc } from '../../lib/quizImages';
@@ -72,7 +83,7 @@ export function QuestionOrderControls({
 	showTransfer = true
 }) {
 	const btnClass =
-		'border-line bg-surface text-muted hover:text-fg disabled:text-muted/40 inline-flex cursor-pointer items-center rounded-md border px-2 py-1 text-[0.65rem] font-medium disabled:cursor-not-allowed';
+		'border-line bg-surface text-muted hover:text-fg disabled:text-muted/40 inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md border disabled:cursor-not-allowed';
 	return (
 		<div className="flex flex-wrap items-center gap-1">
 			<button
@@ -83,7 +94,7 @@ export function QuestionOrderControls({
 				title="Move to top"
 				className={btnClass}
 			>
-				Top
+				<ChevronsUp size={14} />
 			</button>
 			<button
 				type="button"
@@ -93,7 +104,7 @@ export function QuestionOrderControls({
 				title="Move up"
 				className={btnClass}
 			>
-				Up
+				<ChevronUp size={14} />
 			</button>
 			<button
 				type="button"
@@ -103,7 +114,7 @@ export function QuestionOrderControls({
 				title="Move down"
 				className={btnClass}
 			>
-				Down
+				<ChevronDown size={14} />
 			</button>
 			<button
 				type="button"
@@ -113,7 +124,7 @@ export function QuestionOrderControls({
 				title="Move to bottom"
 				className={btnClass}
 			>
-				Bottom
+				<ChevronsDown size={14} />
 			</button>
 			{showTransfer && (
 				<>
@@ -125,7 +136,7 @@ export function QuestionOrderControls({
 						title="Previous section"
 						className={btnClass}
 					>
-						← Sec
+						<ChevronsLeft size={14} />
 					</button>
 					<button
 						type="button"
@@ -135,7 +146,7 @@ export function QuestionOrderControls({
 						title="Next section"
 						className={btnClass}
 					>
-						Sec →
+						<ChevronsRight size={14} />
 					</button>
 				</>
 			)}

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X } from 'lucide-react';
 
@@ -27,7 +28,9 @@ export function Modal({
 
 	const widths = { sm: 'max-w-sm', md: 'max-w-lg', lg: 'max-w-2xl', xl: 'max-w-4xl' };
 
-	return (
+	if (typeof document === 'undefined') return null;
+
+	return createPortal(
 		<AnimatePresence>
 			{open && (
 				<motion.div
@@ -45,7 +48,12 @@ export function Modal({
 						role="dialog"
 						aria-modal="true"
 						aria-label={title}
-						className={`relative flex w-full flex-col ${widths[size]} border-line bg-surface rounded-t-lg border shadow-xl sm:rounded-lg`}
+						className={cn(
+							'relative flex w-full min-h-0 flex-col overflow-hidden',
+							'max-h-dvh sm:max-h-[calc(100dvh-2rem)]',
+							widths[size],
+							'border-line bg-surface rounded-t-lg border shadow-xl sm:rounded-lg'
+						)}
 						initial={{ y: 24, opacity: 0, scale: 0.98 }}
 						animate={{ y: 0, opacity: 1, scale: 1 }}
 						exit={{ y: 24, opacity: 0, scale: 0.98 }}
@@ -80,7 +88,8 @@ export function Modal({
 						)}
 						<div
 							className={cn(
-								!bodyClassName && 'max-h-[70vh] overflow-y-auto p-5',
+								'min-h-0 flex-1 overflow-y-auto',
+								!bodyClassName && 'p-5',
 								bodyClassName
 							)}
 						>
@@ -94,6 +103,7 @@ export function Modal({
 					</motion.div>
 				</motion.div>
 			)}
-		</AnimatePresence>
+		</AnimatePresence>,
+		document.body
 	);
 }

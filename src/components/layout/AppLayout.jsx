@@ -7,6 +7,7 @@ import { post } from '../../lib/api';
 import { useAuthStore } from '../../stores/authStore';
 import { CommandPalette } from './CommandPalette';
 import { Sidebar } from './Sidebar';
+import { StudyTimerEngine } from './StudyTimerEngine';
 import { Topbar } from './Topbar';
 
 export function AppLayout() {
@@ -33,6 +34,7 @@ export function AppLayout() {
 					</div>
 				</main>
 			</div>
+			<StudyTimerEngine />
 			<CommandPalette />
 			<MfaPromptModal
 				open={promptOpen && showMfaPrompt}

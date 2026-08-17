@@ -370,6 +370,13 @@ export default function QuizAttempt() {
 		setRetakeSettingsOpen(true);
 	};
 
+	const handleRetakeSame = () => {
+		navigate(`${location.pathname}${location.search}`, {
+			replace: true,
+			state: { attemptLaunchAt: Date.now() }
+		});
+	};
+
 	const handleRetakeSettingsSaved = (payload) => {
 		const nextQuiz = mergeQuizAfterSettingsSave(quizData, payload, id);
 		setQuizData(nextQuiz);
@@ -528,13 +535,11 @@ export default function QuizAttempt() {
 					answeredCount={answeredCount}
 					totalQuestions={questions.length}
 					showResults={quizResults}
-					score={score}
-					accuracy={accuracy}
-					sectionScores={sectionScores}
 					hideElapsedTimer={!!quizData.per_question_timer_enabled && !quizResults}
 					onSubmit={submitAnswers}
 					submitting={submitting}
 					onRetake={handleRetake}
+					onRetakeSame={handleRetakeSame}
 					onBackToList={() => navigate('/quizzes')}
 					quizImage={quizData.quiz_image || quizData.quiz_image_url || null}
 					submitButtonRef={submitButtonRef}

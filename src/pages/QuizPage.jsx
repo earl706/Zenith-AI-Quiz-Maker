@@ -271,25 +271,44 @@ export default function QuizPage() {
 						</Button>
 						{sections.length > 0 && (
 							<Button
-								variant="secondary"
-								onClick={() => setRoadmapOpen(true)}
+								variant="ghost"
+								size="icon"
+								className="cursor-pointer"
+								aria-label="Create mastery roadmap from this quiz"
 								title="Create mastery roadmap from this quiz"
+								onClick={() => setRoadmapOpen(true)}
 							>
-								<MapIcon size={14} /> Roadmap
+								<MapIcon size={16} />
 							</Button>
 						)}
 						<Button
-							variant="secondary"
-							onClick={() => setMergeOpen(true)}
+							variant="ghost"
+							size="icon"
+							className="cursor-pointer"
+							aria-label="Merge this quiz into another"
 							title="Merge this quiz into another"
+							onClick={() => setMergeOpen(true)}
 						>
-							<Merge size={14} /> Merge into…
+							<Merge size={16} />
 						</Button>
-						<Button variant="secondary" onClick={() => navigate(`/quizzes/edit/${id}`)}>
-							<Pencil size={14} /> Edit
+						<Button
+							variant="ghost"
+							size="icon"
+							className="cursor-pointer"
+							aria-label="Edit quiz"
+							title="Edit quiz"
+							onClick={() => navigate(`/quizzes/edit/${id}`)}
+						>
+							<Pencil size={16} />
 						</Button>
-						<Button onClick={handleHeaderAttempt}>
-							<Play size={14} /> Attempt
+						<Button
+							size="icon"
+							className="cursor-pointer"
+							aria-label="Attempt quiz"
+							title="Attempt quiz"
+							onClick={handleHeaderAttempt}
+						>
+							<Play size={16} />
 						</Button>
 					</div>
 				}

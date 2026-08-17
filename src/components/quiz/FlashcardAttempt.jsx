@@ -203,9 +203,6 @@ export default function FlashcardAttempt({
 			)}
 
 			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-				<p className="text-muted text-sm">
-					Question <span className="text-fg font-semibold">{index + 1}</span> of {total}
-				</p>
 				<div className="flex flex-wrap gap-1.5">
 					{questions.map((q, i) => {
 						const filled = String(answersByIdMap.get(q.id)?.userAnswer ?? '').trim() !== '';

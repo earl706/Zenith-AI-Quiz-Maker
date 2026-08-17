@@ -9,7 +9,7 @@ import { resolveQuestionImageSrc, resolveQuizImageSrc } from '../../lib/quizImag
 import CreateRoadmapFromQuizModal from '../roadmap/CreateRoadmapFromQuizModal';
 import { Badge, Button, Card, CardBody, ProgressRing } from '../ui';
 import MathRenderer from './MathRenderer';
-import { getChoiceData, isIdentification, isMathematical } from './quizHelpers';
+import { getChoiceData, accuracyTone, isIdentification, isMathematical } from './quizHelpers';
 import QuizQuestionListLayout from './QuizQuestionListLayout';
 import { useQuestionDisplayLayout } from './useQuestionDisplayLayout';
 
@@ -271,12 +271,27 @@ function SummaryStat({ label, value, mono = false }) {
 }
 
 function ResultSummary({ score, accuracy, time, correctCount, total, sectionScores = [] }) {
+	const pct = Number.parseFloat(accuracy) || 0;
+	const tone = accuracyTone(accuracy);
 	return (
 		<Card className="overflow-hidden">
 			<div className="from-primary/8 via-surface to-surface bg-linear-to-br p-5">
-				<div className="grid grid-cols-3 gap-3">
+				<div className="grid grid-cols-3 items-center gap-3">
 					<SummaryStat label="Score" value={`${score}/${total}`} />
-					<SummaryStat label="Accuracy" value={`${accuracy}%`} />
+					<div className="min-w-0 text-center">
+						<p className="text-muted text-[0.65rem] font-medium tracking-wider uppercase">
+							Accuracy
+						</p>
+						<div className="mt-1 flex justify-center">
+							<ProgressRing
+								value={pct}
+								size={72}
+								stroke={6}
+								tone={tone}
+								label={`${Math.round(pct)}`}
+							/>
+						</div>
+					</div>
 					<SummaryStat label="Time" value={formatDurationSeconds(time)} mono />
 				</div>
 				<p className="text-muted mt-4 text-center text-xs">
