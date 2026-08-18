@@ -75,11 +75,28 @@ function exportChoices(question) {
 	});
 }
 
+function persistableNumericId(value) {
+	if (typeof value === 'number' && Number.isInteger(value) && value > 0) return value;
+	if (typeof value === 'string' && /^\d+$/.test(value)) {
+		const n = Number(value);
+		if (Number.isInteger(n) && n > 0) return n;
+	}
+	return null;
+}
+
+function questionTypeHint(question) {
+	if (question?.question_type) return question.question_type;
+	if (question?.mathematical) return question?.identification ? 'IDE-COM' : 'MUL-COM';
+	if (question?.identification) return 'IDE';
+	return '';
+}
+
 /**
  * Build template-style quiz JSON from QuizPage summary/detail payloads.
  * Omits attempts, UUIDs, and other runtime fields.
+ * Pass `{ includeIds: true }` for in-editor drafts so Save can update in place.
  */
-export function buildTemplateStyleQuizJson(quiz, questions) {
+export function buildTemplateStyleQuizJson(quiz, questions, options = {}) {
 	if (!quiz || typeof quiz !== 'object') {
 		throw new Error('Quiz data is missing.');
 	}
@@ -106,7 +123,13 @@ export function buildTemplateStyleQuizJson(quiz, questions) {
 		const choices = exportChoices(q);
 		const hasChoiceImages =
 			!!q.has_choice_images || !!q.hasChoiceImages || choices.some((c) => Boolean(c.image_url));
-		const section_index = sectionIndexForQuestion(q, sections);
+		const computedIndex = sectionIndexForQuestion(q, sections);
+		const section_index =
+			typeof q.section_index === 'number'
+				? q.section_index
+				: typeof q.sectionIndex === 'number'
+					? q.sectionIndex
+					: computedIndex;
 		const question_image_url = pickImageUrl(q.question_image_url, q.question_image);
 		const correct_answer_index =
 			typeof q.correct_answer_index === 'number'
@@ -117,7 +140,7 @@ export function buildTemplateStyleQuizJson(quiz, questions) {
 
 		const row = {
 			title: String(q.question || q.title || '').trim(),
-			question_type: q.question_type || 'MUL',
+			question_type: q.question_type || questionTypeHint(q) || 'MUL',
 			correct_answer_index,
 			random_choices: !!(q.random_choices ?? q.randomChoices),
 			has_choice_images: hasChoiceImages,
@@ -125,6 +148,8 @@ export function buildTemplateStyleQuizJson(quiz, questions) {
 			order: typeof q.order === 'number' ? q.order : qi,
 			choices
 		};
+		const persistId = persistableNumericId(q.id);
+		if (options.includeIds && persistId != null) row.id = persistId;
 
 		if (section_index != null) {
 			row.section_index = section_index;
@@ -160,10 +185,15 @@ export function buildTemplateStyleQuizJson(quiz, questions) {
 		per_question_time_seconds:
 			quiz.per_question_time_seconds != null ? Number(quiz.per_question_time_seconds) || 30 : 30,
 		answer_suggestions_enabled: quiz.answer_suggestions_enabled !== false,
-		sections: sections.map((sec, i) => ({
-			title: sec.title || `Section ${i + 1}`,
-			order: sec.order ?? i
-		})),
+		sections: sections.map((sec, i) => {
+			const row = {
+				title: sec.title || `Section ${i + 1}`,
+				order: sec.order ?? i
+			};
+			const persistId = persistableNumericId(sec.id);
+			if (options.includeIds && persistId != null) row.id = persistId;
+			return row;
+		}),
 		questions: exportedQuestions
 	};
 }

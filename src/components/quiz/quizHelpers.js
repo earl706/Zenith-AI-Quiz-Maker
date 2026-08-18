@@ -138,6 +138,14 @@ export function questionTypeFromFlags({ mathematical, identification }) {
 	return identification ? 'IDE' : 'MUL';
 }
 
+export function flagsFromQuestionType(questionType) {
+	const t = String(questionType || 'MUL');
+	return {
+		mathematical: t === 'MUL-COM' || t === 'IDE-COM' || t === 'COM',
+		identification: t === 'IDE' || t === 'IDE-COM'
+	};
+}
+
 export function accuracyTone(accuracy) {
 	const value = Number.parseFloat(accuracy);
 	if (Number.isNaN(value)) return 'primary';
@@ -380,9 +388,7 @@ export function moveQuestionWithinSection(questions, sections, questionId, direc
 		const next = [...group.questions];
 		[next[idx], next[swapWith]] = [next[swapWith], next[idx]];
 		const sectionKey = group.section?.clientKey ?? null;
-		group.questions = sectionKey
-			? next.map((q) => ({ ...q, sectionKey }))
-			: next;
+		group.questions = sectionKey ? next.map((q) => ({ ...q, sectionKey })) : next;
 		return flattenGroupedQuestions(groups);
 	}
 	return questions;
@@ -426,8 +432,7 @@ export function scrollAuthoringQuestionIntoView(questionId) {
 		}
 		const scrollerRect = scroller.getBoundingClientRect();
 		const elRect = el.getBoundingClientRect();
-		const delta =
-			elRect.top + elRect.height / 2 - (scrollerRect.top + scrollerRect.height / 2);
+		const delta = elRect.top + elRect.height / 2 - (scrollerRect.top + scrollerRect.height / 2);
 		if (Math.abs(delta) < 1) return;
 		scroller.scrollBy({ top: delta, behavior: 'smooth' });
 	};

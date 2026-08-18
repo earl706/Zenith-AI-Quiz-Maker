@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
 	Check,
@@ -74,6 +74,10 @@ import { useQuizAiProposal } from '../components/quiz/useQuizAiProposal';
 import QuizAiInstructionModal from '../components/quiz/QuizAiInstructionModal';
 import QuizAiReviewBar, { QuizAiChangeControls } from '../components/quiz/QuizAiReviewBar';
 import { reviewCardClassName } from '../components/quiz/quizAiDiff';
+import { persistableNumericId } from '../components/quiz/quizJsonDraft';
+import { useQuizJsonDraft } from '../components/quiz/useQuizJsonDraft';
+
+const QuizJsonEditor = lazy(() => import('../components/quiz/QuizJsonEditor'));
 
 const colors = QUIZ_TAG_COLORS;
 
@@ -128,6 +132,7 @@ export default function EditQuizPage() {
 	const [imagePreview, setImagePreview] = useState(null);
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [reviseOpen, setReviseOpen] = useState(false);
+	const [jsonView, setJsonView] = useState(false);
 
 	const getDraft = useCallback(
 		() => ({
@@ -153,6 +158,38 @@ export default function EditQuizPage() {
 	const reviewing = aiProposal.isReviewing;
 	const authoringQuestions = reviewing ? aiProposal.displayQuestions || [] : questions;
 	const authoringSections = reviewing ? aiProposal.displaySections || [] : sections;
+
+	const quizJsonMeta = useMemo(
+		() => ({
+			title: quizTitle,
+			tagColor: selectedColor,
+			coverImageUrl: quizImageUrl,
+			flashcardQuiz: quizType === 'flashcard',
+			randomQuestionOrder,
+			perQuestionTimerEnabled,
+			perQuestionTimeSeconds,
+			answerSuggestionsEnabled
+		}),
+		[
+			quizTitle,
+			selectedColor,
+			quizImageUrl,
+			quizType,
+			randomQuestionOrder,
+			perQuestionTimerEnabled,
+			perQuestionTimeSeconds,
+			answerSuggestionsEnabled
+		]
+	);
+	const quizJson = useQuizJsonDraft({
+		questions,
+		sections,
+		setQuestions,
+		setSections,
+		quizMeta: quizJsonMeta,
+		persistIds: true,
+		disabled: reviewing
+	});
 
 	const sectionGroups = useMemo(
 		() => questionsGroupedBySection(authoringQuestions, authoringSections),
@@ -698,7 +735,9 @@ export default function EditQuizPage() {
 						choiceImageUrls.some(Boolean);
 
 					const qData = {
-						...(typeof question.id === 'number' ? { id: question.id } : {}),
+						...(persistableNumericId(question.id) != null
+							? { id: persistableNumericId(question.id) }
+							: {}),
 						question: question.title,
 						question_type: questionTypeFromFlags(question),
 						order: qi,
@@ -820,27 +859,57 @@ export default function EditQuizPage() {
 
 			<div className="flex min-w-0 flex-col gap-3">
 				<div className="flex flex-wrap items-center gap-2">
-					<Button
-						type="button"
-						variant="secondary"
-						size="sm"
-						disabled={reviewing}
-						onClick={addSection}
-					>
-						<Plus size={14} /> Add section
-					</Button>
-					{authoringSections.length > 0 && (
+					{!jsonView && (
+						<Button
+							type="button"
+							variant="secondary"
+							size="sm"
+							disabled={reviewing}
+							onClick={addSection}
+						>
+							<Plus size={14} /> Add section
+						</Button>
+					)}
+					{!jsonView && authoringSections.length > 0 && (
 						<p className="text-muted text-xs">Questions must belong to a section.</p>
 					)}
-					{sectionLayoutAvailable && (
+					<div className={cn('flex flex-wrap items-center gap-1.5', jsonView ? '' : 'ml-auto')}>
+						<ToggleChip active={!jsonView} onClick={() => setJsonView(false)}>
+							Form
+						</ToggleChip>
+						<ToggleChip active={jsonView} onClick={() => setJsonView(true)}>
+							JSON
+						</ToggleChip>
+					</div>
+					{!jsonView && sectionLayoutAvailable && (
 						<QuestionDisplayLayoutToggle
 							layout={questionLayout}
 							onLayoutChange={setQuestionLayout}
-							className="ml-auto"
 						/>
 					)}
 				</div>
 
+				{jsonView ? (
+					<Suspense
+						fallback={
+							<Card className="text-muted p-5 text-sm">Loading JSON editor…</Card>
+						}
+					>
+						<QuizJsonEditor
+							jsonText={quizJson.jsonText}
+							diagnostics={quizJson.diagnostics}
+							disabled={reviewing}
+							persistIds
+							onChange={quizJson.applyJsonText}
+							onFocus={quizJson.onJsonFocus}
+							onBlur={quizJson.onJsonBlur}
+							onFormat={quizJson.formatFromForm}
+							onCopy={quizJson.copyJson}
+							onDownload={quizJson.downloadJson}
+						/>
+					</Suspense>
+				) : (
+					<>
 				{effectiveQuestionLayout === QUESTION_LAYOUT_SECTION && sectionLayoutAvailable && (
 					<SectionQuestionNavigator
 						groups={sectionGroups}
@@ -1223,6 +1292,8 @@ export default function EditQuizPage() {
 					>
 						<Plus size={14} /> Add question
 					</Button>
+				)}
+					</>
 				)}
 			</div>
 
