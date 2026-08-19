@@ -1,75 +1,91 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { addDays, differenceInCalendarDays, format, parseISO, startOfDay } from 'date-fns';
+import { createPortal } from 'react-dom';
+import { addDays, format, parseISO, startOfDay, startOfWeek, subDays } from 'date-fns';
 
 import { formatDate } from '../../lib/format';
 
-function buildHabitWeeks(recentLogs = [], weekCount = 5, createdAt = null) {
+const YEAR_DAYS = 361;
+const WEEK_STARTS_ON = 0;
+const WEEKDAY_LABELS = ['', 'M', '', 'W', '', 'F', ''];
+const GUTTER = 26;
+const GAP = 2;
+const MIN_CELL = 7;
+const MAX_CELL = 11;
+
+function toDay(value) {
+	if (!value) return null;
+	return startOfDay(typeof value === 'string' ? parseISO(value) : value);
+}
+
+function monthLabelForWeek(week) {
+	const first = week.find((day) => {
+		if (day.state === 'pad' || day.state === 'future') return false;
+		return parseISO(day.date).getDate() === 1;
+	});
+	return first ? format(parseISO(first.date), 'MMM') : '';
+}
+
+function buildYearWeeks(recentLogs = [], createdAt = null) {
 	const logSet = new Set(recentLogs);
-	const totalCells = weekCount * 7;
 	const today = startOfDay(new Date());
-	let creationDate = today;
-	if (createdAt) {
-		creationDate = startOfDay(typeof createdAt === 'string' ? parseISO(createdAt) : createdAt);
-	}
-	if (creationDate > today) creationDate = today;
-
-	const ageDays = differenceInCalendarDays(today, creationDate) + 1;
-	const days = [];
-
-	if (ageDays <= totalCells) {
-		for (let i = 0; i < totalCells; i++) {
-			const d = addDays(creationDate, i);
-			const date = format(d, 'yyyy-MM-dd');
-			if (d > today) {
-				days.push({ date, active: false, state: 'future' });
-			} else {
-				const completed = logSet.has(date);
-				days.push({ date, active: completed, state: completed ? 'completed' : 'missed' });
-			}
-		}
-	} else {
-		const startDate = addDays(today, -(totalCells - 1));
-		for (let i = 0; i < totalCells; i++) {
-			const d = addDays(startDate, i);
-			const date = format(d, 'yyyy-MM-dd');
-			const completed = logSet.has(date);
-			days.push({ date, active: completed, state: completed ? 'completed' : 'missed' });
-		}
-	}
+	const windowStart = subDays(today, YEAR_DAYS - 1);
+	const creationDate = toDay(createdAt);
+	const gridStart = startOfWeek(windowStart, { weekStartsOn: WEEK_STARTS_ON });
+	const gridEnd = addDays(startOfWeek(today, { weekStartsOn: WEEK_STARTS_ON }), 6);
 
 	const weeks = [];
-	for (let i = 0; i < days.length; i += 7) {
-		weeks.push(days.slice(i, i + 7));
+	let cursor = gridStart;
+	while (cursor <= gridEnd) {
+		const week = [];
+		for (let row = 0; row < 7; row += 1) {
+			const date = format(cursor, 'yyyy-MM-dd');
+			let state = 'missed';
+			if (cursor > today) state = 'future';
+			else if (cursor < windowStart) state = 'pad';
+			else if (creationDate && cursor < creationDate) state = 'empty';
+			else if (logSet.has(date)) state = 'completed';
+			week.push({
+				date,
+				state,
+				active: state === 'completed'
+			});
+			cursor = addDays(cursor, 1);
+		}
+		weeks.push(week);
 	}
 	return weeks;
 }
 
-const HABIT_GRID_GAP = 3;
-const HABIT_MIN_CELL = 10;
+function computeCellSize(width, weekCount) {
+	if (!width || width <= 0 || weekCount <= 0) return MAX_CELL;
+	const available = width - GUTTER;
+	const size = Math.floor((available - (weekCount - 1) * GAP) / weekCount);
+	return Math.max(MIN_CELL, Math.min(MAX_CELL, size || MIN_CELL));
+}
 
-function computeHabitGridLayout(width, { minWeeks = 5, maxWeeks = 26 } = {}) {
-	if (!width || width <= 0) {
-		return { weeks: minWeeks };
+function tooltipFixedStyle(rect) {
+	if (!rect) return null;
+	const center = rect.left + rect.width / 2;
+	const pad = 8;
+	let left = center;
+	let transform = 'translate(-50%, calc(-100% - 6px))';
+	if (center < 96) {
+		left = Math.max(pad, rect.left);
+		transform = 'translate(0, calc(-100% - 6px))';
+	} else if (center > window.innerWidth - 96) {
+		left = Math.min(window.innerWidth - pad, rect.right);
+		transform = 'translate(-100%, calc(-100% - 6px))';
 	}
-	const weeks = Math.min(
-		maxWeeks,
-		Math.max(minWeeks, Math.floor((width + HABIT_GRID_GAP) / (HABIT_MIN_CELL + HABIT_GRID_GAP)))
-	);
-	return { weeks };
+	return { position: 'fixed', top: rect.top, left, transform, zIndex: 99 };
 }
 
-function tileCellRadius(row, col, size = 7) {
-	const last = size - 1;
-	const parts = ['rounded-sm'];
-	if (row === 0 && col === 0) parts.push('rounded-tl-sm');
-	if (row === 0 && col === last) parts.push('rounded-tr-sm');
-	if (row === last && col === 0) parts.push('rounded-bl-sm');
-	if (row === last && col === last) parts.push('rounded-br-sm');
-	return parts.join(' ');
-}
+function HabitHeatmapTooltip({ day, color, detail, rect }) {
+	if (!day?.date || day.state === 'future' || day.state === 'pad' || !rect) return null;
 
-function HabitHeatmapTooltip({ day, color, detail }) {
-	if (!day?.date || day.state === 'future') return null;
+	let status = 'Missed';
+	if (day.state === 'empty') status = 'Before habit started';
+	else if (day.active) status = 'Completed';
+
 	const accuracyNote =
 		detail?.accuracy_met === false && detail?.showed_up
 			? 'Showed up · missed accuracy target'
@@ -78,10 +94,12 @@ function HabitHeatmapTooltip({ day, color, detail }) {
 				: null;
 
 	return (
-		<div className="border-line bg-surface pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 -translate-x-1/2 rounded-lg border px-2.5 py-1.5 text-xs whitespace-nowrap shadow-lg">
-			<p className="text-fg font-medium">{formatDate(day.date, 'EEE, MMM d, yyyy')}</p>
+		<div
+			className="border-line bg-surface pointer-events-none rounded-md border px-2 py-1 text-[11px] whitespace-nowrap shadow-lg"
+			style={tooltipFixedStyle(rect)}
+		>
 			<p className="text-muted" style={{ color: day.active ? color : undefined }}>
-				{day.active ? 'Completed' : 'Missed'}
+				{status}
 			</p>
 			{accuracyNote && <p className="text-warning mt-0.5">{accuracyNote}</p>}
 		</div>
@@ -93,13 +111,11 @@ export function CompactHabitGrid({
 	logDetails = [],
 	createdAt = null,
 	color = 'var(--primary)',
-	minWeeks = 5,
-	maxWeeks = 26,
 	className = ''
 }) {
 	const containerRef = useRef(null);
 	const [hovered, setHovered] = useState(null);
-	const [layout, setLayout] = useState(() => computeHabitGridLayout(0, { minWeeks, maxWeeks }));
+	const [width, setWidth] = useState(0);
 	const detailByDate = useMemo(() => {
 		const map = new Map();
 		for (const d of logDetails || []) {
@@ -111,70 +127,120 @@ export function CompactHabitGrid({
 	useEffect(() => {
 		const el = containerRef.current;
 		if (!el) return;
-		const update = () => {
-			setLayout(computeHabitGridLayout(el.clientWidth, { minWeeks, maxWeeks }));
-		};
+		const update = () => setWidth(el.clientWidth);
 		update();
 		const observer = new ResizeObserver(update);
 		observer.observe(el);
 		return () => observer.disconnect();
-	}, [minWeeks, maxWeeks]);
+	}, []);
 
-	const gridWeeks = useMemo(
-		() => buildHabitWeeks(logs, layout.weeks, createdAt),
-		[logs, layout.weeks, createdAt]
-	);
-	const { weeks } = layout;
+	const weeks = useMemo(() => buildYearWeeks(logs, createdAt), [logs, createdAt]);
+	const cell = computeCellSize(width, weeks.length);
+	const colWidth = cell + GAP;
 
 	return (
-		<div ref={containerRef} className={`w-full ${className}`} aria-label="Habit check-in history">
-			<div className="flex w-full" style={{ gap: HABIT_GRID_GAP }}>
-				{gridWeeks.map((week, col) => (
-					<div key={col} className="flex min-w-0 flex-1 flex-col" style={{ gap: HABIT_GRID_GAP }}>
-						{week.map((day, row) => {
-							const isFuture = day.state === 'future';
-							const isHovered = !isFuture && hovered === day.date;
-							const detail = detailByDate.get(day.date);
-							const missedAccuracy = detail && detail.showed_up && !detail.accuracy_met;
-
-							return (
-								<div
-									key={`${col}-${row}`}
-									className="relative"
-									onMouseEnter={() => !isFuture && setHovered(day.date)}
-									onMouseLeave={() => setHovered(null)}
-								>
-									{isHovered && <HabitHeatmapTooltip day={day} color={color} detail={detail} />}
-									<div
-										className={`aspect-square w-full transition-colors ${tileCellRadius(row, col, weeks)} ${
-											isFuture ? 'border-line border border-dashed opacity-30' : ''
-										}`}
-										style={{
-											background: isFuture
-												? 'transparent'
-												: day.state === 'completed'
-													? missedAccuracy
-														? `color-mix(in srgb, ${color} 55%, var(--warning))`
-														: color
-													: 'var(--surface-2)',
-											boxShadow: missedAccuracy
-												? 'inset 0 0 0 1px color-mix(in srgb, var(--warning) 70%, transparent)'
-												: undefined
-										}}
-										aria-label={
-											isFuture
-												? 'Upcoming day'
-												: day.date
-													? `${formatDate(day.date, 'MMM d')}: ${day.active ? 'completed' : 'missed'}`
-													: undefined
-										}
-									/>
-								</div>
-							);
-						})}
+		<div className={`relative ${className}`}>
+			<div
+				ref={containerRef}
+				className="w-full overflow-x-auto overflow-y-hidden"
+				aria-label="Habit check-in history for the last year"
+			>
+				<div style={{ minWidth: GUTTER + weeks.length * colWidth - GAP }}>
+					<div className="mb-1 flex" style={{ paddingLeft: GUTTER }}>
+						{weeks.map((week, col) => (
+							<div
+								key={`m-${col}`}
+								className="text-muted overflow-visible text-[9px] leading-3 whitespace-nowrap"
+								style={{ width: cell, marginRight: col === weeks.length - 1 ? 0 : GAP }}
+							>
+								{monthLabelForWeek(week)}
+							</div>
+						))}
 					</div>
-				))}
+					<div className="flex">
+						<div
+							className="text-muted flex shrink-0 flex-col text-[9px] leading-none"
+							style={{ width: '12px', gap: GAP }}
+						>
+							{WEEKDAY_LABELS.map((label, row) => (
+								<div key={row} className="flex items-center" style={{ height: cell }}>
+									{label}
+								</div>
+							))}
+						</div>
+						<div className="flex" style={{ gap: GAP }}>
+							{weeks.map((week, col) => (
+								<div key={col} className="flex flex-col" style={{ gap: GAP }}>
+									{week.map((day, row) => {
+										const interactive =
+											day.state === 'completed' || day.state === 'missed' || day.state === 'empty';
+										const detail = detailByDate.get(day.date);
+										const missedAccuracy = detail && detail.showed_up && !detail.accuracy_met;
+										const isBlank =
+											day.state === 'future' || day.state === 'pad' || day.state === 'empty';
+
+										return (
+											<div
+												key={`${col}-${row}`}
+												onMouseEnter={(e) => {
+													if (!interactive) return;
+													setHovered({
+														day,
+														detail,
+														rect: e.currentTarget.getBoundingClientRect()
+													});
+												}}
+												onMouseLeave={() => setHovered(null)}
+											>
+												<div
+													className="rounded-[2px]"
+													style={{
+														width: cell,
+														height: cell,
+														opacity: day.state === 'future' || day.state === 'pad' ? 0.35 : 1,
+														background: isBlank
+															? 'var(--surface-2)'
+															: day.state === 'completed'
+																? missedAccuracy
+																	? `color-mix(in srgb, ${color} 55%, var(--warning))`
+																	: color
+																: 'var(--surface-2)',
+														boxShadow: missedAccuracy
+															? 'inset 0 0 0 1px color-mix(in srgb, var(--warning) 70%, transparent)'
+															: undefined
+													}}
+													aria-label={
+														day.state === 'future' || day.state === 'pad'
+															? undefined
+															: `${formatDate(day.date, 'MMM d')}: ${
+																	day.active
+																		? 'completed'
+																		: day.state === 'empty'
+																			? 'before habit started'
+																			: 'missed'
+																}`
+													}
+												/>
+											</div>
+										);
+									})}
+								</div>
+							))}
+						</div>
+					</div>
+				</div>
 			</div>
+			{hovered &&
+				typeof document !== 'undefined' &&
+				createPortal(
+					<HabitHeatmapTooltip
+						day={hovered.day}
+						color={color}
+						detail={hovered.detail}
+						rect={hovered.rect}
+					/>,
+					document.body
+				)}
 		</div>
 	);
 }

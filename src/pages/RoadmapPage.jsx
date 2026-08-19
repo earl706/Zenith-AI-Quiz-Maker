@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { CalendarRange, Map, RefreshCw, Sparkles } from 'lucide-react';
+import { CalendarRange, Map, RefreshCw, Sparkles, Trash2 } from 'lucide-react';
 
 import { get } from '../lib/api';
 import { cn, formatDate } from '../lib/format';
@@ -34,8 +34,8 @@ import {
 	CardHeader,
 	EmptyState,
 	Input,
+	LoadingScreen,
 	Modal,
-	ProgressBar,
 	ProgressRing,
 	Select,
 	StatCard
@@ -44,7 +44,10 @@ import { useAttemptLauncher } from '../components/quiz/useAttemptLauncher';
 import { ToggleChip } from '../components/quiz/quizAuthoringUi';
 import RoadmapCapacityFields from '../components/roadmap/RoadmapCapacityFields';
 import RoadmapCapacityStrip from '../components/roadmap/RoadmapCapacityStrip';
-import RoadmapNodeCard, { resolveNodeQuizUuid } from '../components/roadmap/RoadmapNodeCard';
+import RoadmapNodeCard, {
+	launchNodeSectionAttempt,
+	resolveNodeQuizUuid
+} from '../components/roadmap/RoadmapNodeCard';
 import { paginateClient } from '../hooks/useListControls';
 
 const PATH_PAGE_SIZE = 9;
@@ -56,6 +59,94 @@ const MOBILE_TABS = [
 	{ id: 'today', label: 'Today' },
 	{ id: 'week', label: 'Week' }
 ];
+
+function listUnlinkedQuizHint() {
+	toast.error(
+		'No matching owner quiz for this roadmap. Create the quiz from Templates, or create the roadmap from My quiz so View/Attempt can link.'
+	);
+}
+
+function RoadmapListCard({
+	roadmap,
+	onOpen,
+	onDelete,
+	onEditNode,
+	onViewQuiz,
+	onAttemptSection,
+	onPrefetch
+}) {
+	const percent = roadmap.progress?.percent || 0;
+	const preview = roadmap.preview_node;
+	const sourceQuizUuid = roadmap.linked_quiz_uuid || roadmap.source_quiz_uuid;
+	return (
+		<Card
+			className="cursor-pointer transition-colors hover:border-[color-mix(in_srgb,var(--primary)_40%,var(--line))]"
+			onClick={onOpen}
+			onPointerEnter={onPrefetch}
+			onFocus={onPrefetch}
+		>
+			<div className="space-y-3 p-5">
+				<div className="flex items-center gap-3">
+					<ProgressRing
+						value={percent}
+						size={48}
+						stroke={5}
+						tone="primary"
+						label={`${Math.round(percent)}`}
+					/>
+					<div className="min-w-0 flex-1">
+						<div className="flex items-start justify-between gap-2">
+							<div className="min-w-0">
+								<h3 className="text-fg truncate font-semibold">{roadmap.title}</h3>
+								<p className="text-muted mt-0.5 text-xs">
+									{roadmap.progress?.mastered}/{roadmap.progress?.total} nodes mastered
+								</p>
+							</div>
+							<div className="flex shrink-0 items-center gap-1">
+								{roadmap.deadline ? (
+									<Badge tone="warning">{formatDate(roadmap.deadline, 'dd/MM/yyyy')}</Badge>
+								) : null}
+								<Button
+									size="icon"
+									variant="ghost"
+									className="text-danger h-8 w-8"
+									title="Delete roadmap"
+									aria-label="Delete roadmap"
+									onClick={(e) => {
+										e.stopPropagation();
+										onDelete();
+									}}
+								>
+									<Trash2 size={14} />
+								</Button>
+							</div>
+						</div>
+					</div>
+				</div>
+				<div onClick={(e) => e.stopPropagation()}>
+					{preview ? (
+						<>
+							<p className="text-muted mb-1 text-[10px] font-medium tracking-wide uppercase">
+								{preview.overdue ? 'Longest overdue' : 'Due today'}
+							</p>
+							<RoadmapNodeCard
+								node={preview}
+								compact
+								sourceQuizUuid={sourceQuizUuid}
+								onEdit={() => onEditNode(preview)}
+								onViewQuiz={() => onViewQuiz(preview, sourceQuizUuid)}
+								onAttemptSection={() => onAttemptSection(preview, sourceQuizUuid)}
+								onUnlinkedQuiz={listUnlinkedQuizHint}
+							/>
+						</>
+					) : (
+						<p className="text-muted text-xs">Nothing due today — you may be ahead or done.</p>
+					)}
+				</div>
+			</div>
+		</Card>
+	);
+}
 
 function CompactPager({ page, totalPages, count, pageSize, onPageChange }) {
 	if (count <= pageSize) return null;
@@ -846,6 +937,12 @@ function RoadmapDetail({ roadmap, onBack }) {
 		});
 	};
 
+	const handleUnlinkedQuiz = () => {
+		toast.error(
+			'No matching owner quiz for this roadmap. Create the quiz from Templates, or create the roadmap from My quiz so View/Attempt can link.'
+		);
+	};
+
 	const handleViewQuiz = (node) => {
 		const quizUuid = resolveNodeQuizUuid(node, sourceQuizUuid);
 		if (!quizUuid) return;
@@ -853,39 +950,12 @@ function RoadmapDetail({ roadmap, onBack }) {
 	};
 
 	const handleAttemptSection = (node) => {
-		const quizUuid = resolveNodeQuizUuid(node, sourceQuizUuid);
-		if (!quizUuid) return;
-		const sectionId = node.section_id;
-		const sections = nodes
-			.filter((n) => n.section_id)
-			.map((n) => ({
-				id: n.section_id,
-				title: n.title,
-				order: n.order ?? 0
-			}));
-		const quiz = {
-			uuid: quizUuid,
-			quiz_title: roadmap.title || 'Quiz',
-			sections:
-				sections.length > 0
-					? sections
-					: sectionId
-						? [{ id: sectionId, title: node.title, order: node.order ?? 0 }]
-						: []
-		};
-		launchAttempt(quiz, {
-			initialSectionIds: sectionId ? [sectionId] : [],
-			highlightedSectionId: sectionId ?? undefined,
-			presetHint: sectionId
-				? 'Pre-selected from this roadmap section — you can change the selection below.'
-				: undefined
+		launchNodeSectionAttempt({
+			node: { ...node, roadmap_title: roadmap.title },
+			sourceQuizUuid,
+			launchAttempt,
+			onUnlinked: handleUnlinkedQuiz
 		});
-	};
-
-	const handleUnlinkedQuiz = () => {
-		toast.error(
-			'No matching owner quiz for this roadmap. Create the quiz from Templates, or create the roadmap from My quiz so View/Attempt can link.'
-		);
 	};
 
 	const nodeCardProps = {
@@ -1120,8 +1190,13 @@ function RoadmapDetail({ roadmap, onBack }) {
 }
 
 export default function RoadmapPage() {
+	const navigate = useNavigate();
+	const queryClient = useQueryClient();
+	const { launchAttempt, attemptModal } = useAttemptLauncher();
 	const [forkOpen, setForkOpen] = useState(false);
 	const [selectedId, setSelectedId] = useState(null);
+	const [editPreview, setEditPreview] = useState(null);
+	const [deleteTarget, setDeleteTarget] = useState(null);
 
 	const { data: listData, isLoading } = roadmapsApi.useList({ status: 'active' });
 	const roadmaps = Array.isArray(listData) ? listData : listData?.results || [];
@@ -1136,14 +1211,25 @@ export default function RoadmapPage() {
 		queryFn: () => get('/roadmaps/quiz-sources/')
 	});
 
-	const { data: detail } = roadmapsApi.useDetail(selectedId, {
-		enabled: selectedId != null
+	const { data: detail, isError: detailError } = roadmapsApi.useDetail(selectedId, {
+		enabled: selectedId != null,
+		staleTime: 30_000
 	});
+
+	const prefetchDetail = (id) => {
+		if (id == null) return;
+		queryClient.prefetchQuery({
+			queryKey: ['roadmaps', 'detail', id],
+			queryFn: () => get(`/roadmaps/${id}/`),
+			staleTime: 30_000
+		});
+	};
 
 	const remove = roadmapsApi.useRemove({
 		onSuccess: () => {
 			toast.success('Roadmap archived/removed.');
 			setSelectedId(null);
+			setDeleteTarget(null);
 		}
 	});
 
@@ -1156,12 +1242,52 @@ export default function RoadmapPage() {
 		return { count, avg };
 	}, [roadmaps]);
 
-	if (selectedId && detail) {
-		return <RoadmapDetail roadmap={detail} onBack={() => setSelectedId(null)} />;
+	const handleListViewQuiz = (node, sourceQuizUuid) => {
+		const quizUuid = resolveNodeQuizUuid(node, sourceQuizUuid);
+		if (!quizUuid) {
+			listUnlinkedQuizHint();
+			return;
+		}
+		navigate(`/quizzes/${quizUuid}`);
+	};
+
+	const handleListAttemptSection = (node, sourceQuizUuid) => {
+		launchNodeSectionAttempt({
+			node,
+			sourceQuizUuid,
+			launchAttempt,
+			onUnlinked: listUnlinkedQuizHint
+		});
+	};
+
+	if (selectedId) {
+		if (detail) {
+			return <RoadmapDetail roadmap={detail} onBack={() => setSelectedId(null)} />;
+		}
+		if (detailError) {
+			return (
+				<div>
+					<Button variant="ghost" className="mb-4 h-8 px-2 text-sm" onClick={() => setSelectedId(null)}>
+						← All roadmaps
+					</Button>
+					<EmptyState
+						title="Could not open roadmap"
+						description="The detail request failed. Go back and try again."
+						action={
+							<Button variant="secondary" onClick={() => setSelectedId(null)}>
+								Back to list
+							</Button>
+						}
+					/>
+				</div>
+			);
+		}
+		return <LoadingScreen label="Opening roadmap…" />;
 	}
 
 	return (
 		<div>
+			{attemptModal}
 			<PageHeader
 				title="Roadmap"
 				icon={Map}
@@ -1195,35 +1321,16 @@ export default function RoadmapPage() {
 			) : (
 				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 					{roadmaps.map((r) => (
-						<Card
+						<RoadmapListCard
 							key={r.id}
-							className="cursor-pointer transition-colors hover:border-[color-mix(in_srgb,var(--primary)_40%,var(--line))]"
-							onClick={() => setSelectedId(r.id)}
-						>
-							<CardHeader
-								title={r.title}
-								subtitle={r.source_template_slug || (r.source_quiz_uuid ? 'From quiz' : undefined)}
-								action={r.deadline ? <Badge tone="warning">{formatDate(r.deadline)}</Badge> : null}
-							/>
-							<CardBody className="space-y-2">
-								<ProgressBar value={r.progress?.percent || 0} />
-								<p className="text-muted text-xs">
-									{r.progress?.mastered}/{r.progress?.total} nodes mastered
-								</p>
-								<Button
-									size="sm"
-									variant="ghost"
-									className="text-danger"
-									disabled={remove.isPending}
-									onClick={(e) => {
-										e.stopPropagation();
-										remove.mutate(r.id);
-									}}
-								>
-									Delete
-								</Button>
-							</CardBody>
-						</Card>
+							roadmap={r}
+							onOpen={() => setSelectedId(r.id)}
+							onPrefetch={() => prefetchDetail(r.id)}
+							onDelete={() => setDeleteTarget(r)}
+							onEditNode={(node) => setEditPreview({ node, roadmapId: r.id })}
+							onViewQuiz={handleListViewQuiz}
+							onAttemptSection={handleListAttemptSection}
+						/>
 					))}
 				</div>
 			)}
@@ -1234,6 +1341,37 @@ export default function RoadmapPage() {
 				catalog={catalog}
 				quizSources={quizSources}
 			/>
+			<NodeMasteryModal
+				open={editPreview != null}
+				onClose={() => setEditPreview(null)}
+				roadmapId={editPreview?.roadmapId}
+				node={editPreview?.node}
+			/>
+			<Modal
+				open={!!deleteTarget}
+				onClose={() => setDeleteTarget(null)}
+				title="Delete roadmap"
+				size="sm"
+				footer={
+					<>
+						<Button variant="secondary" onClick={() => setDeleteTarget(null)}>
+							Cancel
+						</Button>
+						<Button
+							variant="danger"
+							loading={remove.isPending}
+							onClick={() => deleteTarget && remove.mutate(deleteTarget.id)}
+						>
+							Delete
+						</Button>
+					</>
+				}
+			>
+				<p className="text-muted text-sm">
+					Are you sure you want to delete {deleteTarget?.title || 'this roadmap'}? This archives the
+					path and cannot be undone from here.
+				</p>
+			</Modal>
 		</div>
 	);
 }

@@ -40,6 +40,7 @@ function sectionsWithQuestionCounts(quiz) {
  *   highlightedSectionId?: number,
  *   skipModal?: boolean,
  *   presetHint?: string  // override SectionAttemptModal preset helper text
+ *   skipCountHydration?: boolean  // skip summary fetch (roadmap stub sections)
  * })
  */
 export function useAttemptLauncher() {
@@ -53,7 +54,7 @@ export function useAttemptLauncher() {
 			if (!id) return;
 			const sections = sectionsWithQuestionCounts(quiz);
 			const initialSectionIds = Array.isArray(options.initialSectionIds)
-				? options.initialSectionIds.filter(Boolean)
+				? options.initialSectionIds.filter((id) => id != null && id !== '')
 				: [];
 			const highlightedSectionId = options.highlightedSectionId ?? initialSectionIds[0] ?? null;
 
@@ -74,7 +75,8 @@ export function useAttemptLauncher() {
 				sections,
 				initialSectionIds: initialSectionIds.length ? initialSectionIds : null,
 				highlightedSectionId,
-				presetHint: options.presetHint ?? null
+				presetHint: options.presetHint ?? null,
+				skipCountHydration: Boolean(options.skipCountHydration)
 			});
 		},
 		[navigate]
@@ -111,6 +113,7 @@ export function useAttemptLauncher() {
 			initialSectionIds={target.initialSectionIds}
 			highlightedSectionId={target.highlightedSectionId}
 			presetHint={target.presetHint}
+			skipCountHydration={target.skipCountHydration}
 		/>
 	) : null;
 

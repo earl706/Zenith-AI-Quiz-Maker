@@ -1,7 +1,25 @@
 import { useEffect, useState } from 'react';
-import { Flame, Plus, Target, Undo2 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import {
+	AlertTriangle,
+	BadgeCheck,
+	BookOpen,
+	Check,
+	CheckCircle2,
+	Clock,
+	Flame,
+	GitBranch,
+	Pencil,
+	Plus,
+	Shuffle,
+	Target,
+	Trash2,
+	Undo2
+} from 'lucide-react';
 
-import { habitsApi, useEnsureDefaultHabits, useHabitCheckIn } from '../lib/studyResources';
+import { get } from '../lib/api';
+import { normalizeQuizList } from '../lib/resources';
+import { habitsApi, roadmapsApi, useHabitCheckIn } from '../lib/studyResources';
 import { toast } from '../stores/toastStore';
 import { CompactHabitGrid } from '../components/habits/CompactHabitGrid';
 import { PageHeader } from '../components/layout/PageHeader';
@@ -18,11 +36,31 @@ import {
 	StatCard
 } from '../components/ui';
 
+const DEFAULT_COLOR = '#0D9488';
+
+function listRows(data) {
+	return Array.isArray(data) ? data : data?.results || [];
+}
+
+function roadmapMinutes(roadmap) {
+	const hours = Number(roadmap?.hours_per_day);
+	if (!Number.isFinite(hours) || hours <= 0) return 15;
+	return Math.max(1, Math.round(hours * 60));
+}
+
 function HabitFormModal({ open, onClose, habit }) {
 	const create = habitsApi.useCreate({
 		onSuccess: () => {
 			toast.success('Habit created.');
 			onClose();
+		},
+		onError: (err) => {
+			const data = err.response?.data;
+			const detail =
+				(typeof data?.detail === 'string' && data.detail) ||
+				(Array.isArray(data?.non_field_errors) && data.non_field_errors[0]) ||
+				'Could not save habit.';
+			toast.error(detail);
 		}
 	});
 	const update = habitsApi.useUpdate({
@@ -37,18 +75,40 @@ function HabitFormModal({ open, onClose, habit }) {
 		frequency: 'daily',
 		target_attempts: 1,
 		target_minutes: 15,
-		target_accuracy: 80
+		target_accuracy: 80,
+		color: DEFAULT_COLOR,
+		sourceKind: '',
+		sourceQuizUuid: '',
+		sourceRoadmapId: ''
 	});
+
+	const { data: quizPayload } = useQuery({
+		queryKey: ['quizzes', 'habit-source'],
+		queryFn: () => get('/quizzes/quiz/'),
+		enabled: open
+	});
+	const { data: roadmapPayload } = roadmapsApi.useList(
+		{ status: 'active', page_size: 100 },
+		{ enabled: open }
+	);
+
+	const quizzes = normalizeQuizList(quizPayload);
+	const roadmaps = listRows(roadmapPayload);
 
 	useEffect(() => {
 		if (habit) {
+			const sourceKind = habit.source_quiz_uuid ? 'quiz' : habit.source_roadmap_id ? 'roadmap' : '';
 			setForm({
 				name: habit.name || '',
 				description: habit.description || '',
 				frequency: habit.frequency || 'daily',
 				target_attempts: habit.target_attempts ?? 1,
 				target_minutes: habit.target_minutes ?? 15,
-				target_accuracy: habit.target_accuracy ?? 80
+				target_accuracy: habit.target_accuracy ?? 80,
+				color: habit.color || DEFAULT_COLOR,
+				sourceKind,
+				sourceQuizUuid: habit.source_quiz_uuid ? String(habit.source_quiz_uuid) : '',
+				sourceRoadmapId: habit.source_roadmap_id ? String(habit.source_roadmap_id) : ''
 			});
 		} else if (open) {
 			setForm({
@@ -57,18 +117,60 @@ function HabitFormModal({ open, onClose, habit }) {
 				frequency: 'daily',
 				target_attempts: 1,
 				target_minutes: 15,
-				target_accuracy: 80
+				target_accuracy: 80,
+				color: DEFAULT_COLOR,
+				sourceKind: '',
+				sourceQuizUuid: '',
+				sourceRoadmapId: ''
 			});
 		}
 	}, [habit, open]);
 
+	const applyQuiz = (uuid) => {
+		const quiz = quizzes.find((q) => String(q.uuid) === String(uuid));
+		setForm((f) => ({
+			...f,
+			sourceKind: 'quiz',
+			sourceQuizUuid: uuid,
+			sourceRoadmapId: '',
+			name: quiz?.quiz_title || f.name,
+			color: quiz?.tag_color || f.color
+		}));
+	};
+
+	const applyRoadmap = (id) => {
+		const roadmap = roadmaps.find((r) => String(r.id) === String(id));
+		setForm((f) => ({
+			...f,
+			sourceKind: 'roadmap',
+			sourceRoadmapId: id,
+			sourceQuizUuid: '',
+			name: roadmap?.title || f.name,
+			color: roadmap?.color || f.color,
+			target_minutes: roadmap ? roadmapMinutes(roadmap) : f.target_minutes
+		}));
+	};
+
+	const sourceReady = Boolean(
+		(form.sourceKind === 'quiz' && form.sourceQuizUuid) ||
+			(form.sourceKind === 'roadmap' && form.sourceRoadmapId)
+	);
+	const canSave = Boolean(form.name.trim()) && (habit || sourceReady);
+
 	const save = () => {
+		if (!canSave) return;
 		const body = {
-			...form,
+			name: form.name.trim(),
+			description: form.description,
+			frequency: form.frequency,
 			schedule_mode: 'fixed',
 			target_attempts: Number(form.target_attempts) || 1,
 			target_minutes: Number(form.target_minutes) || 0,
-			target_accuracy: Number(form.target_accuracy) || 80
+			target_accuracy: Number(form.target_accuracy) || 80,
+			color: form.color || DEFAULT_COLOR,
+			source_quiz_uuid: form.sourceKind === 'quiz' ? form.sourceQuizUuid || null : null,
+			source_roadmap_id:
+				form.sourceKind === 'roadmap' && form.sourceRoadmapId ? Number(form.sourceRoadmapId) : null
 		};
 		if (habit) update.mutate({ id: habit.id, ...body });
 		else create.mutate(body);
@@ -77,6 +179,71 @@ function HabitFormModal({ open, onClose, habit }) {
 	return (
 		<Modal open={open} onClose={onClose} title={habit ? 'Edit habit' : 'New habit'}>
 			<div className="space-y-3">
+				<Select
+					label="Source"
+					value={form.sourceKind}
+					onChange={(e) => {
+						const sourceKind = e.target.value;
+						setForm((f) => ({
+							...f,
+							sourceKind,
+							sourceQuizUuid: sourceKind === 'quiz' ? f.sourceQuizUuid : '',
+							sourceRoadmapId: sourceKind === 'roadmap' ? f.sourceRoadmapId : ''
+						}));
+					}}
+				>
+					<option value="">{habit ? 'None (any quiz counts)' : 'Choose quiz or roadmap…'}</option>
+					<option value="quiz">Quiz</option>
+					<option value="roadmap">Roadmap</option>
+				</Select>
+				{form.sourceKind === 'quiz' && (
+					<>
+						<Select
+							label="Quiz"
+							value={form.sourceQuizUuid}
+							onChange={(e) => applyQuiz(e.target.value)}
+						>
+							<option value="">Select a quiz…</option>
+							{quizzes.map((q) => (
+								<option key={q.uuid} value={q.uuid}>
+									{q.quiz_title || 'Untitled quiz'}
+								</option>
+							))}
+						</Select>
+						{quizzes.length === 0 && (
+							<p className="text-muted text-xs">
+								No quizzes yet. Create one under My Quizzes first.
+							</p>
+						)}
+					</>
+				)}
+				{form.sourceKind === 'roadmap' && (
+					<>
+						<Select
+							label="Roadmap"
+							value={form.sourceRoadmapId}
+							onChange={(e) => applyRoadmap(e.target.value)}
+						>
+							<option value="">Select a roadmap…</option>
+							{roadmaps.map((r) => (
+								<option key={r.id} value={r.id}>
+									{r.title || 'Untitled roadmap'}
+								</option>
+							))}
+						</Select>
+						{roadmaps.length === 0 && (
+							<p className="text-muted text-xs">
+								No active roadmaps yet. Create one under Roadmap first.
+							</p>
+						)}
+					</>
+				)}
+				{!habit && (
+					<p className="text-muted text-xs">
+						New habits must be linked to one quiz or one roadmap. Attempts on that source log
+						automatically; name, color, and time goal are copied from it.
+					</p>
+				)}
 				<Input
 					label="Name"
 					value={form.name}
@@ -128,7 +295,7 @@ function HabitFormModal({ open, onClose, habit }) {
 					<Button variant="ghost" onClick={onClose}>
 						Cancel
 					</Button>
-					<Button onClick={save} disabled={!form.name.trim()}>
+					<Button onClick={save} disabled={!canSave}>
 						Save
 					</Button>
 				</div>
@@ -139,7 +306,6 @@ function HabitFormModal({ open, onClose, habit }) {
 
 export default function ProgressPage() {
 	const { data, isLoading } = habitsApi.useList({ is_active: true });
-	const ensureDefaults = useEnsureDefaultHabits();
 	const checkIn = useHabitCheckIn();
 	const remove = habitsApi.useRemove({
 		onSuccess: () => toast.success('Habit removed.')
@@ -147,18 +313,7 @@ export default function ProgressPage() {
 	const [modalOpen, setModalOpen] = useState(false);
 	const [editing, setEditing] = useState(null);
 
-	const habits = Array.isArray(data) ? data : data?.results || [];
-
-	useEffect(() => {
-		if (
-			!isLoading &&
-			habits.length === 0 &&
-			!ensureDefaults.isPending &&
-			!ensureDefaults.isSuccess
-		) {
-			ensureDefaults.mutate();
-		}
-	}, [isLoading, habits.length, ensureDefaults]);
+	const habits = listRows(data);
 
 	const bestStreak = Math.max(0, ...habits.map((h) => h.momentum?.current_streak || 0));
 	const dueToday = habits.filter((h) => h.today_status?.status === 'due').length;
@@ -168,7 +323,7 @@ export default function ProgressPage() {
 			<PageHeader
 				title="Progress"
 				icon={Flame}
-				description="Habits, streaks, and study heatmaps. Quiz attempts log automatically."
+				description="Habits forked from a quiz or roadmap. Attempts on that source log automatically."
 				actions={
 					<Button
 						onClick={() => {
@@ -193,92 +348,131 @@ export default function ProgressPage() {
 			) : habits.length === 0 ? (
 				<EmptyState
 					title="No habits yet"
-					description="Create a habit or wait for the default daily practice habit to appear."
+					description="Create a habit from one existing quiz or roadmap. Attempts on that source keep the streak."
 				/>
 			) : (
-				<div className="space-y-4">
+				<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
 					{habits.map((habit) => {
 						const todayLog = habit.today_log;
 						const showedUp = todayLog?.showed_up;
 						const missedAccuracy = showedUp && !todayLog?.accuracy_met;
+						const sourceKind = habit.source_quiz_uuid
+							? 'quiz'
+							: habit.source_roadmap_id
+								? 'roadmap'
+								: 'any';
+						const sourceMeta =
+							sourceKind === 'quiz'
+								? { label: 'Quiz', Icon: BookOpen }
+								: sourceKind === 'roadmap'
+									? { label: 'Roadmap', Icon: GitBranch }
+									: { label: 'Any quiz', Icon: Shuffle };
+						const doneToday = habit.today_status?.status === 'completed';
+						const iconBtn =
+							'text-fg hover:bg-surface-2 inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md transition-colors disabled:pointer-events-none disabled:opacity-50';
 
 						return (
 							<Card key={habit.id}>
 								<CardHeader
+									className="p-4 pb-2"
 									title={habit.name}
 									action={
-										<div className="flex flex-wrap items-center gap-2">
-											<Badge
-												tone={habit.today_status?.status === 'completed' ? 'success' : 'warning'}
+										<div className="flex items-center gap-0.5">
+											<button
+												type="button"
+												className={`${iconBtn} bg-surface-2 border-line border`}
+												disabled={checkIn.isPending}
+												title="Manual check-in"
+												aria-label="Manual check-in"
+												onClick={() =>
+													checkIn.mutate(
+														{ id: habit.id },
+														{ onSuccess: () => toast.success('Checked in.') }
+													)
+												}
 											>
-												{habit.today_status?.status === 'completed' ? 'Done today' : 'Due'}
-											</Badge>
-											{missedAccuracy && (
-												<Badge tone="warning">Missed {habit.target_accuracy}% target</Badge>
-											)}
-											{todayLog?.accuracy_met && <Badge tone="success">Accuracy met</Badge>}
+												<Check size={14} />
+											</button>
+											<button
+												type="button"
+												className={iconBtn}
+												disabled={checkIn.isPending || !showedUp}
+												title="Undo today"
+												aria-label="Undo today"
+												onClick={() => checkIn.mutate({ id: habit.id, undo: true })}
+											>
+												<Undo2 size={14} />
+											</button>
+											<button
+												type="button"
+												className={iconBtn}
+												title="Edit habit"
+												aria-label="Edit habit"
+												onClick={() => {
+													setEditing(habit);
+													setModalOpen(true);
+												}}
+											>
+												<Pencil size={14} />
+											</button>
+											<button
+												type="button"
+												className={`${iconBtn} text-danger`}
+												title="Delete habit"
+												aria-label="Delete habit"
+												onClick={() => remove.mutate(habit.id)}
+											>
+												<Trash2 size={14} />
+											</button>
 										</div>
 									}
-								/>
-								<CardBody className="space-y-3">
-									{habit.description && <p className="text-muted text-sm">{habit.description}</p>}
-									<div className="text-muted flex flex-wrap gap-3 text-xs">
-										<span>{habit.schedule_summary}</span>
-										<span>Streak {habit.momentum?.current_streak ?? 0}</span>
-										<span>
-											Goal: {habit.target_attempts} attempt(s) or {habit.target_minutes} min · ≥
-											{habit.target_accuracy}%
-										</span>
+								>
+									<div className="mt-1.5 flex flex-wrap items-center gap-1">
+										<Badge
+											tone="neutral"
+											className="h-6 w-6 justify-center px-0"
+											title={sourceMeta.label}
+											aria-label={sourceMeta.label}
+										>
+											<sourceMeta.Icon size={14} />
+										</Badge>
+										<Badge
+											tone={doneToday ? 'success' : 'warning'}
+											className="h-6 w-6 justify-center px-0"
+											title={doneToday ? 'Done today' : 'Due'}
+											aria-label={doneToday ? 'Done today' : 'Due'}
+										>
+											{doneToday ? <CheckCircle2 size={14} /> : <Clock size={14} />}
+										</Badge>
+										{missedAccuracy && (
+											<Badge
+												tone="warning"
+												className="h-6 w-6 justify-center px-0"
+												title={`Missed ${habit.target_accuracy}% target`}
+												aria-label={`Missed ${habit.target_accuracy}% target`}
+											>
+												<AlertTriangle size={14} />
+											</Badge>
+										)}
+										{todayLog?.accuracy_met && (
+											<Badge
+												tone="success"
+												className="h-6 w-6 justify-center px-0"
+												title="Accuracy met"
+												aria-label="Accuracy met"
+											>
+												<BadgeCheck size={14} />
+											</Badge>
+										)}
 									</div>
+								</CardHeader>
+								<CardBody className="p-4 pt-0">
 									<CompactHabitGrid
 										logs={habit.recent_logs || []}
 										logDetails={habit.recent_log_details || []}
 										createdAt={habit.created_at}
 										color={habit.color || 'var(--primary)'}
 									/>
-									<div className="flex flex-wrap gap-2">
-										<Button
-											size="sm"
-											variant="secondary"
-											disabled={checkIn.isPending}
-											onClick={() =>
-												checkIn.mutate(
-													{ id: habit.id },
-													{ onSuccess: () => toast.success('Checked in.') }
-												)
-											}
-										>
-											Manual check-in
-										</Button>
-										{showedUp && (
-											<Button
-												size="sm"
-												variant="ghost"
-												onClick={() => checkIn.mutate({ id: habit.id, undo: true })}
-											>
-												<Undo2 size={14} className="mr-1" />
-												Undo today
-											</Button>
-										)}
-										<Button
-											size="sm"
-											variant="ghost"
-											onClick={() => {
-												setEditing(habit);
-												setModalOpen(true);
-											}}
-										>
-											Edit
-										</Button>
-										<Button
-											size="sm"
-											variant="ghost"
-											className="text-danger"
-											onClick={() => remove.mutate(habit.id)}
-										>
-											Delete
-										</Button>
-									</div>
 								</CardBody>
 							</Card>
 						);

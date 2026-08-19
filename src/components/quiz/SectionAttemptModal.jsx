@@ -7,8 +7,13 @@ const DEFAULT_SAMPLE = 10;
 
 function normalizeInitialIds(initialSectionIds, allIds) {
 	if (!Array.isArray(initialSectionIds) || !initialSectionIds.length) return null;
-	const allowed = new Set(allIds);
-	const next = initialSectionIds.filter((id) => allowed.has(id));
+	const byKey = new Map((allIds || []).map((id) => [String(id), id]));
+	const next = [];
+	for (const id of initialSectionIds) {
+		if (id == null || id === '') continue;
+		const match = byKey.get(String(id));
+		if (match != null) next.push(match);
+	}
 	return next.length ? next : null;
 }
 
@@ -50,6 +55,7 @@ const DEFAULT_PRESET_HINT =
  * highlightedSectionId — subtle hint for the section that drove the pre-selection.
  * presetHint — optional override for the preset helper line under Quick start.
  * quizId — used to hydrate per-section question_count when callers omit it.
+ * skipCountHydration — skip the full-quiz summary fetch (roadmap stub sections).
  */
 export default function SectionAttemptModal({
 	open,
@@ -60,7 +66,8 @@ export default function SectionAttemptModal({
 	onConfirm,
 	initialSectionIds = null,
 	highlightedSectionId = null,
-	presetHint = null
+	presetHint = null,
+	skipCountHydration = false
 }) {
 	const [hydratedSections, setHydratedSections] = useState(sections);
 
@@ -69,7 +76,7 @@ export default function SectionAttemptModal({
 	}, [sections]);
 
 	useEffect(() => {
-		if (!open || !quizId) return;
+		if (!open || !quizId || skipCountHydration) return;
 		const list = Array.isArray(sections) ? sections : [];
 		if (!list.length || !list.some(sectionNeedsCount)) return;
 
@@ -94,7 +101,7 @@ export default function SectionAttemptModal({
 		return () => {
 			cancelled = true;
 		};
-	}, [open, quizId, sections]);
+	}, [open, quizId, sections, skipCountHydration]);
 
 	const sorted = useMemo(
 		() =>

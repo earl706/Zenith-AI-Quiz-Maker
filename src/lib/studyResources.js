@@ -15,6 +15,7 @@ export function useHabitCheckIn() {
 	});
 }
 
+/** POST /habits/ensure-defaults/ is a no-op; kept for older clients. */
 export function useEnsureDefaultHabits() {
 	const qc = useQueryClient();
 	return useMutation({

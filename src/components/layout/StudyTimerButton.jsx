@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Coffee, Pause, Play, RotateCcw, SkipForward, Timer, Volume2 } from 'lucide-react';
 
-import { habitsApi, useEnsureDefaultHabits } from '../../lib/studyResources';
+import { habitsApi } from '../../lib/studyResources';
 import { previewStudyAlarmSound, STUDY_ALARM_SOUNDS } from '../../lib/studyAlarm';
 import { formatTimerDisplay } from '../../lib/studyTimerFormat';
 import {
@@ -72,15 +72,7 @@ export function StudyTimerButton() {
 		{ is_active: true, page_size: 100 },
 		{ enabled: open }
 	);
-	const ensureDefaults = useEnsureDefaultHabits();
 	const habits = listHabits(habitData);
-
-	useEffect(() => {
-		if (!open || habitsLoading) return;
-		if (habits.length === 0 && !ensureDefaults.isPending && !ensureDefaults.isSuccess) {
-			ensureDefaults.mutate();
-		}
-	}, [open, habitsLoading, habits.length, ensureDefaults]);
 
 	useEffect(() => {
 		if (!open || habitDefaultApplied || habitsLoading || !habits.length) return;

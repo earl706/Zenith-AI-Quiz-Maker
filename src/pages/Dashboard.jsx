@@ -19,7 +19,10 @@ import {
 	StatCard
 } from '../components/ui';
 import { useAttemptLauncher } from '../components/quiz/useAttemptLauncher';
-import RoadmapNodeCard, { resolveNodeQuizUuid } from '../components/roadmap/RoadmapNodeCard';
+import RoadmapNodeCard, {
+	launchNodeSectionAttempt,
+	resolveNodeQuizUuid
+} from '../components/roadmap/RoadmapNodeCard';
 import { paginateClient } from '../hooks/useListControls';
 
 const DUE_TODAY_PAGE_SIZE = 5;
@@ -106,23 +109,11 @@ export default function DashboardPage() {
 	};
 
 	const attemptSection = (item) => {
-		const quizUuid = resolveNodeQuizUuid(item, item.source_quiz_uuid);
-		if (!quizUuid) {
-			toast.error('This section is not linked to a quiz yet.');
-			return;
-		}
-		const sectionId = item.section_id;
-		const quiz = {
-			uuid: quizUuid,
-			quiz_title: item.roadmap_title || 'Quiz',
-			sections: sectionId ? [{ id: sectionId, title: item.title, order: 0 }] : []
-		};
-		launchAttempt(quiz, {
-			initialSectionIds: sectionId ? [sectionId] : [],
-			highlightedSectionId: sectionId ?? undefined,
-			presetHint: sectionId
-				? 'Pre-selected from this roadmap section — you can change the selection below.'
-				: undefined
+		launchNodeSectionAttempt({
+			node: item,
+			sourceQuizUuid: item.source_quiz_uuid,
+			launchAttempt,
+			onUnlinked: () => toast.error('This section is not linked to a quiz yet.')
 		});
 	};
 
