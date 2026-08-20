@@ -8,8 +8,17 @@ import { answersEqual } from '../../lib/mathAnswersEqual';
 import { resolveQuestionImageSrc, resolveQuizImageSrc } from '../../lib/quizImages';
 import CreateRoadmapFromQuizModal from '../roadmap/CreateRoadmapFromQuizModal';
 import { Badge, Button, Card, CardBody, ProgressRing } from '../ui';
+import QuestionTitle from './QuestionTitle';
 import MathRenderer from './MathRenderer';
-import { getChoiceData, accuracyTone, isIdentification, isMathematical } from './quizHelpers';
+import {
+	getChoiceData,
+	accuracyTone,
+	isIdentification,
+	isMathematical,
+	isSequence,
+	sequenceSlotCredit,
+	formatScore
+} from './quizHelpers';
 import QuizQuestionListLayout from './QuizQuestionListLayout';
 import { useQuestionDisplayLayout } from './useQuestionDisplayLayout';
 
@@ -277,7 +286,7 @@ function ResultSummary({ score, accuracy, time, correctCount, total, sectionScor
 		<Card className="overflow-hidden">
 			<div className="from-primary/8 via-surface to-surface bg-linear-to-br p-5">
 				<div className="grid grid-cols-3 items-center gap-3">
-					<SummaryStat label="Score" value={`${score}/${total}`} />
+					<SummaryStat label="Score" value={`${formatScore(score)}/${total}`} />
 					<div className="min-w-0 text-center">
 						<p className="text-muted text-[0.65rem] font-medium tracking-wider uppercase">
 							Accuracy
@@ -306,7 +315,7 @@ function ResultSummary({ score, accuracy, time, correctCount, total, sectionScor
 							>
 								<span className="text-fg truncate">{ss.section_title}</span>
 								<span className="text-muted shrink-0">
-									{ss.score}/{ss.total_score} · {Math.round(ss.accuracy)}%
+									{formatScore(ss.score)}/{ss.total_score} · {Math.round(ss.accuracy)}%
 								</span>
 							</li>
 						))}
@@ -410,12 +419,72 @@ function TeachingContent({ question }) {
 	);
 }
 
+function SequenceResult({ question, submitted, math }) {
+	const items = question.sequence_items || [];
+	const byId = new Map((submitted?.userSequence || []).map((row) => [row.id, row.text ?? '']));
+	return (
+		<div className="grid gap-3 sm:grid-cols-2">
+			<div>
+				<p className="text-muted mb-1.5 text-xs font-medium">Your sequence</p>
+				<ol className="space-y-1.5">
+					{items.map((item, index) => {
+						const userText = item.role === 'blank' ? (byId.get(item.id) ?? '') : item.text;
+						const ok =
+							item.role !== 'blank' ||
+							answersEqual(item.text, byId.get(item.id) ?? '', {
+								questionType: question.question_type
+							});
+						return (
+							<li
+								key={`user-${item.id ?? index}`}
+								className={`rounded-md border px-2.5 py-1.5 text-sm ${
+									item.role === 'blank'
+										? ok
+											? 'border-success/20 bg-success/10'
+											: 'border-danger/20 bg-danger/10'
+										: 'border-line bg-surface-2'
+								}`}
+							>
+								<span className="text-muted mr-2 tabular-nums">{index + 1}.</span>
+								<AnswerText value={userText} mathematical={math} />
+							</li>
+						);
+					})}
+				</ol>
+			</div>
+			<div>
+				<p className="text-muted mb-1.5 text-xs font-medium">Correct sequence</p>
+				<ol className="space-y-1.5">
+					{items.map((item, index) => (
+						<li
+							key={`correct-${item.id ?? index}`}
+							className="border-line bg-surface-2 rounded-md border px-2.5 py-1.5 text-sm"
+						>
+							<span className="text-muted mr-2 tabular-nums">{index + 1}.</span>
+							<AnswerText value={item.text} mathematical={math} />
+							{item.role !== 'blank' && (
+								<span className="text-muted ml-2 text-[0.65rem] uppercase">{item.role}</span>
+							)}
+						</li>
+					))}
+				</ol>
+			</div>
+		</div>
+	);
+}
+
 function ResultQuestionCard({ question, submitted, index }) {
-	const correct = answersEqual(submitted?.correctAnswer, submitted?.userAnswer, {
-		questionType: question?.question_type ?? submitted?.questionType
-	});
 	const math = isMathematical(question.question_type);
 	const identification = isIdentification(question.question_type);
+	const sequence = isSequence(question.question_type);
+	const credit = sequence
+		? sequenceSlotCredit(question, submitted)
+		: answersEqual(submitted?.correctAnswer, submitted?.userAnswer, {
+					questionType: question?.question_type ?? submitted?.questionType
+			  })
+			? 1
+			: 0;
+	const correct = credit === 1;
 	const questionImage = resolveQuestionImageSrc(question);
 
 	return (
@@ -428,14 +497,18 @@ function ResultQuestionCard({ question, submitted, index }) {
 			<CardBody className="space-y-3 p-5">
 				<div className="flex items-center justify-between gap-3 pt-4">
 					<p className="text-muted text-xs font-medium tabular-nums">Q{index + 1}</p>
-					<Badge tone={correct ? 'success' : 'danger'}>
-						{correct ? <Check size={12} aria-hidden /> : <X size={12} aria-hidden />}
+					<Badge tone={correct ? 'success' : credit > 0 ? 'warning' : 'danger'}>
+						{sequence && credit !== 1 && credit > 0 ? (
+							formatScore(credit)
+						) : correct ? (
+							<Check size={12} aria-hidden />
+						) : (
+							<X size={12} aria-hidden />
+						)}
 					</Badge>
 				</div>
 
-				<p className="text-fg text-center text-2xl leading-snug font-semibold">
-					{question.question}
-				</p>
+				<QuestionTitle text={question.question} mathematical={math} className="text-2xl" />
 
 				{questionImage && (
 					<div className="flex w-full justify-center">
@@ -447,7 +520,9 @@ function ResultQuestionCard({ question, submitted, index }) {
 					</div>
 				)}
 
-				{identification ? (
+				{sequence ? (
+					<SequenceResult question={question} submitted={submitted} math={math} />
+				) : identification ? (
 					<IdentificationResult submitted={submitted} correct={correct} math={math} />
 				) : (
 					<ChoiceResult choices={question.choices} submitted={submitted} math={math} />
@@ -478,14 +553,16 @@ export default function QuizResultReview({
 			questions.map((question, index) => ({
 				question,
 				submitted: submittedAnswers[index],
-				correct: answersEqual(
-					submittedAnswers[index]?.correctAnswer,
-					submittedAnswers[index]?.userAnswer,
-					{
-						mathematical: isMathematical(question.question_type),
-						questionType: question.question_type ?? submittedAnswers[index]?.questionType
-					}
-				)
+				correct: isSequence(question.question_type)
+					? sequenceSlotCredit(question, submittedAnswers[index]) === 1
+					: answersEqual(
+							submittedAnswers[index]?.correctAnswer,
+							submittedAnswers[index]?.userAnswer,
+							{
+								mathematical: isMathematical(question.question_type),
+								questionType: question.question_type ?? submittedAnswers[index]?.questionType
+							}
+						)
 			})),
 		[questions, submittedAnswers]
 	);

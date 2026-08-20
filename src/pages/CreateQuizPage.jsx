@@ -6,6 +6,7 @@ import {
 	ChevronUp,
 	Plus,
 	X,
+	Copy,
 	Import,
 	ListChecks,
 	SlidersHorizontal,
@@ -33,6 +34,7 @@ import {
 	Textarea
 } from '../components/ui';
 import MathInput from '../components/quiz/MathInput';
+import SequenceItemEditor from '../components/quiz/SequenceItemEditor';
 import {
 	canUseSectionQuestionLayout,
 	createSection,
@@ -51,7 +53,10 @@ import {
 	clampPerQuestionSeconds,
 	parseOptionalTimerSeconds,
 	PLAIN_IDE_TEXT_INPUT_AUTO_OFF,
-	flagsFromQuestionType
+	flagsFromQuestionType,
+	authoringSequenceFields,
+	defaultSequenceItems,
+	duplicateAuthoringQuestion
 } from '../components/quiz/quizHelpers';
 import {
 	QUESTION_LAYOUT_SECTION,
@@ -64,6 +69,7 @@ import {
 	QUIZ_TAG_COLORS,
 	ToggleChip,
 	QuestionOrderControls,
+	QuestionTypeFlagToggles,
 	ImageDropzone,
 	ChoiceImageControl,
 	QuestionTimerOverrideField
@@ -82,7 +88,9 @@ const colors = QUIZ_TAG_COLORS;
 const AI_TYPE_MIX_OPTIONS = [
 	{ value: 'mostly_mc', label: 'Mostly MC' },
 	{ value: 'balanced', label: 'Balanced' },
-	{ value: 'mostly_identification', label: 'Mostly ID' }
+	{ value: 'mostly_identification', label: 'Mostly ID' },
+	{ value: 'with_sequence', label: 'With sequence' },
+	{ value: 'mostly_sequence', label: 'Mostly sequence' }
 ];
 
 /** Mirror backend auto heuristic for timeout/preview (chars ≈ words*5). */
@@ -117,6 +125,10 @@ function getDefaultQuestion(id, randomChoices = false, sectionKey = null) {
 		correctAnswerIndex: 0,
 		mathematical: false,
 		identification: false,
+		sequence: false,
+		sequenceMode: 'gap',
+		sequenceOrderMatters: true,
+		sequenceItems: [],
 		randomChoices,
 		hasChoiceImages: false,
 		showChoiceImages: false,
@@ -308,6 +320,7 @@ export default function CreateQuizPage() {
 						typeof q.correct_answer_index === 'number' ? q.correct_answer_index : 0,
 					mathematical: flags.mathematical,
 					identification: flags.identification,
+					...authoringSequenceFields(q, flags),
 					randomChoices: !!q.random_choices,
 					hasChoiceImages,
 					showChoiceImages: hasChoiceImages,
@@ -458,7 +471,27 @@ export default function CreateQuizPage() {
 			qs.map((q) => {
 				if (q.id !== id) return q;
 				const next = { ...q, [field]: value };
-				// Choice images only apply to standard multiple-choice rows.
+				if (field === 'sequence' && value === true) {
+					next.identification = false;
+					next.showChoiceImages = false;
+					next.hasChoiceImages = false;
+					next.sequenceMode = q.sequenceMode || 'gap';
+					if (!q.sequenceItems?.length) {
+						next.sequenceItems = defaultSequenceItems(next.sequenceMode);
+					}
+				}
+				if (field === 'sequenceMode' && q.sequence) {
+					if (value === 'full') {
+						next.sequenceItems = (q.sequenceItems || []).map((item) =>
+							item.role === 'given' ? { ...item, role: 'blank' } : item
+						);
+					} else if (!(q.sequenceItems || []).length) {
+						next.sequenceItems = defaultSequenceItems(value);
+					}
+				}
+				if (field === 'identification' && value === true) {
+					next.sequence = false;
+				}
 				if ((field === 'identification' || field === 'mathematical') && value === true) {
 					next.showChoiceImages = false;
 					next.hasChoiceImages = false;
@@ -493,6 +526,18 @@ export default function CreateQuizPage() {
 
 	const removeQuestion = (questionID) => {
 		setQuestions((qs) => qs.filter((q) => q.id !== questionID));
+	};
+
+	const duplicateQuestion = (questionID) => {
+		setQuestions((qs) => {
+			const idx = qs.findIndex((q) => q.id === questionID);
+			if (idx < 0) return qs;
+			const copy = duplicateAuthoringQuestion(qs[idx]);
+			const next = [...qs];
+			next.splice(idx + 1, 0, copy);
+			requestAnimationFrame(() => scrollAuthoringQuestionIntoView(copy.id));
+			return next;
+		});
 	};
 
 	const removeChoice = (id, index) => {
@@ -772,6 +817,16 @@ export default function CreateQuizPage() {
 					question.identification ? 'true' : 'false'
 				);
 				formData.append(`questions[${qi}][mathematical]`, question.mathematical ? 'true' : 'false');
+				formData.append(`questions[${qi}][sequence]`, question.sequence ? 'true' : 'false');
+				formData.append(`questions[${qi}][sequenceMode]`, question.sequenceMode || 'gap');
+				formData.append(
+					`questions[${qi}][sequenceOrderMatters]`,
+					question.sequenceOrderMatters !== false ? 'true' : 'false'
+				);
+				(question.sequenceItems || []).forEach((item, si) => {
+					formData.append(`questions[${qi}][sequence_items][${si}][text]`, item.text || '');
+					formData.append(`questions[${qi}][sequence_items][${si}][role]`, item.role || 'blank');
+				});
 				formData.append(`questions[${qi}][order]`, String(qi));
 				formData.append(`questions[${qi}][explanation]`, question.explanation || '');
 				formData.append(`questions[${qi}][worked_solution]`, question.workedSolution || '');
@@ -831,10 +886,29 @@ export default function CreateQuizPage() {
 				navigate(`/quizzes/${quizId}`);
 			}
 		} catch (error) {
+			const data = error?.response?.data;
+			const walk = (node) => {
+				if (node == null) return null;
+				if (typeof node === 'string') return node;
+				if (Array.isArray(node)) {
+					for (const item of node) {
+						const found = walk(item);
+						if (found) return found;
+					}
+					return null;
+				}
+				if (typeof node === 'object') {
+					for (const value of Object.values(node)) {
+						const found = walk(value);
+						if (found) return found;
+					}
+				}
+				return null;
+			};
 			const detail =
-				error?.response?.data?.detail ||
-				error?.response?.data?.error ||
-				(typeof error?.response?.data === 'string' ? error.response.data : null);
+				(typeof data?.detail === 'string' && data.detail) ||
+				(typeof data?.error === 'string' && data.error) ||
+				(typeof data === 'string' ? data : walk(data));
 			toast.error(detail || 'Failed to create quiz.');
 		} finally {
 			setCreating(false);
@@ -1249,38 +1323,23 @@ export default function CreateQuizPage() {
 																		onTransferPrev={() => transferQuestion(question.id, -1)}
 																		onTransferNext={() => transferQuestion(question.id, 1)}
 																	/>
-																	<ToggleChip
-																		active={question.mathematical}
-																		onClick={() =>
-																			handleInputChange(
-																				question.id,
-																				'mathematical',
-																				!question.mathematical
-																			)
+																	<QuestionTypeFlagToggles
+																		question={question}
+																		onToggle={(field, value) =>
+																			handleInputChange(question.id, field, value)
 																		}
+																		onToggleImages={() => toggleChoiceImages(question.id)}
+																	/>
+																	<Button
+																		variant="ghost"
+																		size="icon"
+																		className="cursor-pointer"
+																		aria-label={`Duplicate question ${index + 1}`}
+																		title="Duplicate question"
+																		onClick={() => duplicateQuestion(question.id)}
 																	>
-																		Math
-																	</ToggleChip>
-																	<ToggleChip
-																		active={question.identification}
-																		onClick={() =>
-																			handleInputChange(
-																				question.id,
-																				'identification',
-																				!question.identification
-																			)
-																		}
-																	>
-																		ID
-																	</ToggleChip>
-																	{!question.identification && !question.mathematical && (
-																		<ToggleChip
-																			active={question.showChoiceImages}
-																			onClick={() => toggleChoiceImages(question.id)}
-																		>
-																			Images
-																		</ToggleChip>
-																	)}
+																		<Copy size={15} />
+																	</Button>
 																	<Button
 																		variant="ghost"
 																		size="icon"
@@ -1306,7 +1365,11 @@ export default function CreateQuizPage() {
 														onChange={(e) =>
 															handleInputChange(question.id, 'title', e.target.value)
 														}
-														placeholder="Question text"
+														placeholder={
+															question.sequence
+																? 'Question text (use {{1}}, {{2}} for items)'
+																: 'Question text'
+														}
 														className={cn('py-1.5', isRemoved && 'line-through')}
 														disabled={reviewing}
 													/>
@@ -1339,7 +1402,59 @@ export default function CreateQuizPage() {
 															/>
 
 															<div className="space-y-1.5">
-																{question.mathematical ? (
+																{question.sequence ? (
+																	<>
+																		<div className="flex flex-wrap gap-1.5">
+																			<select
+																				value={question.sequenceMode || 'gap'}
+																				onChange={(e) =>
+																					handleInputChange(
+																						question.id,
+																						'sequenceMode',
+																						e.target.value
+																					)
+																				}
+																				disabled={reviewing}
+																				className="border-line bg-surface text-fg rounded-md border px-2 py-1 text-xs"
+																			>
+																				<option value="full">Full list</option>
+																				<option value="gap">Gap fill</option>
+																				<option value="next">Next step</option>
+																			</select>
+																			<ToggleChip
+																				active={question.sequenceOrderMatters !== false}
+																				onClick={() =>
+																					handleInputChange(
+																						question.id,
+																						'sequenceOrderMatters',
+																						question.sequenceOrderMatters === false
+																					)
+																				}
+																			>
+																				Order
+																			</ToggleChip>
+																			<ToggleChip
+																				active={!!question.randomChoices}
+																				onClick={() =>
+																					handleInputChange(
+																						question.id,
+																						'randomChoices',
+																						!question.randomChoices
+																					)
+																				}
+																			>
+																				Shuffle
+																			</ToggleChip>
+																		</div>
+																		<SequenceItemEditor
+																			question={question}
+																			disabled={reviewing}
+																			onItemsChange={(items) =>
+																				handleInputChange(question.id, 'sequenceItems', items)
+																			}
+																		/>
+																	</>
+																) : question.mathematical ? (
 																	<MathInput
 																		handleChoicesChange={handleChoicesChange}
 																		handleInputChange={handleInputChange}
@@ -1441,7 +1556,7 @@ export default function CreateQuizPage() {
 																)}
 															</div>
 
-															{!question.identification && !reviewing && (
+															{!question.identification && !question.sequence && !reviewing && (
 																<Button
 																	variant="ghost"
 																	size="sm"

@@ -7,22 +7,18 @@ import { cn } from '../../lib/format';
 const HAS_INLINE_MATH = /\$/;
 
 /**
- * Question prompt for quiz detail and attempt modes.
- * Mathematical questions: plain text by default; only author-embedded $...$ / $$...$$
- * fragments render as KaTeX. Non-math: always plain text.
- * Choices / answers still use MathRenderer separately.
+ * Question prompt for quiz detail, attempt, and review.
+ * Author-embedded $...$ / $$...$$ fragments render as KaTeX. Remaining text
+ * stays plain. Choices / answers still use MathRenderer separately.
  */
 export default function QuestionTitle({
 	text,
-	mathematical = false,
+	mathematical: _mathematical = false,
 	className = '',
 	as: Tag = 'p'
 }) {
 	const value = text == null ? '' : String(text);
-	const useInlineMath = useMemo(
-		() => Boolean(mathematical) && HAS_INLINE_MATH.test(value),
-		[mathematical, value]
-	);
+	const useInlineMath = useMemo(() => HAS_INLINE_MATH.test(value), [value]);
 
 	const classes = cn('text-fg text-center leading-snug font-semibold', className);
 

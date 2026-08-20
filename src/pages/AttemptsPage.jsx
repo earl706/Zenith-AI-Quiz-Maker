@@ -12,7 +12,8 @@ import {
 	attemptQuizMeta,
 	attemptScopeLabel,
 	getAttemptStats,
-	normalizeAttemptList
+	normalizeAttemptList,
+	formatScore
 } from '../components/quiz/quizHelpers';
 import { LIST_PAGE_SIZE, paginateClient } from '../hooks/useListControls';
 
@@ -99,7 +100,7 @@ export default function AttemptsPage() {
 											</span>
 											{complete && (
 												<span className="text-fg tabular-nums">
-													{score}/{total}
+													{formatScore(score)}/{total}
 												</span>
 											)}
 											<span className="inline-flex items-center gap-1">

@@ -8,7 +8,14 @@
  * Keep in sync with backend/apps/quizzes/math_answers.py.
  */
 
-const MATH_QUESTION_TYPES = new Set(['MUL-COM', 'COM', 'IDE-COM']);
+const MATH_QUESTION_TYPES = new Set([
+	'MUL-COM',
+	'COM',
+	'IDE-COM',
+	'SEQ-FUL-COM',
+	'SEQ-GAP-COM',
+	'SEQ-NXT-COM'
+]);
 
 const FENCE_CMD =
 	/\\(left|right|big|Big|bigg|Bigg|bigl|bigr|Bigl|Bigr|biggl|biggr|Biggl|Biggr)\b\s*/g;

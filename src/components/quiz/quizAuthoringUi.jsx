@@ -7,7 +7,10 @@ import {
 	ChevronsRight,
 	ChevronsUp,
 	Image as ImageIcon,
+	ListOrdered,
 	Plus,
+	Sigma,
+	Type,
 	X
 } from 'lucide-react';
 
@@ -65,6 +68,67 @@ export function ToggleChip({ active, onClick, children, className }) {
 			</span>
 			{children}
 		</button>
+	);
+}
+
+const ICON_TOGGLE_CLASS =
+	'inline-flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md border transition focus-visible:outline-primary focus-visible:outline-2 focus-visible:outline-offset-2';
+
+export function IconToggleButton({ active, onClick, label, icon: Icon, disabled = false }) {
+	return (
+		<button
+			type="button"
+			title={label}
+			aria-label={label}
+			aria-pressed={active}
+			disabled={disabled}
+			onClick={onClick}
+			className={cn(
+				ICON_TOGGLE_CLASS,
+				active
+					? 'border-primary/40 bg-primary/12 text-primary shadow-primary/10 shadow-sm'
+					: 'border-line bg-surface text-muted hover:border-primary/25 hover:bg-surface-2 hover:text-fg',
+				disabled && 'cursor-not-allowed opacity-40'
+			)}
+		>
+			<Icon size={14} />
+		</button>
+	);
+}
+
+/** Math / Seq / ID / Images flags on a question card header. */
+export function QuestionTypeFlagToggles({ question, onToggle, onToggleImages }) {
+	return (
+		<div className="flex items-center gap-1">
+			<IconToggleButton
+				active={!!question.mathematical}
+				label="Math"
+				icon={Sigma}
+				onClick={() => onToggle('mathematical', !question.mathematical)}
+			/>
+			<IconToggleButton
+				active={!!question.sequence}
+				label="Sequence"
+				icon={ListOrdered}
+				onClick={() => onToggle('sequence', !question.sequence)}
+			/>
+			{!question.sequence && (
+				<IconToggleButton
+					active={!!question.identification}
+					label="Identification"
+					icon={Type}
+					onClick={() => onToggle('identification', !question.identification)}
+				/>
+			)}
+			{!question.identification && !question.mathematical && !question.sequence && (
+				<IconToggleButton
+					active={!!question.showChoiceImages}
+					label="Choice images"
+					icon={ImageIcon}
+					onClick={onToggleImages}
+				/>
+			)}
+		</div>
 	);
 }
 

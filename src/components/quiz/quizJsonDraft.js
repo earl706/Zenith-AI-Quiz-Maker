@@ -16,7 +16,8 @@ import {
 	flagsFromQuestionType,
 	parseOptionalTimerSeconds,
 	questionTypeFromFlags,
-	resolveAuthoringSectionIndex
+	resolveAuthoringSectionIndex,
+	authoringSequenceFields
 } from './quizHelpers';
 
 export function persistableNumericId(value) {
@@ -115,8 +116,10 @@ export function mapJsonQuestionToAuthoring(q, index, { templateStyle, sections }
 	const flags = templateStyle
 		? flagsFromQuestionType(q.question_type)
 		: {
-				mathematical: !!q.mathematical,
-				identification: !!q.identification
+				mathematical: !!q.mathematical || String(q.question_type || '').endsWith('-COM'),
+				identification: !!q.identification,
+				sequence: !!q.sequence || String(q.question_type || '').startsWith('SEQ'),
+				sequenceMode: q.sequenceMode || q.sequence_mode
 			};
 	const rawChoices = Array.isArray(q.choices) ? q.choices : [];
 	const choices = choiceTexts(rawChoices, flags);
@@ -152,6 +155,7 @@ export function mapJsonQuestionToAuthoring(q, index, { templateStyle, sections }
 					: 0,
 		mathematical: flags.mathematical,
 		identification: flags.identification,
+		...authoringSequenceFields(q, flags),
 		randomChoices: !!(q.random_choices ?? q.randomChoices),
 		hasChoiceImages,
 		showChoiceImages: hasChoiceImages,
@@ -190,6 +194,14 @@ function authoringQuestionToExportShape(q, index, sections) {
 		question_type: questionTypeFromFlags(q),
 		correct_answer_index: q.correctAnswerIndex || 0,
 		random_choices: !!q.randomChoices,
+		sequence_order_matters: q.sequenceOrderMatters !== false,
+		sequence_items: q.sequence
+			? (q.sequenceItems || []).map((item, i) => ({
+					text: item.text || '',
+					role: item.role || 'blank',
+					order: i
+				}))
+			: [],
 		has_choice_images: !!q.hasChoiceImages || (q.choiceImageUrls || []).some(Boolean),
 		question_image_url: usableUrl(q.question_image_url),
 		order: index,
@@ -312,13 +324,25 @@ function validateParsedQuiz(data) {
 		if (
 			type != null &&
 			type !== '' &&
-			!['MUL', 'IDE', 'MUL-COM', 'IDE-COM', 'COM'].includes(type)
+			![
+				'MUL',
+				'IDE',
+				'MUL-COM',
+				'IDE-COM',
+				'COM',
+				'SEQ-FUL',
+				'SEQ-GAP',
+				'SEQ-NXT',
+				'SEQ-FUL-COM',
+				'SEQ-GAP-COM',
+				'SEQ-NXT-COM'
+			].includes(type)
 		) {
 			diagnostics.push({
 				severity: 'error',
 				fatal: true,
 				path: `${path}.question_type`,
-				message: `Unknown question_type "${type}". Use MUL, IDE, MUL-COM, or IDE-COM.`
+				message: `Unknown question_type "${type}".`
 			});
 		}
 		const id = persistableNumericId(q.id);

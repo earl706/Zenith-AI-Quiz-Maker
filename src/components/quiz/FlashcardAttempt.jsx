@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { cn, formatDurationSeconds } from '../../lib/format';
@@ -8,11 +8,15 @@ import IdentificationAnswerInput from './IdentificationAnswerInput';
 import MathRenderer from './MathRenderer';
 import QuestionStudyFeedback from './QuestionStudyFeedback';
 import QuestionTitle from './QuestionTitle';
+import SequenceAnswerInput from './SequenceAnswerInput';
 import {
 	getChoiceData,
 	isIdentification,
 	isMathematical,
-	resolveQuestionTimerSeconds
+	isSequence,
+	resolveQuestionTimerSeconds,
+	sequenceQuestionAnswered,
+	shuffleSequenceItems
 } from './quizHelpers';
 
 const MC_AUTO_ADVANCE_MS = 250;
@@ -25,6 +29,7 @@ export default function FlashcardAttempt({
 	answersByIdMap,
 	onAnswerChange,
 	onIdentificationChange,
+	onSequenceChange,
 	onSubmit,
 	submitting,
 	answerSuggestionsEnabled = false,
@@ -43,7 +48,17 @@ export default function FlashcardAttempt({
 	const math = currentQuestion ? isMathematical(currentQuestion.question_type) : false;
 	const revealed = currentQuestion ? revealedIds.has(currentQuestion.id) : false;
 	const locked = currentQuestion ? lockedIds.has(currentQuestion.id) : false;
-	const hasAnswer = String(answer?.userAnswer ?? '').trim() !== '';
+	const sequence = currentQuestion ? isSequence(currentQuestion.question_type) : false;
+	const displayItems = useMemo(() => {
+		if (!currentQuestion || !sequence) return [];
+		const items = currentQuestion.sequence_items || [];
+		if (currentQuestion.random_choices) return shuffleSequenceItems(items);
+		return items;
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [currentQuestion?.id]);
+	const hasAnswer = sequence
+		? sequenceQuestionAnswered(currentQuestion, answer)
+		: String(answer?.userAnswer ?? '').trim() !== '';
 
 	const advanceTimer = useRef(null);
 	const questionLimitRef = useRef(0);
@@ -205,7 +220,9 @@ export default function FlashcardAttempt({
 			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 				<div className="flex flex-wrap gap-1.5">
 					{questions.map((q, i) => {
-						const filled = String(answersByIdMap.get(q.id)?.userAnswer ?? '').trim() !== '';
+						const filled = sequenceQuestionAnswered(q, answersByIdMap.get(q.id))
+							? true
+							: String(answersByIdMap.get(q.id)?.userAnswer ?? '').trim() !== '';
 						const canJump = !perQuestionTimerEnabled || i >= index;
 						return (
 							<button
@@ -243,7 +260,19 @@ export default function FlashcardAttempt({
 				</Button>
 			</div>
 
-			{isIdentification(currentQuestion.question_type) ? (
+			{sequence ? (
+				<SequenceAnswerInput
+					key={currentQuestion.id}
+					question={currentQuestion}
+					answer={answer}
+					displayItems={displayItems}
+					onSequenceChange={onSequenceChange}
+					onEnter={() => revealIdentification(ID_ENTER_ADVANCE_MS)}
+					autoFocus={!revealed && !locked}
+					disabled={revealed || locked}
+					revealed={revealed}
+				/>
+			) : isIdentification(currentQuestion.question_type) ? (
 				<IdentificationAnswerInput
 					key={currentQuestion.id}
 					answer={answer}
@@ -313,7 +342,7 @@ export default function FlashcardAttempt({
 				</Card>
 			)}
 
-			{isIdentification(currentQuestion.question_type) && !revealed && !locked && (
+			{(isIdentification(currentQuestion.question_type) || sequence) && !revealed && !locked && (
 				<Button
 					className="w-full"
 					variant="secondary"

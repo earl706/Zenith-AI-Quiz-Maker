@@ -48,10 +48,12 @@ import {
 	accuracyTone,
 	attemptScopeLabel,
 	canUseSectionQuestionLayout,
+	formatScore,
 	getAttemptStats,
 	getChoiceData,
 	groupQuestionsByApiSection,
 	isMathematical,
+	isSequence,
 	questionTypeLabel,
 	sortQuestionsBySectionOrder
 } from '../components/quiz/quizHelpers';
@@ -435,7 +437,7 @@ export default function QuizPage() {
 												</div>
 											)}
 
-											{choices.length > 0 && (
+											{!isSequence(question.question_type) && choices.length > 0 && (
 												<div
 													className={
 														math
@@ -485,6 +487,30 @@ export default function QuizPage() {
 													})}
 												</div>
 											)}
+
+											{isSequence(question.question_type) &&
+												Array.isArray(question.sequence_items) &&
+												question.sequence_items.length > 0 && (
+													<ol className="space-y-1.5 text-sm">
+														{question.sequence_items.map((item, si) => (
+															<li key={item.id ?? si} className="text-fg flex gap-2">
+																<span className="text-muted w-6 text-right tabular-nums">
+																	{si + 1}.
+																</span>
+																<span className="min-w-0 flex-1">
+																	{math ? (
+																		<MathRenderer expression={item.text} displayMode={false} />
+																	) : (
+																		item.text
+																	)}
+																	<span className="text-muted ml-2 text-[0.65rem] uppercase">
+																		{item.role}
+																	</span>
+																</span>
+															</li>
+														))}
+													</ol>
+												)}
 										</CardBody>
 									</Card>
 								);
@@ -542,7 +568,7 @@ export default function QuizPage() {
 												<div className="flex justify-between gap-2">
 													<span className="text-muted">Score</span>
 													<span className="text-fg font-medium">
-														{complete ? `${score} / ${total}` : 'Incomplete'}
+														{complete ? `${formatScore(score)} / ${total}` : 'Incomplete'}
 													</span>
 												</div>
 												<div className="flex justify-between gap-2">
@@ -568,7 +594,7 @@ export default function QuizPage() {
 													>
 														<span className="truncate">{ss.section_title}</span>
 														<span className="text-fg shrink-0">
-															{ss.score}/{ss.total_score} · {Math.round(ss.accuracy)}%
+															{formatScore(ss.score)}/{ss.total_score} · {Math.round(ss.accuracy)}%
 														</span>
 													</li>
 												))}

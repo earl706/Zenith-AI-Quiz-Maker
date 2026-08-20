@@ -1,4 +1,9 @@
-import { createSection, createSectionKey, applyGeneratedSections } from './quizHelpers';
+import {
+	applyGeneratedSections,
+	authoringSequenceFields,
+	createSection,
+	createSectionKey
+} from './quizHelpers';
 
 let aiIdCounter = 0;
 
@@ -13,6 +18,10 @@ export function createAiQuestionId() {
  */
 export function mapAiQuestion(question, index, randomChoices = false) {
 	const identification = !!question?.identification;
+	const flags = {
+		sequence: !!question?.sequence || String(question?.question_type || '').startsWith('SEQ'),
+		sequenceMode: question?.sequenceMode || question?.sequence_mode || 'gap'
+	};
 	const rawChoices = Array.isArray(question?.choices) ? question.choices : [];
 	let choices = rawChoices.map((choice) => String(choice));
 	let correctAnswerIndex =
@@ -22,7 +31,7 @@ export function mapAiQuestion(question, index, randomChoices = false) {
 		const answer = choices[correctAnswerIndex] ?? question?.correctAnswer ?? choices[0] ?? '';
 		choices = [String(answer)];
 		correctAnswerIndex = 0;
-	} else {
+	} else if (!flags.sequence) {
 		if (choices.length === 0) choices = ['', '', '', ''];
 		while (choices.length < 4) choices.push('');
 		choices = choices.slice(0, 4);
@@ -49,6 +58,8 @@ export function mapAiQuestion(question, index, randomChoices = false) {
 		id = createAiQuestionId();
 	}
 
+	const seq = authoringSequenceFields(question, flags);
+
 	return {
 		id,
 		title: question?.title || '',
@@ -57,7 +68,8 @@ export function mapAiQuestion(question, index, randomChoices = false) {
 		choiceImagePreviews: new Array(choices.length).fill(null),
 		correctAnswerIndex,
 		mathematical: !!question?.mathematical,
-		identification,
+		identification: flags.sequence ? false : identification,
+		...seq,
 		randomChoices: question?.randomChoices ?? randomChoices,
 		hasChoiceImages: false,
 		showChoiceImages: false,
@@ -90,6 +102,16 @@ export function buildQuizSnapshot(questions, sections, meta = {}) {
 			correctAnswerIndex: q.correctAnswerIndex ?? 0,
 			mathematical: !!q.mathematical,
 			identification: !!q.identification,
+			sequence: !!q.sequence,
+			sequenceMode: q.sequenceMode || 'gap',
+			sequenceOrderMatters: q.sequenceOrderMatters !== false,
+			sequenceItems: Array.isArray(q.sequenceItems)
+				? q.sequenceItems.map((item, i) => ({
+						text: item.text || '',
+						role: item.role || 'blank',
+						order: item.order ?? i
+					}))
+				: [],
 			randomChoices: !!q.randomChoices,
 			explanation: q.explanation || '',
 			workedSolution: q.workedSolution || '',
@@ -123,6 +145,9 @@ function questionContentEqual(a, b) {
 		String(a.title || '') === String(b.title || '') &&
 		!!a.mathematical === !!b.mathematical &&
 		!!a.identification === !!b.identification &&
+		!!a.sequence === !!b.sequence &&
+		String(a.sequenceMode || '') === String(b.sequenceMode || '') &&
+		JSON.stringify(a.sequenceItems || []) === JSON.stringify(b.sequenceItems || []) &&
 		(a.correctAnswerIndex ?? 0) === (b.correctAnswerIndex ?? 0) &&
 		String(a.explanation || '') === String(b.explanation || '') &&
 		String(a.workedSolution || '') === String(b.workedSolution || '') &&

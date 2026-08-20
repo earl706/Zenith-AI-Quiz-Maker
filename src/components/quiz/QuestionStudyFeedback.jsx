@@ -3,7 +3,7 @@ import { BookOpen, CheckCircle2, XCircle } from 'lucide-react';
 import { cn } from '../../lib/format';
 import { answersEqual } from '../../lib/mathAnswersEqual';
 import MathRenderer from './MathRenderer';
-import { isMathematical } from './quizHelpers';
+import { isMathematical, resolveCorrectAnswer } from './quizHelpers';
 
 function ContentBlock({ label, value }) {
 	if (!String(value || '').trim()) return null;
@@ -16,15 +16,41 @@ function ContentBlock({ label, value }) {
 }
 
 export default function QuestionStudyFeedback({ question, answer }) {
+	const sequence = String(question?.question_type || '').startsWith('SEQ');
 	const selected = String(answer?.userAnswer ?? '').trim();
-	const correctAnswer = String(answer?.correctAnswer ?? question?.correct_answer ?? '').trim();
-	if (!selected) return null;
-
+	const correctAnswer = String(
+		answer?.correctAnswer ?? resolveCorrectAnswer(question) ?? ''
+	).trim();
+	if (!sequence && !selected) return null;
 	const math = isMathematical(question?.question_type);
-	const correct = answersEqual(correctAnswer, selected, {
-		mathematical: math,
-		questionType: question?.question_type ?? answer?.questionType
-	});
+	const correct = sequence
+		? false
+		: answersEqual(correctAnswer, selected, {
+				mathematical: math,
+				questionType: question?.question_type ?? answer?.questionType
+			});
+	if (sequence) {
+		if (!(question?.explanation || question?.worked_solution || question?.source_citation)) {
+			return null;
+		}
+		return (
+			<div className="border-line bg-surface-2 w-full space-y-3 rounded-md border p-4 text-left">
+				{(question?.explanation || question?.worked_solution || question?.source_citation) && (
+					<div className="space-y-3">
+						<p className="text-primary flex items-center gap-1.5 text-xs font-semibold uppercase">
+							<BookOpen size={14} aria-hidden />
+							Study notes
+						</p>
+						<ContentBlock label="Explanation" value={question.explanation} />
+						<ContentBlock label="Worked solution" value={question.worked_solution} />
+						{question.source_citation && (
+							<p className="text-muted text-xs">Source: {question.source_citation}</p>
+						)}
+					</div>
+				)}
+			</div>
+		);
+	}
 
 	return (
 		<div

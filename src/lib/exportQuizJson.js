@@ -162,6 +162,20 @@ export function buildTemplateStyleQuizJson(quiz, questions, options = {}) {
 		if (worked_solution) row.worked_solution = worked_solution;
 		if (source_citation) row.source_citation = source_citation;
 
+		if (String(row.question_type || '').startsWith('SEQ')) {
+			row.sequence_order_matters = q.sequence_order_matters !== false;
+			const items = Array.isArray(q.sequence_items)
+				? q.sequence_items
+				: Array.isArray(q.sequenceItems)
+					? q.sequenceItems
+					: [];
+			row.sequence_items = items.map((item, i) => ({
+				text: item.text == null ? '' : String(item.text),
+				role: item.role || 'blank',
+				order: typeof item.order === 'number' ? item.order : i
+			}));
+		}
+
 		const pq = q.per_question_time_seconds ?? q.perQuestionTimeSeconds ?? null;
 		if (pq != null && String(pq).trim() !== '') {
 			const n = Number(pq);

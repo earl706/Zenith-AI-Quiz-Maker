@@ -1,5 +1,22 @@
-const MATH_TYPES = new Set(['MUL-COM', 'COM', 'IDE-COM']);
+import { answersEqual } from '../../lib/mathAnswersEqual';
+
+const MATH_TYPES = new Set([
+	'MUL-COM',
+	'COM',
+	'IDE-COM',
+	'SEQ-FUL-COM',
+	'SEQ-GAP-COM',
+	'SEQ-NXT-COM'
+]);
 const ID_TYPES = new Set(['IDE', 'IDE-COM']);
+const SEQ_TYPES = new Set([
+	'SEQ-FUL',
+	'SEQ-GAP',
+	'SEQ-NXT',
+	'SEQ-FUL-COM',
+	'SEQ-GAP-COM',
+	'SEQ-NXT-COM'
+]);
 
 /**
  * Disable OS/browser autocorrect, spellcheck, and form autocomplete on plain
@@ -22,8 +39,18 @@ const QUESTION_TYPE_LABELS = {
 	IDE: 'Identification',
 	'MUL-COM': 'Multiple choice · math',
 	'IDE-COM': 'Identification · math',
-	COM: 'Computational'
+	COM: 'Computational',
+	'SEQ-FUL': 'Sequence · full list',
+	'SEQ-GAP': 'Sequence · gap fill',
+	'SEQ-NXT': 'Sequence · next step',
+	'SEQ-FUL-COM': 'Sequence · full list · math',
+	'SEQ-GAP-COM': 'Sequence · gap fill · math',
+	'SEQ-NXT-COM': 'Sequence · next step · math'
 };
+
+export const SEQUENCE_ITEM_MIN = 3;
+export const SEQUENCE_ITEM_MAX = 100;
+export const SEQUENCE_PLACEHOLDER = /\{\{(\d+)\}\}/g;
 
 let sectionKeyCounter = 0;
 let questionClientIdCounter = 0;
@@ -121,6 +148,25 @@ export function getChoiceData(choice) {
 	return { text: choice == null ? '' : String(choice), image: null, id: undefined };
 }
 
+/** Prefer stored correct_answer; fall back to choices[correct_answer_index]. */
+export function resolveCorrectAnswer(question) {
+	const stored = String(question?.correct_answer ?? '').trim();
+	if (stored) return String(question.correct_answer);
+	if (isSequence(question?.question_type)) {
+		const blanks = sequenceBlanks(question?.sequence_items);
+		return blanks
+			.map((item) => String(item.text ?? '').trim())
+			.filter(Boolean)
+			.join(' | ');
+	}
+	const choices = Array.isArray(question?.choices) ? question.choices : [];
+	let idx = Number(question?.correct_answer_index);
+	if (!Number.isInteger(idx) || idx < 0) idx = 0;
+	if (choices.length === 0) return '';
+	if (idx >= choices.length) idx = 0;
+	return getChoiceData(choices[idx]).text;
+}
+
 export function isMathematical(questionType) {
 	return MATH_TYPES.has(questionType);
 }
@@ -129,20 +175,147 @@ export function isIdentification(questionType) {
 	return ID_TYPES.has(questionType);
 }
 
+export function isSequence(questionType) {
+	return SEQ_TYPES.has(questionType) || String(questionType || '').startsWith('SEQ');
+}
+
 export function questionTypeLabel(questionType) {
 	return QUESTION_TYPE_LABELS[questionType] || questionType || 'Question';
 }
 
-export function questionTypeFromFlags({ mathematical, identification }) {
+export function sequenceModeFromType(questionType) {
+	const t = String(questionType || '');
+	if (t.startsWith('SEQ-FUL')) return 'full';
+	if (t.startsWith('SEQ-NXT')) return 'next';
+	if (t.startsWith('SEQ')) return 'gap';
+	return 'gap';
+}
+
+export function questionTypeFromFlags({ mathematical, identification, sequence, sequenceMode }) {
+	if (sequence) {
+		const mode =
+			sequenceMode === 'full' ? 'SEQ-FUL' : sequenceMode === 'next' ? 'SEQ-NXT' : 'SEQ-GAP';
+		return mathematical ? `${mode}-COM` : mode;
+	}
 	if (mathematical) return identification ? 'IDE-COM' : 'MUL-COM';
 	return identification ? 'IDE' : 'MUL';
 }
 
 export function flagsFromQuestionType(questionType) {
 	const t = String(questionType || 'MUL');
+	const sequence = t.startsWith('SEQ');
 	return {
-		mathematical: t === 'MUL-COM' || t === 'IDE-COM' || t === 'COM',
-		identification: t === 'IDE' || t === 'IDE-COM'
+		mathematical: MATH_TYPES.has(t) || t.endsWith('-COM'),
+		identification: t === 'IDE' || t === 'IDE-COM',
+		sequence,
+		sequenceMode: sequenceModeFromType(t)
+	};
+}
+
+export function formatScore(value) {
+	const n = Number(value);
+	if (!Number.isFinite(n)) return '0';
+	return Number.isInteger(n) ? String(n) : n.toFixed(2);
+}
+
+let sequenceItemKeyCounter = 0;
+export function createSequenceItemClientKey() {
+	sequenceItemKeyCounter += 1;
+	return `seq-item-${Date.now()}-${sequenceItemKeyCounter}`;
+}
+
+export function defaultSequenceItems(mode = 'gap') {
+	if (mode === 'full') {
+		return [
+			{ clientKey: createSequenceItemClientKey(), text: '', role: 'blank', order: 0 },
+			{ clientKey: createSequenceItemClientKey(), text: '', role: 'blank', order: 1 },
+			{ clientKey: createSequenceItemClientKey(), text: '', role: 'blank', order: 2 }
+		];
+	}
+	if (mode === 'next') {
+		return [
+			{ clientKey: createSequenceItemClientKey(), text: '', role: 'given', order: 0 },
+			{ clientKey: createSequenceItemClientKey(), text: '', role: 'given', order: 1 },
+			{ clientKey: createSequenceItemClientKey(), text: '', role: 'blank', order: 2 }
+		];
+	}
+	return [
+		{ clientKey: createSequenceItemClientKey(), text: '', role: 'given', order: 0 },
+		{ clientKey: createSequenceItemClientKey(), text: '', role: 'blank', order: 1 },
+		{ clientKey: createSequenceItemClientKey(), text: '', role: 'given', order: 2 }
+	];
+}
+
+export function normalizeSequenceItems(raw) {
+	const list = Array.isArray(raw) ? raw : [];
+	return list.map((item, i) => ({
+		id: item.id,
+		clientKey: item.clientKey || createSequenceItemClientKey(),
+		text: item.text == null ? '' : String(item.text),
+		role: item.role === 'given' || item.role === 'distractor' ? item.role : 'blank',
+		order: typeof item.order === 'number' ? item.order : i
+	}));
+}
+
+/** Clone an authoring question as a new unsaved row (insert after the original). */
+export function duplicateAuthoringQuestion(question) {
+	const sequenceItems = (question.sequenceItems || []).map((item, i) => ({
+		text: item.text,
+		role: item.role,
+		order: i,
+		clientKey: createSequenceItemClientKey()
+	}));
+	return {
+		...question,
+		id: createQuestionClientId(),
+		choices: [...(question.choices || [])],
+		choiceImages: [...(question.choiceImages || [])],
+		choiceImagePreviews: [...(question.choiceImagePreviews || [])],
+		choiceImageUrls: [...(question.choiceImageUrls || [])],
+		sequenceItems,
+		_jsonId: undefined,
+		_jsonIndex: undefined,
+		_reviewKind: undefined,
+		_priorTitle: undefined
+	};
+}
+
+export function sequenceBlanks(items) {
+	return (items || []).filter((item) => item.role === 'blank');
+}
+
+export function shuffleSequenceItems(items) {
+	const next = [...(items || [])];
+	for (let i = next.length - 1; i > 0; i -= 1) {
+		const j = Math.floor(Math.random() * (i + 1));
+		[next[i], next[j]] = [next[j], next[i]];
+	}
+	return next;
+}
+
+export function interpolateSequenceStem(stem, items) {
+	const list = items || [];
+	return String(stem || '').replace(/\{\{(\d+)\}\}/g, (_, raw) => {
+		const n = Number(raw);
+		const item = list[n - 1];
+		if (!item) return `{{${raw}}}`;
+		if (item.role === 'blank') return '____';
+		return String(item.text || '').trim() || `{{${raw}}}`;
+	});
+}
+
+export function authoringSequenceFields(raw, flags = {}) {
+	const sequence = !!(flags.sequence || raw?.sequence);
+	const sequenceMode =
+		flags.sequenceMode || raw?.sequenceMode || sequenceModeFromType(raw?.question_type);
+	const source = raw?.sequence_items || raw?.sequenceItems;
+	return {
+		sequence,
+		sequenceMode,
+		sequenceOrderMatters: raw?.sequence_order_matters ?? raw?.sequenceOrderMatters ?? true,
+		sequenceItems: sequence
+			? normalizeSequenceItems(source?.length ? source : defaultSequenceItems(sequenceMode))
+			: []
 	};
 }
 
@@ -517,14 +690,56 @@ export function buildAnswerRecords(questions) {
 	return questions.map((q) => ({
 		id: q.id,
 		question: q.question,
-		correctAnswer: q.correct_answer,
+		correctAnswer: resolveCorrectAnswer(q),
 		questionType: q.question_type,
-		userAnswer: ''
+		userAnswer: '',
+		userSequence: []
 	}));
 }
 
-export function countAnswered(answers) {
-	return answers.filter((a) => String(a.userAnswer ?? '').trim() !== '').length;
+export function sequenceQuestionAnswered(question, answer) {
+	const blanks = sequenceBlanks(question?.sequence_items);
+	if (!blanks.length) return false;
+	const byId = new Map(
+		(answer?.userSequence || []).map((row) => [row.id, String(row.text ?? '').trim()])
+	);
+	return blanks.every((item) => byId.get(item.id));
+}
+
+export function sequenceSlotCredit(question, answer) {
+	const blanks = sequenceBlanks(question?.sequence_items);
+	if (!blanks.length) return 0;
+	const qtype = question?.question_type;
+	const userSeq = answer?.userSequence || [];
+	const byId = new Map(userSeq.map((row) => [row.id, row.text ?? '']));
+	const orderMatters = question?.sequence_order_matters !== false;
+	let hits = 0;
+	if (orderMatters) {
+		for (const item of blanks) {
+			if (answersEqual(item.text, byId.get(item.id) ?? '', { questionType: qtype })) hits += 1;
+		}
+	} else {
+		const remaining = userSeq.map((row) => row.text ?? '');
+		for (const item of blanks) {
+			const idx = remaining.findIndex((text) =>
+				answersEqual(item.text, text, { questionType: qtype })
+			);
+			if (idx >= 0) {
+				hits += 1;
+				remaining.splice(idx, 1);
+			}
+		}
+	}
+	return Math.round((hits / blanks.length) * 100) / 100;
+}
+
+export function countAnswered(answers, questions = []) {
+	const byId = new Map((questions || []).map((q) => [q.id, q]));
+	return answers.filter((a) => {
+		const q = byId.get(a.id);
+		if (q && isSequence(q.question_type)) return sequenceQuestionAnswered(q, a);
+		return String(a.userAnswer ?? '').trim() !== '';
+	}).length;
 }
 
 export function answersById(answers) {
@@ -574,7 +789,7 @@ export function identificationAnswerCorpus(questions) {
 	const corpus = [];
 	for (const question of questions || []) {
 		if (question?.question_type !== 'IDE') continue;
-		const answer = String(question.correct_answer ?? '').trim();
+		const answer = String(resolveCorrectAnswer(question) ?? '').trim();
 		if (!answer) continue;
 		const key = answer.toLowerCase();
 		if (seen.has(key)) continue;

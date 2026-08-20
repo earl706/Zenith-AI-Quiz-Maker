@@ -27,6 +27,7 @@ import {
 	groupQuestionsByApiSection,
 	identificationAnswerCorpus,
 	isIdentification,
+	isSequence,
 	parseAttemptScopeFromSearch,
 	sampleArray,
 	shuffleArray,
@@ -166,10 +167,12 @@ export default function QuizAttempt() {
 	});
 
 	const answersMap = useMemo(() => answersById(answers), [answers]);
-	const answeredCount = useMemo(() => countAnswered(answers), [answers]);
+	const answeredCount = useMemo(() => countAnswered(answers, questions), [answers, questions]);
 	const suggestionCorpus = useMemo(() => identificationAnswerCorpus(questions), [questions]);
 	const firstIdentificationId = useMemo(() => {
-		const match = questions.find((q) => isIdentification(q.question_type));
+		const match = questions.find(
+			(q) => isIdentification(q.question_type) || isSequence(q.question_type)
+		);
 		return match?.id ?? null;
 	}, [questions]);
 	const [questionLayout, setQuestionLayout] = useQuestionDisplayLayout();
@@ -260,6 +263,10 @@ export default function QuizAttempt() {
 
 	const handleIdentificationAnswerChange = useCallback((qid, value) => {
 		setAnswers((prev) => prev.map((a) => (a.id === qid ? { ...a, userAnswer: value } : a)));
+	}, []);
+
+	const handleSequenceChange = useCallback((qid, userSequence) => {
+		setAnswers((prev) => prev.map((a) => (a.id === qid ? { ...a, userSequence } : a)));
 	}, []);
 
 	const startAttempt = useCallback(async () => {
@@ -484,6 +491,7 @@ export default function QuizAttempt() {
 							answersByIdMap={answersMap}
 							onAnswerChange={handleAnswerChange}
 							onIdentificationChange={handleIdentificationAnswerChange}
+							onSequenceChange={handleSequenceChange}
 							onSubmit={submitAnswers}
 							submitting={submitting}
 							answerSuggestionsEnabled={quizData.answer_suggestions_enabled !== false}
@@ -511,6 +519,7 @@ export default function QuizAttempt() {
 											answers={answers}
 											handleAnswerChange={handleAnswerChange}
 											handleIdentificationAnswerChange={handleIdentificationAnswerChange}
+											handleSequenceChange={handleSequenceChange}
 											answerSuggestionsEnabled={quizData.answer_suggestions_enabled !== false}
 											suggestionCorpus={suggestionCorpus}
 											autoFocus={

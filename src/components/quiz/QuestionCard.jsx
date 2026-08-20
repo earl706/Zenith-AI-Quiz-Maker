@@ -1,17 +1,25 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import IdentificationAnswerInput from './IdentificationAnswerInput';
 import MathRenderer from './MathRenderer';
 import QuestionStudyFeedback from './QuestionStudyFeedback';
 import QuestionTitle from './QuestionTitle';
+import SequenceAnswerInput from './SequenceAnswerInput';
 import { resolveQuestionImageSrc, resolveQuizImageSrc } from '../../lib/quizImages';
-import { getChoiceData, isMathematical } from './quizHelpers';
+import {
+	getChoiceData,
+	isMathematical,
+	isSequence,
+	sequenceQuestionAnswered,
+	shuffleSequenceItems
+} from './quizHelpers';
 
 export default function QuestionCard({
 	question,
 	answers,
 	handleAnswerChange,
 	handleIdentificationAnswerChange,
+	handleSequenceChange,
 	answerSuggestionsEnabled = false,
 	suggestionCorpus = [],
 	autoFocus = false,
@@ -22,10 +30,28 @@ export default function QuestionCard({
 	const [revealed, setRevealed] = useState(false);
 	const answer = answers.find((a) => a.id === question.id);
 	const questionImage = resolveQuestionImageSrc(question);
-	const hasAnswer = String(answer?.userAnswer ?? '').trim() !== '';
 	const identification = question.question_type === 'IDE' || question.question_type === 'IDE-COM';
+	const sequence = isSequence(question.question_type);
+	const displayItems = useMemo(() => {
+		const items = question.sequence_items || [];
+		if (!sequence) return items;
+		if (question.random_choices) return shuffleSequenceItems(items);
+		return items;
+		// Shuffle once per question mount.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [question.id]);
+	const hasAnswer = sequence
+		? sequenceQuestionAnswered(question, answer)
+		: String(answer?.userAnswer ?? '').trim() !== '';
 
 	const revealIfAnswered = (committedText) => {
+		if (sequence) {
+			if (!hasAnswer || revealed) return;
+			setRevealed(true);
+			onAnswered?.(question.id);
+			onIdentificationRevealed?.(question.id);
+			return;
+		}
 		const text = committedText != null ? committedText : answer?.userAnswer;
 		if (!String(text ?? '').trim() || revealed) return;
 		setRevealed(true);
@@ -35,7 +61,18 @@ export default function QuestionCard({
 
 	return (
 		<div className="space-y-3">
-			{identification ? (
+			{sequence ? (
+				<SequenceAnswerInput
+					question={question}
+					answer={answer}
+					displayItems={displayItems}
+					onSequenceChange={handleSequenceChange}
+					onEnter={revealIfAnswered}
+					autoFocus={autoFocus && !revealed}
+					disabled={revealed}
+					revealed={revealed}
+				/>
+			) : identification ? (
 				<IdentificationAnswerInput
 					answer={answer}
 					question={question}
@@ -111,7 +148,7 @@ export default function QuestionCard({
 					</div>
 				</div>
 			)}
-			{identification && !revealed && (
+			{(identification || sequence) && !revealed && (
 				<button
 					type="button"
 					disabled={!hasAnswer}
