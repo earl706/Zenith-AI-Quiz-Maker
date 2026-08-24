@@ -10,6 +10,7 @@ import {
 	Target
 } from 'lucide-react';
 
+import { get } from '../../lib/api';
 import { cn, formatDate } from '../../lib/format';
 import { toast } from '../../stores/toastStore';
 
@@ -36,7 +37,30 @@ export function nodeSectionAttemptOptions(node) {
 	};
 }
 
-export function launchNodeSectionAttempt({ node, sourceQuizUuid, launchAttempt, onUnlinked }) {
+async function loadQuizSections(quizUuid) {
+	try {
+		const summary = await get(`/quizzes/quiz/summary/${quizUuid}/`);
+		const apiSections = summary?.quiz?.sections || summary?.data?.sections || summary?.sections;
+		if (Array.isArray(apiSections) && apiSections.length) return apiSections;
+	} catch {
+		/* fall through */
+	}
+	try {
+		const detail = await get(`/quizzes/quiz/${quizUuid}/`);
+		const apiSections = detail?.data?.sections || detail?.sections;
+		if (Array.isArray(apiSections) && apiSections.length) return apiSections;
+	} catch {
+		/* stub below */
+	}
+	return null;
+}
+
+export async function launchNodeSectionAttempt({
+	node,
+	sourceQuizUuid,
+	launchAttempt,
+	onUnlinked
+}) {
 	const quizUuid = resolveNodeQuizUuid(node, sourceQuizUuid);
 	if (!quizUuid) {
 		if (onUnlinked) onUnlinked(node);
@@ -45,13 +69,20 @@ export function launchNodeSectionAttempt({ node, sourceQuizUuid, launchAttempt, 
 	}
 	const sectionId = node?.section_id;
 	const hasSection = sectionId != null && sectionId !== '';
+	const stub = hasSection ? [{ id: sectionId, title: node.title, order: node.order ?? 0 }] : [];
+	const sections = (await loadQuizSections(quizUuid)) || stub;
 	launchAttempt(
 		{
 			uuid: quizUuid,
 			quiz_title: node.roadmap_title || 'Quiz',
-			sections: hasSection ? [{ id: sectionId, title: node.title, order: node.order ?? 0 }] : []
+			sections
 		},
-		nodeSectionAttemptOptions(node)
+		{
+			...nodeSectionAttemptOptions(node),
+			skipCountHydration:
+				sections.length > 0 &&
+				!sections.some((s) => s?.question_count == null && s?.questions_count == null)
+		}
 	);
 }
 
@@ -98,6 +129,9 @@ export default function RoadmapNodeCard({
 			{node.qualifying_attempts}/{node.mastery_attempts_required} at ≥
 			{node.mastery_accuracy_threshold}%
 			{node.due_date ? ` · ${formatDate(node.due_date, 'MMM d')}` : ''}
+			{node.status === 'mastered' && node.mastered_at
+				? ` · Mastered ${formatDate(node.mastered_at, 'dd/MM/yy')}`
+				: ''}
 		</>
 	);
 	const icon =

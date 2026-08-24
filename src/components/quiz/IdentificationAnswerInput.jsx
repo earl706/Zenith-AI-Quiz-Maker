@@ -72,7 +72,7 @@ export default function IdentificationAnswerInput({
 				setOpen(false);
 				return;
 			}
-			if (event.key === 'Enter' && !event.shiftKey) {
+			if (event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
 				event.preventDefault();
 				const pick = suggestions[activeIndex] ?? suggestions[0];
 				if (pick) applySuggestion(pick);
@@ -80,7 +80,7 @@ export default function IdentificationAnswerInput({
 			}
 		}
 
-		if (event.key === 'Enter' && !event.shiftKey) {
+		if (event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
 			event.preventDefault();
 			onEnter?.(value);
 		}
@@ -139,7 +139,7 @@ export default function IdentificationAnswerInput({
 						aria-autocomplete={suggestionsEnabled ? 'list' : 'none'}
 						aria-activedescendant={showList ? `${listId}-option-${activeIndex}` : undefined}
 						{...PLAIN_IDE_TEXT_INPUT_AUTO_OFF}
-						className="border-line bg-surface-2 text-fg focus:border-primary w-full cursor-text rounded-md border px-3 py-2 text-sm font-medium transition focus:outline-none"
+						className="border-line bg-surface-2 text-fg focus:border-primary w-full cursor-text rounded-md border px-3 py-2 text-xl font-medium transition focus:outline-none"
 					/>
 					{showList && (
 						<ul

@@ -5,7 +5,7 @@ import { Target } from 'lucide-react';
 import { api } from '../lib/api';
 import { toast } from '../stores/toastStore';
 import { PageHeader } from '../components/layout/PageHeader';
-import { Badge, LoadingScreen } from '../components/ui';
+import { Badge, Button, LoadingScreen, Modal } from '../components/ui';
 import QuestionCard from '../components/quiz/QuestionCard';
 import FlashcardAttempt from '../components/quiz/FlashcardAttempt';
 import QuizResultReview from '../components/quiz/QuizResultReview';
@@ -31,11 +31,12 @@ import {
 	parseAttemptScopeFromSearch,
 	sampleArray,
 	shuffleArray,
-	sortQuestionsBySectionOrder
+	sortQuestionsBySectionOrder,
+	ADVANCE_DELAY_CORRECT_MS,
+	ADVANCE_DELAY_WRONG_MS
 } from '../components/quiz/quizHelpers';
 
-/** After checking an answer in list mode, wait briefly then focus the next question. */
-const LIST_FOCUS_ADVANCE_MS = 2000;
+/** After checking an answer in list mode: 0.5s if fully correct, else 5s. */
 
 function parseQuizPayload(data) {
 	const quizData = data.data || data;
@@ -146,6 +147,7 @@ export default function QuizAttempt() {
 
 	const [time, setTime] = useState(0);
 	const [isRunning, setIsRunning] = useState(true);
+	const [paused, setPaused] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [submitting, setSubmitting] = useState(false);
 	const [submittedAnswers, setSubmittedAnswers] = useState([]);
@@ -232,11 +234,12 @@ export default function QuizAttempt() {
 	}, []);
 
 	const handleQuestionAnswered = useCallback(
-		(questionId) => {
+		(questionId, fullyCorrect = false) => {
 			if (focusAdvanceTimer.current) {
 				clearTimeout(focusAdvanceTimer.current);
 				focusAdvanceTimer.current = null;
 			}
+			const delay = fullyCorrect ? ADVANCE_DELAY_CORRECT_MS : ADVANCE_DELAY_WRONG_MS;
 			focusAdvanceTimer.current = setTimeout(() => {
 				focusAdvanceTimer.current = null;
 				const visible = visibleQuestionsRef.current;
@@ -245,7 +248,7 @@ export default function QuizAttempt() {
 				if (next?.id != null) {
 					focusQuestionCard(next.id);
 				}
-			}, LIST_FOCUS_ADVANCE_MS);
+			}, delay);
 		},
 		[focusQuestionCard]
 	);
@@ -318,6 +321,7 @@ export default function QuizAttempt() {
 				setRoadmapProgress(null);
 				setQuizResults(false);
 				setTime(0);
+				setPaused(false);
 				setIsRunning(true);
 				if (!signal?.aborted) {
 					await startAttempt();
@@ -365,12 +369,23 @@ export default function QuizAttempt() {
 			setSectionScores(response.data.section_scores || []);
 			setRoadmapProgress(response.data.roadmap_progress || null);
 			setQuizResults(true);
+			setPaused(false);
 			setIsRunning(false);
 		} catch {
 			toast.error('Failed to submit answers.');
 		} finally {
 			setSubmitting(false);
 		}
+	};
+
+	const handlePause = () => {
+		setPaused(true);
+		setIsRunning(false);
+	};
+
+	const handleContinue = () => {
+		setPaused(false);
+		setIsRunning(true);
 	};
 
 	const handleRetake = () => {
@@ -456,6 +471,21 @@ export default function QuizAttempt() {
 				submitLabel="Save & continue"
 				preferSettings={retakePreferSettings}
 			/>
+			<Modal
+				open={paused}
+				onClose={handleContinue}
+				title="Quiz paused"
+				size="sm"
+				footer={
+					<Button className="cursor-pointer" onClick={handleContinue}>
+						Continue
+					</Button>
+				}
+			>
+				<p className="text-muted text-sm">
+					Questions are hidden. Click Continue when you are ready to resume.
+				</p>
+			</Modal>
 			<PageHeader
 				title={quizData.quiz_title || 'Quiz attempt'}
 				icon={Target}
@@ -498,6 +528,7 @@ export default function QuizAttempt() {
 							suggestionCorpus={suggestionCorpus}
 							perQuestionTimerEnabled={!!quizData.per_question_timer_enabled}
 							perQuestionTimeSeconds={quizData.per_question_time_seconds ?? 30}
+							paused={paused}
 						/>
 					) : (
 						<div onFocusCapture={handleListFocusCapture}>
@@ -540,18 +571,19 @@ export default function QuizAttempt() {
 				</div>
 
 				<AttemptStatusPanel
-					time={time}
 					answeredCount={answeredCount}
 					totalQuestions={questions.length}
 					showResults={quizResults}
-					hideElapsedTimer={!!quizData.per_question_timer_enabled && !quizResults}
 					onSubmit={submitAnswers}
 					submitting={submitting}
+					onPause={quizResults ? undefined : handlePause}
 					onRetake={handleRetake}
 					onRetakeSame={handleRetakeSame}
 					onBackToList={() => navigate('/quizzes')}
+					onExit={() => navigate(`/quizzes/${id}`)}
 					quizImage={quizData.quiz_image || quizData.quiz_image_url || null}
 					submitButtonRef={submitButtonRef}
+					shortcutsEnabled={!paused && !retakeSettingsOpen}
 				/>
 			</div>
 		</div>

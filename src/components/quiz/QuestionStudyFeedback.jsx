@@ -18,9 +18,9 @@ function ContentBlock({ label, value }) {
 export default function QuestionStudyFeedback({ question, answer }) {
 	const sequence = String(question?.question_type || '').startsWith('SEQ');
 	const selected = String(answer?.userAnswer ?? '').trim();
-	const correctAnswer = String(
-		answer?.correctAnswer ?? resolveCorrectAnswer(question) ?? ''
-	).trim();
+	const correctAnswer = String(answer?.correctAnswer ?? '').trim()
+		? String(answer.correctAnswer).trim()
+		: String(resolveCorrectAnswer(question) ?? '').trim();
 	if (!sequence && !selected) return null;
 	const math = isMathematical(question?.question_type);
 	const correct = sequence

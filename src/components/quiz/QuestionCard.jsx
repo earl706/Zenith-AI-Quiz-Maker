@@ -8,6 +8,7 @@ import SequenceAnswerInput from './SequenceAnswerInput';
 import { resolveQuestionImageSrc, resolveQuizImageSrc } from '../../lib/quizImages';
 import {
 	getChoiceData,
+	isAttemptAnswerFullyCorrect,
 	isMathematical,
 	isSequence,
 	sequenceQuestionAnswered,
@@ -44,18 +45,23 @@ export default function QuestionCard({
 		? sequenceQuestionAnswered(question, answer)
 		: String(answer?.userAnswer ?? '').trim() !== '';
 
+	const notifyAnswered = (answerSnapshot) => {
+		onAnswered?.(question.id, isAttemptAnswerFullyCorrect(question, answerSnapshot));
+	};
+
 	const revealIfAnswered = (committedText) => {
 		if (sequence) {
 			if (!hasAnswer || revealed) return;
 			setRevealed(true);
-			onAnswered?.(question.id);
+			notifyAnswered(answer);
 			onIdentificationRevealed?.(question.id);
 			return;
 		}
 		const text = committedText != null ? committedText : answer?.userAnswer;
 		if (!String(text ?? '').trim() || revealed) return;
+		const nextAnswer = { ...answer, userAnswer: text };
 		setRevealed(true);
-		onAnswered?.(question.id);
+		notifyAnswered(nextAnswer);
 		onIdentificationRevealed?.(question.id);
 	};
 
@@ -115,10 +121,11 @@ export default function QuestionCard({
 									type="button"
 									disabled={revealed}
 									onClick={() => {
+										const nextAnswer = { ...answer, userAnswer: choiceText };
 										handleAnswerChange(question.id, 'userAnswer', choiceText);
 										if (revealed) return;
 										setRevealed(true);
-										onAnswered?.(question.id);
+										notifyAnswered(nextAnswer);
 									}}
 									className={`w-full cursor-pointer rounded-md p-3 text-center font-semibold transition ${
 										answer.userAnswer === choiceText
@@ -137,9 +144,13 @@ export default function QuestionCard({
 										{question.question_type === 'COM' ||
 										question.question_type === 'IDE-COM' ||
 										question.question_type === 'MUL-COM' ? (
-											<MathRenderer expression={choiceText} displayMode={false} />
+											<MathRenderer
+												expression={choiceText}
+												displayMode={false}
+												className="text-xl"
+											/>
 										) : (
-											<span className="text-sm">{choiceText}</span>
+											<span className="text-xl">{choiceText}</span>
 										)}
 									</div>
 								</button>

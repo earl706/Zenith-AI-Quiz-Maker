@@ -45,7 +45,7 @@ export default function SequenceAnswerInput({
 
 	const handleKeyDown = (event) => {
 		if (event.nativeEvent?.isComposing) return;
-		if (event.key === 'Enter' && !event.shiftKey) {
+		if (event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
 			event.preventDefault();
 			onEnter?.();
 		}
@@ -100,13 +100,13 @@ export default function SequenceAnswerInput({
 											}
 											disabled={disabled}
 											{...PLAIN_IDE_TEXT_INPUT_AUTO_OFF}
-											className="border-line bg-surface-2 text-fg focus:border-primary w-full rounded-md border px-3 py-2 text-sm focus:outline-none"
+											className="border-line bg-surface-2 text-fg focus:border-primary w-full rounded-md border px-3 py-2 text-xl focus:outline-none"
 										/>
 									)
 								) : (
 									<div
 										className={cn(
-											'rounded-md border px-3 py-2 text-sm',
+											'rounded-md border px-3 py-2 text-xl',
 											item.role === 'distractor'
 												? 'border-line bg-surface-2 text-muted'
 												: 'border-line bg-surface-2 text-fg'
@@ -146,7 +146,7 @@ export default function SequenceAnswerInput({
 					</p>
 					<ol className="space-y-1">
 						{(question.sequence_items || []).map((item, index) => (
-							<li key={`correct-${item.id ?? index}`} className="flex gap-2 text-sm">
+							<li key={`correct-${item.id ?? index}`} className="flex gap-2 text-xl">
 								<span className="text-muted w-6 text-right tabular-nums">{index + 1}.</span>
 								{math ? (
 									<MathRenderer expression={item.text} displayMode={false} />

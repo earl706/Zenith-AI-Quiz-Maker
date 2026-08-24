@@ -733,6 +733,32 @@ export function sequenceSlotCredit(question, answer) {
 	return Math.round((hits / blanks.length) * 100) / 100;
 }
 
+/** Full credit only (sequences: credit === 1; partial counts as incorrect). */
+export function isAttemptAnswerFullyCorrect(question, answer) {
+	if (!question) return false;
+	if (isSequence(question.question_type)) {
+		return sequenceSlotCredit(question, answer) === 1;
+	}
+	const selected = String(answer?.userAnswer ?? '').trim();
+	if (!selected) return false;
+	const stored = String(answer?.correctAnswer ?? '').trim();
+	const correctAnswer = stored || String(resolveCorrectAnswer(question) ?? '').trim();
+	if (!correctAnswer) return false;
+	return answersEqual(correctAnswer, selected, {
+		mathematical: isMathematical(question.question_type),
+		questionType: question.question_type ?? answer?.questionType
+	});
+}
+
+export const ADVANCE_DELAY_CORRECT_MS = 500;
+export const ADVANCE_DELAY_WRONG_MS = 3000;
+
+export function advanceDelayForAnswer(question, answer) {
+	return isAttemptAnswerFullyCorrect(question, answer)
+		? ADVANCE_DELAY_CORRECT_MS
+		: ADVANCE_DELAY_WRONG_MS;
+}
+
 export function countAnswered(answers, questions = []) {
 	const byId = new Map((questions || []).map((q) => [q.id, q]));
 	return answers.filter((a) => {

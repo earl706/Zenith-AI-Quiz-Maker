@@ -6,12 +6,13 @@ import { previewStudyAlarmSound, STUDY_ALARM_SOUNDS } from '../../lib/studyAlarm
 import { formatTimerDisplay } from '../../lib/studyTimerFormat';
 import {
 	getPhaseLabel,
-	getTechnique,
 	isStructuredTechnique,
+	STUDY_TECHNIQUE_FREE,
 	STUDY_TECHNIQUES
 } from '../../lib/studyTechniques';
 import {
 	selectIntervalActive,
+	selectIsFreeRest,
 	selectOnBreak,
 	useStudyTimerStore
 } from '../../stores/studyTimerStore';
@@ -19,6 +20,7 @@ import { Button, Modal, ProgressRing, Select } from '../ui';
 
 const DEFAULT_HABIT_NAME = 'Daily quiz practice';
 const FREE_PRESETS = [15, 25, 45, 60];
+const DIAL_ADJUST_SECONDS = 5 * 60;
 
 function listHabits(data) {
 	const rows = Array.isArray(data) ? data : data?.results || [];
@@ -40,8 +42,10 @@ export function StudyTimerButton() {
 	const totalSeconds = useStudyTimerStore((s) => s.totalSeconds);
 	const sessionActive = useStudyTimerStore(selectIntervalActive);
 	const onBreak = useStudyTimerStore(selectOnBreak);
+	const isFreeRest = useStudyTimerStore(selectIsFreeRest);
 	const techniqueId = useStudyTimerStore((s) => s.techniqueId);
 	const phase = useStudyTimerStore((s) => s.phase);
+	const freeMode = useStudyTimerStore((s) => s.freeMode);
 	const pomodoroCount = useStudyTimerStore((s) => s.pomodoroCount);
 	const start = useStudyTimerStore((s) => s.start);
 	const pause = useStudyTimerStore((s) => s.pause);
@@ -50,6 +54,7 @@ export function StudyTimerButton() {
 	const setDurationSeconds = useStudyTimerStore((s) => s.setDurationSeconds);
 	const addDuration = useStudyTimerStore((s) => s.addDuration);
 	const setTechnique = useStudyTimerStore((s) => s.setTechnique);
+	const toggleFreeMode = useStudyTimerStore((s) => s.toggleFreeMode);
 	const alarmActive = useStudyTimerStore((s) => s.alarmActive);
 	const alarmSound = useStudyTimerStore((s) => s.alarmSound);
 	const setAlarmSound = useStudyTimerStore((s) => s.setAlarmSound);
@@ -58,15 +63,16 @@ export function StudyTimerButton() {
 	const applyDefaultHabit = useStudyTimerStore((s) => s.applyDefaultHabit);
 	const habitDefaultApplied = useStudyTimerStore((s) => s.habitDefaultApplied);
 
-	const technique = getTechnique(techniqueId);
-	const phaseLabel = getPhaseLabel(phase, techniqueId, pomodoroCount);
+	const phaseLabel = getPhaseLabel(phase, techniqueId, pomodoroCount, freeMode);
 	const structured = isStructuredTechnique(techniqueId);
+	const isFree = techniqueId === STUDY_TECHNIQUE_FREE;
 	const locked = sessionActive || alarmActive;
 	const remainingPct = totalSeconds > 0 ? (remainingSeconds / totalSeconds) * 100 : 0;
 	const display = formatTimerDisplay(remainingSeconds);
 	const canStart = remainingSeconds > 0;
 	const canEditDuration = !locked && !structured;
-	const tone = onBreak ? 'success' : 'primary';
+	const canToggleFreeMode = isFree && canEditDuration;
+	const tone = onBreak || isFreeRest ? 'success' : 'primary';
 
 	const { data: habitData, isLoading: habitsLoading } = habitsApi.useList(
 		{ is_active: true, page_size: 100 },
@@ -80,8 +86,10 @@ export function StudyTimerButton() {
 	}, [open, habitDefaultApplied, habitsLoading, habits, applyDefaultHabit]);
 
 	const ariaLabel = sessionActive
-		? `${onBreak ? 'Break' : 'Study timer'} ${display} remaining`
+		? `${isFreeRest || onBreak ? 'Rest' : 'Study timer'} ${display} remaining`
 		: 'Study timer';
+
+	const startLabel = isFreeRest ? 'Start rest' : onBreak ? 'Start break' : 'Start';
 
 	return (
 		<>
@@ -102,23 +110,52 @@ export function StudyTimerButton() {
 			<Modal open={open} onClose={() => setOpen(false)} title="Study timer" size="sm">
 				<div className="space-y-4">
 					<div className="flex flex-col items-center gap-2">
-						<div className="relative inline-flex items-center justify-center">
-							<ProgressRing
-								value={sessionActive ? remainingPct : 0}
-								size={112}
-								stroke={7}
-								tone={tone}
-								label=""
-							/>
-							<p className="text-fg pointer-events-none absolute font-mono text-2xl font-bold tracking-tight tabular-nums">
-								{display}
-							</p>
+						<div className="flex w-full items-center justify-center gap-3">
+							{canEditDuration && (
+								<Button
+									size="sm"
+									variant="secondary"
+									onClick={() => addDuration(-DIAL_ADJUST_SECONDS)}
+									aria-label="Decrease timer by 5 minutes"
+								>
+									-5m
+								</Button>
+							)}
+							<div className="relative inline-flex items-center justify-center">
+								<ProgressRing
+									value={sessionActive ? remainingPct : 0}
+									size={148}
+									stroke={8}
+									tone={tone}
+									label=""
+								/>
+								<p className="text-fg pointer-events-none absolute font-mono text-3xl font-bold tracking-tight tabular-nums">
+									{display}
+								</p>
+							</div>
+							{canEditDuration && (
+								<Button
+									size="sm"
+									variant="secondary"
+									onClick={() => addDuration(DIAL_ADJUST_SECONDS)}
+									aria-label="Increase timer by 5 minutes"
+								>
+									+5m
+								</Button>
+							)}
 						</div>
-						<p className="text-fg text-sm font-medium">{phaseLabel}</p>
-						{technique?.description && (
-							<p className="text-muted text-center text-xs leading-relaxed">
-								{technique.description}
-							</p>
+						{canToggleFreeMode ? (
+							<button
+								type="button"
+								onClick={toggleFreeMode}
+								className="text-fg hover:bg-surface-2 cursor-pointer rounded-md px-2 py-0.5 text-sm font-medium transition-colors"
+								aria-label={`Switch to ${freeMode === 'rest' ? 'Focus' : 'Rest'} mode`}
+								title="Toggle Focus / Rest"
+							>
+								{phaseLabel}
+							</button>
+						) : (
+							<p className="text-fg text-sm font-medium">{phaseLabel}</p>
 						)}
 					</div>
 
@@ -128,9 +165,9 @@ export function StudyTimerButton() {
 								{running ? (
 									<Button
 										size="sm"
-										variant={onBreak ? 'primary' : 'secondary'}
+										variant={onBreak || isFreeRest ? 'primary' : 'secondary'}
 										onClick={pause}
-										aria-label={onBreak ? 'Pause break timer' : 'Pause study timer'}
+										aria-label={isFreeRest || onBreak ? 'Pause rest timer' : 'Pause study timer'}
 									>
 										<Pause size={16} />
 										Pause
@@ -139,13 +176,13 @@ export function StudyTimerButton() {
 									<Button
 										size="sm"
 										onClick={start}
-										aria-label={onBreak ? 'Resume break timer' : 'Resume study timer'}
+										aria-label={isFreeRest || onBreak ? 'Resume rest timer' : 'Resume study timer'}
 									>
 										<Play size={16} />
 										Resume
 									</Button>
 								)}
-								{onBreak && (
+								{onBreak && !isFreeRest && (
 									<Button size="sm" variant="ghost" onClick={skipBreak} aria-label="Skip break">
 										<SkipForward size={16} />
 										Skip
@@ -157,9 +194,9 @@ export function StudyTimerButton() {
 								</Button>
 							</div>
 						) : (
-							<Button onClick={start} disabled={!canStart} aria-label="Start study timer">
-								{onBreak ? <Coffee size={18} /> : <Play size={18} />}
-								{onBreak ? 'Start break' : 'Start'}
+							<Button onClick={start} disabled={!canStart} aria-label={startLabel}>
+								{isFreeRest || onBreak ? <Coffee size={18} /> : <Play size={18} />}
+								{startLabel}
 							</Button>
 						)}
 					</div>
@@ -176,19 +213,13 @@ export function StudyTimerButton() {
 									{minutes}m
 								</Button>
 							))}
-							<Button size="sm" variant="ghost" onClick={() => addDuration(60)}>
-								+1m
-							</Button>
-							<Button size="sm" variant="ghost" onClick={() => addDuration(300)}>
-								+5m
-							</Button>
 						</div>
 					)}
 
 					<div className="space-y-3">
 						<Select
 							label="Technique"
-							value={techniqueId}
+							value={techniqueId === 'rest' ? STUDY_TECHNIQUE_FREE : techniqueId}
 							disabled={locked}
 							onChange={(e) => setTechnique(e.target.value)}
 						>

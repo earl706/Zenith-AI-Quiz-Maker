@@ -32,7 +32,7 @@ export const STUDY_TECHNIQUES = [
 	{
 		id: STUDY_TECHNIQUE_FREE,
 		label: 'Free timer',
-		description: 'Set any duration — no scheduled breaks',
+		description: 'Set any duration — toggle Focus or Rest',
 		focusSeconds: null,
 		shortBreakSeconds: null,
 		longBreakSeconds: null,
@@ -44,11 +44,18 @@ export function getTechnique(id) {
 	return STUDY_TECHNIQUES.find((t) => t.id === id) ?? STUDY_TECHNIQUES[0];
 }
 
-export function isStructuredTechnique(id) {
-	return id && id !== STUDY_TECHNIQUE_FREE;
+export function isFreeformTechnique(id) {
+	return id === STUDY_TECHNIQUE_FREE;
 }
 
-export function getPhaseLabel(phase, techniqueId, pomodoroCount) {
+export function isStructuredTechnique(id) {
+	return Boolean(id) && !isFreeformTechnique(id);
+}
+
+export function getPhaseLabel(phase, techniqueId, pomodoroCount, freeMode = 'focus') {
+	if (techniqueId === STUDY_TECHNIQUE_FREE) {
+		return freeMode === 'rest' ? 'Rest' : 'Focus';
+	}
 	if (!isStructuredTechnique(techniqueId)) return 'Focus';
 	if (phase === 'long_break') return 'Long break';
 	if (phase === 'short_break') return 'Short break';

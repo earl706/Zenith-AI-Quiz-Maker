@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { cn, formatDurationSeconds } from '../../lib/format';
@@ -10,6 +11,8 @@ import QuestionStudyFeedback from './QuestionStudyFeedback';
 import QuestionTitle from './QuestionTitle';
 import SequenceAnswerInput from './SequenceAnswerInput';
 import {
+	advanceDelayForAnswer,
+	ADVANCE_DELAY_WRONG_MS,
 	getChoiceData,
 	isIdentification,
 	isMathematical,
@@ -19,10 +22,10 @@ import {
 	shuffleSequenceItems
 } from './quizHelpers';
 
-const MC_AUTO_ADVANCE_MS = 250;
-const ID_ENTER_ADVANCE_MS = 2000;
-const ID_CHECK_ADVANCE_MS = 5000;
-const TIMER_REVEAL_ADVANCE_MS = 1500;
+const FLASHCARD_FADE = {
+	duration: 0.25,
+	ease: [0.22, 1, 0.36, 1]
+};
 
 export default function FlashcardAttempt({
 	questions,
@@ -35,7 +38,8 @@ export default function FlashcardAttempt({
 	answerSuggestionsEnabled = false,
 	suggestionCorpus = [],
 	perQuestionTimerEnabled = false,
-	perQuestionTimeSeconds = 30
+	perQuestionTimeSeconds = 30,
+	paused = false
 }) {
 	const [index, setIndex] = useState(0);
 	const [revealedIds, setRevealedIds] = useState(() => new Set());
@@ -63,6 +67,8 @@ export default function FlashcardAttempt({
 	const advanceTimer = useRef(null);
 	const questionLimitRef = useRef(0);
 	const timedOutRef = useRef(false);
+	/** Sync guard so timer-zero cannot overwrite a user answer's advance delay. */
+	const completedIdsRef = useRef(new Set());
 
 	const cancelAutoAdvance = () => {
 		if (advanceTimer.current) {
@@ -81,8 +87,15 @@ export default function FlashcardAttempt({
 		setRevealedIds((previous) => new Set(previous).add(questionId));
 	};
 
+	const markCompleted = (questionId) => {
+		completedIdsRef.current.add(questionId);
+		markLocked(questionId);
+		markRevealed(questionId);
+	};
+
 	const goTo = (next) => {
 		if (perQuestionTimerEnabled && next < index) return;
+		if (next === index) return;
 		cancelAutoAdvance();
 		timedOutRef.current = false;
 		setIndex(next);
@@ -107,6 +120,7 @@ export default function FlashcardAttempt({
 		if (!currentQuestion) return;
 		if (perQuestionTimerEnabled) {
 			if (!locked) {
+				completedIdsRef.current.add(currentQuestion.id);
 				markLocked(currentQuestion.id);
 				if (hasAnswer) markRevealed(currentQuestion.id);
 			}
@@ -124,62 +138,75 @@ export default function FlashcardAttempt({
 		}, delayMs);
 	};
 
-	const revealIdentification = (delayMs) => {
-		if (!hasAnswer || !currentQuestion || locked) return;
-		markRevealed(currentQuestion.id);
-		markLocked(currentQuestion.id);
-		scheduleAfterReveal(perQuestionTimerEnabled ? TIMER_REVEAL_ADVANCE_MS : delayMs);
+	const revealIdentification = (committedText) => {
+		if (!currentQuestion || locked || completedIdsRef.current.has(currentQuestion.id)) return;
+		const snapshot = sequence
+			? answer
+			: {
+					...answer,
+					userAnswer:
+						committedText != null && String(committedText).trim() !== ''
+							? committedText
+							: answer?.userAnswer
+				};
+		if (sequence) {
+			if (!sequenceQuestionAnswered(currentQuestion, snapshot)) return;
+		} else if (!String(snapshot?.userAnswer ?? '').trim()) {
+			return;
+		}
+		if (
+			!sequence &&
+			committedText != null &&
+			String(committedText).trim() !== '' &&
+			String(committedText) !== String(answer?.userAnswer ?? '')
+		) {
+			onIdentificationChange?.(currentQuestion.id, committedText);
+		}
+		markCompleted(currentQuestion.id);
+		scheduleAfterReveal(advanceDelayForAnswer(currentQuestion, snapshot));
 	};
 
 	const handleChoiceSelect = (questionId, choiceText) => {
-		if (lockedIds.has(questionId)) return;
+		if (lockedIds.has(questionId) || completedIdsRef.current.has(questionId)) return;
+		const question = questions.find((q) => q.id === questionId) || currentQuestion;
+		const prior = answersByIdMap.get(questionId);
+		const nextAnswer = { ...prior, userAnswer: choiceText };
 		onAnswerChange(questionId, 'userAnswer', choiceText);
-		cancelAutoAdvance();
-		if (perQuestionTimerEnabled) {
-			markLocked(questionId);
-			markRevealed(questionId);
-			scheduleAfterReveal(TIMER_REVEAL_ADVANCE_MS);
-			return;
-		}
-		if (isLast) return;
-		advanceTimer.current = setTimeout(() => {
-			advanceTimer.current = null;
-			setIndex((p) => Math.min(p + 1, total - 1));
-		}, MC_AUTO_ADVANCE_MS);
+		markCompleted(questionId);
+		scheduleAfterReveal(advanceDelayForAnswer(question, nextAnswer));
 	};
 
 	const handleTimeout = () => {
 		if (!currentQuestion || timedOutRef.current) return;
+		if (completedIdsRef.current.has(currentQuestion.id)) return;
 		timedOutRef.current = true;
-		markLocked(currentQuestion.id);
-		markRevealed(currentQuestion.id);
-		scheduleAfterReveal(TIMER_REVEAL_ADVANCE_MS);
+		markCompleted(currentQuestion.id);
+		scheduleAfterReveal(ADVANCE_DELAY_WRONG_MS);
 	};
 
 	useEffect(() => {
 		if (!perQuestionTimerEnabled || !currentQuestion) {
 			setSecondsLeft(null);
-			return undefined;
+			return;
 		}
-		if (locked) {
-			return undefined;
-		}
+		if (locked) return;
 		const limit = resolveQuestionTimerSeconds(currentQuestion, perQuestionTimeSeconds);
 		questionLimitRef.current = limit;
 		timedOutRef.current = false;
 		setSecondsLeft(limit);
+	}, [perQuestionTimerEnabled, currentQuestion?.id, perQuestionTimeSeconds, index, locked]);
+
+	useEffect(() => {
+		if (!perQuestionTimerEnabled || !currentQuestion || locked || paused) return undefined;
 		const interval = setInterval(() => {
 			setSecondsLeft((prev) => {
 				if (prev == null) return prev;
-				if (prev <= 1) {
-					clearInterval(interval);
-					return 0;
-				}
+				if (prev <= 1) return 0;
 				return prev - 1;
 			});
 		}, 1000);
 		return () => clearInterval(interval);
-	}, [perQuestionTimerEnabled, currentQuestion?.id, perQuestionTimeSeconds, index, locked]);
+	}, [perQuestionTimerEnabled, currentQuestion?.id, locked, paused]);
 
 	useEffect(() => {
 		if (!perQuestionTimerEnabled || secondsLeft !== 0 || locked) return;
@@ -260,99 +287,116 @@ export default function FlashcardAttempt({
 				</Button>
 			</div>
 
-			{sequence ? (
-				<SequenceAnswerInput
-					key={currentQuestion.id}
-					question={currentQuestion}
-					answer={answer}
-					displayItems={displayItems}
-					onSequenceChange={onSequenceChange}
-					onEnter={() => revealIdentification(ID_ENTER_ADVANCE_MS)}
-					autoFocus={!revealed && !locked}
-					disabled={revealed || locked}
-					revealed={revealed}
-				/>
-			) : isIdentification(currentQuestion.question_type) ? (
-				<IdentificationAnswerInput
-					key={currentQuestion.id}
-					answer={answer}
-					question={currentQuestion}
-					handleIdentificationAnswerChange={onIdentificationChange}
-					onEnter={() => revealIdentification(ID_ENTER_ADVANCE_MS)}
-					autoFocus={!revealed && !locked}
-					disabled={revealed || locked}
-					answerSuggestionsEnabled={answerSuggestionsEnabled}
-					suggestionCorpus={suggestionCorpus}
-				/>
-			) : (
-				<Card>
-					<CardBody className="space-y-4 p-5 sm:p-6">
-						<QuestionTitle
-							text={currentQuestion.question}
-							mathematical={math}
-							className="text-2xl"
-						/>
-						{resolveQuestionImageSrc(currentQuestion) && (
-							<div className="flex w-full justify-center">
-								<img
-									src={resolveQuestionImageSrc(currentQuestion)}
-									alt=""
-									className="h-auto max-h-48 w-full max-w-md object-contain"
-								/>
-							</div>
-						)}
-						<div className="space-y-2">
-							{(currentQuestion.choices || []).map((choice, choiceIndex) => {
-								const choiceData = getChoiceData(choice);
-								const selected = answer?.userAnswer === choiceData.text;
-								const choiceImage = resolveQuizImageSrc(choiceData.image) || choiceData.image;
-								return (
-									<button
-										key={choiceData.id ?? choiceIndex}
-										type="button"
-										disabled={locked || submitting}
-										onClick={() => handleChoiceSelect(currentQuestion.id, choiceData.text)}
-										className={cn(
-											'w-full rounded-md px-4 py-3 text-center font-semibold transition',
-											locked || submitting ? 'cursor-not-allowed' : 'cursor-pointer',
-											selected
-												? 'bg-primary text-primary-fg ring-primary/30 ring-2 ring-offset-2 ring-offset-[var(--surface)]'
-												: 'bg-surface-2 text-fg hover:bg-primary/10'
-										)}
-									>
-										<div className="flex flex-col items-center gap-2">
-											{choiceImage && (
-												<img
-													src={choiceImage}
-													alt=""
-													className="max-h-24 rounded-md object-cover"
-												/>
-											)}
-											{math ? (
-												<MathRenderer expression={choiceData.text} displayMode={false} />
-											) : (
-												<span className="text-sm">{choiceData.text}</span>
-											)}
+			<div className="relative">
+				<AnimatePresence mode="wait" initial={false}>
+					<motion.div
+						key={currentQuestion.id}
+						initial={{ opacity: 0 }}
+						animate={{ opacity: 1 }}
+						exit={{ opacity: 0 }}
+						transition={FLASHCARD_FADE}
+						className="space-y-4"
+					>
+						{sequence ? (
+							<SequenceAnswerInput
+								question={currentQuestion}
+								answer={answer}
+								displayItems={displayItems}
+								onSequenceChange={onSequenceChange}
+								onEnter={revealIdentification}
+								autoFocus={!revealed && !locked}
+								disabled={revealed || locked}
+								revealed={revealed}
+							/>
+						) : isIdentification(currentQuestion.question_type) ? (
+							<IdentificationAnswerInput
+								answer={answer}
+								question={currentQuestion}
+								handleIdentificationAnswerChange={onIdentificationChange}
+								onEnter={revealIdentification}
+								autoFocus={!revealed && !locked}
+								disabled={revealed || locked}
+								answerSuggestionsEnabled={answerSuggestionsEnabled}
+								suggestionCorpus={suggestionCorpus}
+							/>
+						) : (
+							<Card>
+								<CardBody className="space-y-4 p-5 sm:p-6">
+									<QuestionTitle
+										text={currentQuestion.question}
+										mathematical={math}
+										className="text-2xl"
+									/>
+									{resolveQuestionImageSrc(currentQuestion) && (
+										<div className="flex w-full justify-center">
+											<img
+												src={resolveQuestionImageSrc(currentQuestion)}
+												alt=""
+												className="h-auto max-h-48 w-full max-w-md object-contain"
+											/>
 										</div>
-									</button>
-								);
-							})}
-						</div>
-					</CardBody>
-				</Card>
-			)}
+									)}
+									<div className="space-y-2">
+										{(currentQuestion.choices || []).map((choice, choiceIndex) => {
+											const choiceData = getChoiceData(choice);
+											const selected = answer?.userAnswer === choiceData.text;
+											const choiceImage = resolveQuizImageSrc(choiceData.image) || choiceData.image;
+											return (
+												<button
+													key={choiceData.id ?? choiceIndex}
+													type="button"
+													disabled={locked || submitting}
+													onClick={() => handleChoiceSelect(currentQuestion.id, choiceData.text)}
+													className={cn(
+														'w-full rounded-md px-4 py-3 text-center font-semibold transition',
+														locked || submitting ? 'cursor-not-allowed' : 'cursor-pointer',
+														selected
+															? 'bg-primary text-primary-fg ring-primary/30 ring-2 ring-offset-2 ring-offset-[var(--surface)]'
+															: 'bg-surface-2 text-fg hover:bg-primary/10'
+													)}
+												>
+													<div className="flex flex-col items-center gap-2">
+														{choiceImage && (
+															<img
+																src={choiceImage}
+																alt=""
+																className="max-h-24 rounded-md object-cover"
+															/>
+														)}
+														{math ? (
+															<MathRenderer
+																expression={choiceData.text}
+																displayMode={false}
+																className="text-xl"
+															/>
+														) : (
+															<span className="text-xl">{choiceData.text}</span>
+														)}
+													</div>
+												</button>
+											);
+										})}
+									</div>
+								</CardBody>
+							</Card>
+						)}
 
-			{(isIdentification(currentQuestion.question_type) || sequence) && !revealed && !locked && (
-				<Button
-					className="w-full"
-					variant="secondary"
-					disabled={!hasAnswer || submitting}
-					onClick={() => revealIdentification(ID_CHECK_ADVANCE_MS)}
-				>
-					Check answer
-				</Button>
-			)}
-			{revealed && <QuestionStudyFeedback question={currentQuestion} answer={answer} />}
+						{(isIdentification(currentQuestion.question_type) || sequence) &&
+							!revealed &&
+							!locked && (
+								<Button
+									className="w-full"
+									variant="secondary"
+									disabled={!hasAnswer || submitting}
+									onClick={revealIdentification}
+								>
+									Check answer
+								</Button>
+							)}
+						{revealed && <QuestionStudyFeedback question={currentQuestion} answer={answer} />}
+					</motion.div>
+				</AnimatePresence>
+			</div>
 		</div>
 	);
 }

@@ -4,6 +4,7 @@ import { persist } from 'zustand/middleware';
 import { DEFAULT_STUDY_ALARM_SOUND, stopStudyAlarm } from '../lib/studyAlarm';
 import { hmsFromSeconds, secondsFromHms } from '../lib/studyTimerFormat';
 import {
+	STUDY_TECHNIQUE_FREE,
 	STUDY_TECHNIQUE_POMODORO,
 	getBreakPhase,
 	getBreakSeconds,
@@ -25,8 +26,22 @@ function applyDuration(set, total) {
 	});
 }
 
-function isFocusPhase(s) {
+function countsAsFocus(s) {
+	if (s.techniqueId === STUDY_TECHNIQUE_FREE) return s.freeMode !== 'rest';
 	return s.phase === 'focus';
+}
+
+function normalizePersistedTechnique(partial) {
+	if (!partial || typeof partial !== 'object') return partial;
+	const next = { ...partial };
+	if (next.techniqueId === 'rest') {
+		next.techniqueId = STUDY_TECHNIQUE_FREE;
+		next.freeMode = 'rest';
+	}
+	if (next.freeMode !== 'rest' && next.freeMode !== 'focus') {
+		next.freeMode = 'focus';
+	}
+	return next;
 }
 
 export function selectIntervalActive(s) {
@@ -38,7 +53,12 @@ export function selectIntervalActive(s) {
 }
 
 export function selectOnBreak(s) {
+	if (s.techniqueId === STUDY_TECHNIQUE_FREE && s.freeMode === 'rest') return true;
 	return isStructuredTechnique(s.techniqueId) && s.phase !== 'focus';
+}
+
+export function selectIsFreeRest(s) {
+	return s.techniqueId === STUDY_TECHNIQUE_FREE && s.freeMode === 'rest';
 }
 
 export const useStudyTimerStore = create(
@@ -60,6 +80,7 @@ export const useStudyTimerStore = create(
 			alarmSound: DEFAULT_STUDY_ALARM_SOUND,
 			techniqueId: STUDY_TECHNIQUE_POMODORO,
 			phase: 'focus',
+			freeMode: 'focus',
 			pomodoroCount: 0,
 			attachmentType: 'none',
 			attachedHabitId: null,
@@ -114,7 +135,15 @@ export const useStudyTimerStore = create(
 				if (s.running || selectIntervalActive(s) || s.alarmActive) return;
 				const tech = getTechnique(techniqueId);
 				if (!isStructuredTechnique(techniqueId)) {
-					set({ techniqueId: 'free', phase: 'focus', pomodoroCount: 0 });
+					set({
+						techniqueId: STUDY_TECHNIQUE_FREE,
+						phase: 'focus',
+						pomodoroCount: 0,
+						running: false,
+						endAt: null,
+						startedAt: null,
+						interruptions: 0
+					});
 					return;
 				}
 				set({
@@ -127,6 +156,13 @@ export const useStudyTimerStore = create(
 					interruptions: 0
 				});
 				applyDuration(set, tech.focusSeconds);
+			},
+
+			toggleFreeMode: () => {
+				const s = get();
+				if (s.running || selectIntervalActive(s) || s.alarmActive) return;
+				if (s.techniqueId !== STUDY_TECHNIQUE_FREE) return;
+				set({ freeMode: s.freeMode === 'rest' ? 'focus' : 'rest' });
 			},
 
 			startAlarm: (completedPhase) =>
@@ -194,12 +230,13 @@ export const useStudyTimerStore = create(
 					applyDuration(set, remaining);
 				}
 				const now = Date.now();
-				const focusPhase = s.phase === 'focus';
+				const structuredFocus = isStructuredTechnique(s.techniqueId) && s.phase === 'focus';
+				const freeform = !isStructuredTechnique(s.techniqueId);
 				set({
 					running: true,
 					remainingSeconds: remaining,
 					endAt: now + remaining * 1000,
-					startedAt: focusPhase ? s.startedAt || new Date(now).toISOString() : null
+					startedAt: structuredFocus || freeform ? s.startedAt || new Date(now).toISOString() : null
 				});
 			},
 
@@ -213,7 +250,7 @@ export const useStudyTimerStore = create(
 					running: false,
 					endAt: null,
 					remainingSeconds: remaining,
-					interruptions: isFocusPhase(s) ? s.interruptions + 1 : s.interruptions
+					interruptions: countsAsFocus(s) ? s.interruptions + 1 : s.interruptions
 				});
 			},
 
@@ -315,6 +352,7 @@ export const useStudyTimerStore = create(
 					actualSeconds,
 					techniqueId: s.techniqueId,
 					phase: s.phase,
+					freeMode: s.freeMode,
 					attachmentType: s.attachmentType,
 					attachedHabitId: s.attachedHabitId,
 					attachedHabitName: s.attachedHabitName
@@ -353,11 +391,16 @@ export const useStudyTimerStore = create(
 				alarmSound: s.alarmSound,
 				techniqueId: s.techniqueId,
 				phase: s.phase,
+				freeMode: s.freeMode,
 				pomodoroCount: s.pomodoroCount,
 				attachmentType: s.attachmentType,
 				attachedHabitId: s.attachedHabitId,
 				attachedHabitName: s.attachedHabitName,
 				habitDefaultApplied: s.habitDefaultApplied
+			}),
+			merge: (persisted, current) => ({
+				...current,
+				...normalizePersistedTechnique(persisted)
 			})
 		}
 	)

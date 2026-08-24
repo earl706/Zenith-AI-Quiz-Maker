@@ -21,18 +21,22 @@ const ALARM_REPEAT_MS = {
 	urgent: 1600
 };
 
+/** Peak gain multiplier applied to every tone (Web Audio linear gain). */
+const MASTER_VOLUME = 2.8;
+
 function getAudioContext() {
 	if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 	return audioCtx;
 }
 
-function tone(ctx, when, freq, { duration = 0.35, type = 'sine', volume = 1.0 } = {}) {
+function tone(ctx, when, freq, { duration = 0.35, type = 'sine', volume = 0.55 } = {}) {
 	const osc = ctx.createOscillator();
 	const gain = ctx.createGain();
+	const peak = Math.max(0.0001, volume * MASTER_VOLUME);
 	osc.type = type;
 	osc.frequency.value = freq;
 	gain.gain.setValueAtTime(0.0001, when);
-	gain.gain.exponentialRampToValueAtTime(volume, when + 0.02);
+	gain.gain.exponentialRampToValueAtTime(peak, when + 0.02);
 	gain.gain.exponentialRampToValueAtTime(0.0001, when + duration);
 	osc.connect(gain);
 	gain.connect(ctx.destination);
@@ -42,26 +46,26 @@ function tone(ctx, when, freq, { duration = 0.35, type = 'sine', volume = 1.0 } 
 
 const ALARM_PATTERNS = {
 	chime: (ctx, t) => {
-		[880, 880, 1100, 880].forEach((freq, i) => tone(ctx, t + i * 0.45, freq));
+		[880, 880, 1100, 880].forEach((freq, i) => tone(ctx, t + i * 0.45, freq, { volume: 0.65 }));
 	},
 	bell: (ctx, t) => {
 		[523, 659, 784].forEach((freq, i) =>
-			tone(ctx, t + i * 0.55, freq, { type: 'triangle', duration: 0.6, volume: 0.24 })
+			tone(ctx, t + i * 0.55, freq, { type: 'triangle', duration: 0.6, volume: 0.5 })
 		);
 	},
 	digital: (ctx, t) => {
 		[1200, 1200, 1200].forEach((freq, i) =>
-			tone(ctx, t + i * 0.2, freq, { type: 'square', duration: 0.12, volume: 0.14 })
+			tone(ctx, t + i * 0.2, freq, { type: 'square', duration: 0.12, volume: 0.45 })
 		);
 	},
 	soft: (ctx, t) => {
 		[440, 554, 659, 880].forEach((freq, i) =>
-			tone(ctx, t + i * 0.5, freq, { duration: 0.5, volume: 0.2 })
+			tone(ctx, t + i * 0.5, freq, { duration: 0.5, volume: 0.48 })
 		);
 	},
 	urgent: (ctx, t) => {
 		[1400, 1000, 1400, 1000].forEach((freq, i) =>
-			tone(ctx, t + i * 0.15, freq, { duration: 0.12, volume: 0.22 })
+			tone(ctx, t + i * 0.15, freq, { duration: 0.12, volume: 0.52 })
 		);
 	}
 };

@@ -6,13 +6,13 @@
 	   document, adding a second scrollbar next to the app's scroll pane. */
 	position: relative;
 	width: 100%;
-	min-height: 2.5rem;
-	padding: 0.4rem 0.65rem;
+	min-height: 3rem;
+	padding: 0.5rem 0.75rem;
 	border: 1px solid var(--line);
 	border-radius: var(--radius-md, 8px);
 	background: var(--surface);
 	color: var(--fg);
-	font-size: 1.2rem;
+	font-size: 1.5rem;
 	line-height: 1.4;
 	box-sizing: border-box;
 	cursor: text;

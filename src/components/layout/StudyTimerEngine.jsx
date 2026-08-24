@@ -3,7 +3,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { BellOff, VolumeX } from 'lucide-react';
 
 import { startStudyAlarm } from '../../lib/studyAlarm';
-import { getTechnique, isStructuredTechnique } from '../../lib/studyTechniques';
+import {
+	getTechnique,
+	isStructuredTechnique,
+	STUDY_TECHNIQUE_FREE
+} from '../../lib/studyTechniques';
 import { formatDurationSeconds } from '../../lib/format';
 import { useHabitCheckIn } from '../../lib/studyResources';
 import { useStudyTimerStore } from '../../stores/studyTimerStore';
@@ -97,9 +101,30 @@ export function StudyTimerEngine() {
 		}
 	};
 
+	const finishRestPhase = () => {
+		if (finishingRef.current) return;
+		finishingRef.current = true;
+		try {
+			const seconds = Math.max(
+				0,
+				Math.floor(Number(useStudyTimerStore.getState().getSessionPayload().actualSeconds) || 0)
+			);
+			if (seconds > 0) {
+				toast.success(`Rest complete — ${formatDurationSeconds(seconds)}.`);
+			}
+			useStudyTimerStore.setState({ pendingAfterAlarm: 'finish_free' });
+			startAlarm('rest');
+			startStudyAlarm('soft');
+		} finally {
+			finishingRef.current = false;
+		}
+	};
+
 	const onIntervalEnd = () => {
-		const { techniqueId, phase } = useStudyTimerStore.getState();
-		if (isStructuredTechnique(techniqueId) && phase !== 'focus') {
+		const { techniqueId, phase, freeMode } = useStudyTimerStore.getState();
+		if (techniqueId === STUDY_TECHNIQUE_FREE && freeMode === 'rest') {
+			finishRestPhase();
+		} else if (isStructuredTechnique(techniqueId) && phase !== 'focus') {
 			finishBreakPhase();
 		} else {
 			finishFocusPhase();
@@ -125,13 +150,20 @@ export function StudyTimerEngine() {
 		return () => window.clearInterval(id);
 	}, [syncTick]);
 
+	const restAlarm = alarmCompletedPhase === 'rest';
 	const breakAlarm = alarmCompletedPhase === 'break';
-	const alarmTitle = breakAlarm ? 'Break finished' : 'Study timer finished';
-	const alarmHint = breakAlarm
-		? 'Stop the alarm to start your next focus round.'
-		: pendingAfterAlarm === 'start_break'
-			? 'Stop the alarm to start your break.'
-			: 'Stop the alarm to continue.';
+	const alarmTitle = restAlarm
+		? 'Rest finished'
+		: breakAlarm
+			? 'Break finished'
+			: 'Study timer finished';
+	const alarmHint = restAlarm
+		? 'Stop the alarm when you are ready.'
+		: breakAlarm
+			? 'Stop the alarm to start your next focus round.'
+			: pendingAfterAlarm === 'start_break'
+				? 'Stop the alarm to start your break.'
+				: 'Stop the alarm to continue.';
 
 	if (!alarmActive) return null;
 

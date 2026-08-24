@@ -146,7 +146,15 @@ export default function MathFieldInput({
 		};
 
 		const handleKeyDown = (event) => {
-			if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+			if (
+				event.key !== 'Enter' ||
+				event.shiftKey ||
+				event.metaKey ||
+				event.ctrlKey ||
+				event.isComposing
+			) {
+				return;
+			}
 			if (!onEnterRef.current) return;
 			event.preventDefault();
 			onEnterRef.current(lastEmitted.current ?? mf.value ?? '');

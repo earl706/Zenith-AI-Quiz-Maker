@@ -135,6 +135,24 @@ export default function SectionAttemptModal({
 		return known === sorted.length && sorted.length > 0 ? sum : null;
 	}, [sorted]);
 
+	const selectedQuestionCount = useMemo(() => {
+		if (!hasSections) return null;
+		const active = allSelected ? sorted : sorted.filter((section) => selected.includes(section.id));
+		if (!active.length) return 0;
+		let sum = 0;
+		let known = 0;
+		for (const section of active) {
+			const count = sectionQuestionCount(section);
+			if (count == null) continue;
+			sum += count;
+			known += 1;
+		}
+		if (known === 0) return null;
+		return sum;
+	}, [hasSections, allSelected, sorted, selected]);
+
+	const selectedSectionCount = allSelected ? sorted.length : selected.length;
+
 	const toggleAll = () => {
 		if (allSelected) {
 			setAllSelected(false);
@@ -159,7 +177,7 @@ export default function SectionAttemptModal({
 
 	const handleConfirm = () => {
 		if (!canConfirm) return;
-		if (!hasSections || allSelected || selected.length === allIds.length) {
+		if (!hasSections || allSelected) {
 			confirmWith({ fullQuiz: true, sectionIds: [] });
 		} else {
 			confirmWith({ fullQuiz: false, sectionIds: selected });
@@ -308,6 +326,21 @@ export default function SectionAttemptModal({
 							);
 						})}
 					</ul>
+
+					<div className="border-line bg-surface-2 mt-3 flex items-center justify-between gap-3 rounded-md border px-3 py-2.5">
+						<p className="text-muted text-xs font-medium tracking-wide uppercase">Selection</p>
+						<p className="text-fg text-sm tabular-nums">
+							<span className="font-medium">
+								{selectedQuestionCount != null
+									? formatQuestionCount(selectedQuestionCount)
+									: 'Questions…'}
+							</span>
+							<span className="text-muted">
+								{' '}
+								· {selectedSectionCount} section{selectedSectionCount === 1 ? '' : 's'}
+							</span>
+						</p>
+					</div>
 				</>
 			)}
 		</Modal>
