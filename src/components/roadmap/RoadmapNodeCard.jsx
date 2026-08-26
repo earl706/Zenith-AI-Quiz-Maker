@@ -10,7 +10,6 @@ import {
 	Target
 } from 'lucide-react';
 
-import { get } from '../../lib/api';
 import { cn, formatDate } from '../../lib/format';
 import { toast } from '../../stores/toastStore';
 
@@ -24,43 +23,25 @@ export function resolveNodeQuizUuid(node, sourceQuizUuid) {
 const UNLINKED_QUIZ_MESSAGE =
 	'No matching owner quiz for this roadmap. Create the quiz from Templates, or create the roadmap from My quiz so View/Attempt can link.';
 
+const UNLINKED_SECTION_MESSAGE =
+	'This roadmap node is not linked to a quiz section, so an attempt cannot start.';
+
+/** Options for launching a single roadmap-node section (same as QuizPage section Attempt). */
 export function nodeSectionAttemptOptions(node) {
 	const sectionId = node?.section_id;
 	const hasSection = sectionId != null && sectionId !== '';
 	return {
 		initialSectionIds: hasSection ? [sectionId] : [],
 		highlightedSectionId: hasSection ? sectionId : undefined,
-		presetHint: hasSection
-			? 'Pre-selected from this roadmap section — you can change the selection below.'
-			: undefined,
-		skipCountHydration: true
+		skipModal: true
 	};
 }
 
-async function loadQuizSections(quizUuid) {
-	try {
-		const summary = await get(`/quizzes/quiz/summary/${quizUuid}/`);
-		const apiSections = summary?.quiz?.sections || summary?.data?.sections || summary?.sections;
-		if (Array.isArray(apiSections) && apiSections.length) return apiSections;
-	} catch {
-		/* fall through */
-	}
-	try {
-		const detail = await get(`/quizzes/quiz/${quizUuid}/`);
-		const apiSections = detail?.data?.sections || detail?.sections;
-		if (Array.isArray(apiSections) && apiSections.length) return apiSections;
-	} catch {
-		/* stub below */
-	}
-	return null;
-}
-
-export async function launchNodeSectionAttempt({
-	node,
-	sourceQuizUuid,
-	launchAttempt,
-	onUnlinked
-}) {
+/**
+ * Start a section-scoped attempt immediately (no modal / no quiz summary wait).
+ * Toasts and returns when the node has no quiz or no section_id.
+ */
+export function launchNodeSectionAttempt({ node, sourceQuizUuid, launchAttempt, onUnlinked }) {
 	const quizUuid = resolveNodeQuizUuid(node, sourceQuizUuid);
 	if (!quizUuid) {
 		if (onUnlinked) onUnlinked(node);
@@ -68,21 +49,17 @@ export async function launchNodeSectionAttempt({
 		return;
 	}
 	const sectionId = node?.section_id;
-	const hasSection = sectionId != null && sectionId !== '';
-	const stub = hasSection ? [{ id: sectionId, title: node.title, order: node.order ?? 0 }] : [];
-	const sections = (await loadQuizSections(quizUuid)) || stub;
+	if (sectionId == null || sectionId === '') {
+		toast.error(UNLINKED_SECTION_MESSAGE);
+		return;
+	}
 	launchAttempt(
 		{
 			uuid: quizUuid,
 			quiz_title: node.roadmap_title || 'Quiz',
-			sections
+			sections: []
 		},
-		{
-			...nodeSectionAttemptOptions(node),
-			skipCountHydration:
-				sections.length > 0 &&
-				!sections.some((s) => s?.question_count == null && s?.questions_count == null)
-		}
+		nodeSectionAttemptOptions(node)
 	);
 }
 

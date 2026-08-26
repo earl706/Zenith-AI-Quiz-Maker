@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { BellOff, VolumeX } from 'lucide-react';
 
 import { startStudyAlarm } from '../../lib/studyAlarm';
@@ -9,19 +8,9 @@ import {
 	STUDY_TECHNIQUE_FREE
 } from '../../lib/studyTechniques';
 import { formatDurationSeconds } from '../../lib/format';
-import { useHabitCheckIn } from '../../lib/studyResources';
 import { useStudyTimerStore } from '../../stores/studyTimerStore';
 import { toast } from '../../stores/toastStore';
 import { Button } from '../ui';
-
-function getApiErrorDetail(error) {
-	return (
-		error?.response?.data?.detail ||
-		error?.response?.data?.non_field_errors?.[0] ||
-		error?.response?.data?.habit?.[0] ||
-		(typeof error?.response?.data === 'string' ? error.response.data : null)
-	);
-}
 
 function toastAfterAlarm(action) {
 	if (action === 'start_break') {
@@ -44,8 +33,6 @@ export function StudyTimerEngine() {
 	const alarmActive = useStudyTimerStore((s) => s.alarmActive);
 	const alarmCompletedPhase = useStudyTimerStore((s) => s.alarmCompletedPhase);
 	const pendingAfterAlarm = useStudyTimerStore((s) => s.pendingAfterAlarm);
-	const checkIn = useHabitCheckIn();
-	const qc = useQueryClient();
 	const finishingRef = useRef(false);
 
 	const handleAlarmDismiss = () => {
@@ -53,7 +40,7 @@ export function StudyTimerEngine() {
 		toastAfterAlarm(action);
 	};
 
-	const finishFocusPhase = async () => {
+	const finishFocusPhase = () => {
 		if (finishingRef.current) return;
 		finishingRef.current = true;
 		try {
@@ -62,22 +49,9 @@ export function StudyTimerEngine() {
 			const payload = state.getSessionPayload();
 			const seconds = Math.max(0, Math.floor(Number(payload.actualSeconds) || 0));
 
-			if (payload.attachmentType === 'habit' && payload.attachedHabitId && seconds > 0) {
-				try {
-					await checkIn.mutateAsync({
-						id: payload.attachedHabitId,
-						duration_seconds: seconds
-					});
-					const suffix = payload.attachedHabitName ? ` on ${payload.attachedHabitName}` : '';
-					toast.success(`Logged ${formatDurationSeconds(seconds)} of focus${suffix}.`);
-				} catch (error) {
-					toast.error(getApiErrorDetail(error) || 'Could not log study time to habit.');
-				}
-			} else if (seconds > 0) {
+			if (seconds > 0) {
 				toast.success(`Focus complete — ${formatDurationSeconds(seconds)}.`);
 			}
-
-			qc.invalidateQueries({ queryKey: ['habits'] });
 
 			useStudyTimerStore.setState({
 				pendingAfterAlarm: structured ? 'start_break' : 'finish_free'

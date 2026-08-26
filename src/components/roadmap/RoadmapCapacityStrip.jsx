@@ -3,7 +3,6 @@ import { ChevronDown } from 'lucide-react';
 
 import { cn } from '../../lib/format';
 import {
-	capacityLoadPct,
 	capacityRingTone,
 	capacitySpentPct,
 	clampCapacityRingPct,
@@ -43,8 +42,21 @@ function CapacityMetric({ title, rawPct, caption, subcaption, size = 44, stroke 
 	);
 }
 
+function spentBudgetCaption(spentSeconds, budgetMinutes, { offDay = false } = {}) {
+	const spent = Math.max(0, Number(spentSeconds) || 0);
+	const budget = Math.max(0, Number(budgetMinutes) || 0);
+	if (budget > 0) {
+		return `${formatDuration(spent)} / ${formatMinutesShort(budget)}`;
+	}
+	if (spent > 0) {
+		return offDay ? `${formatDuration(spent)} spent · off day` : `${formatDuration(spent)} spent`;
+	}
+	return offDay ? 'No study day' : 'No budget';
+}
+
 /**
  * Compact Today / Week / Path capacity rings for RoadmapDetail.
+ * Today/Week: spent÷budget. Path: spent÷remaining estimate.
  * Mobile: Today only; tap expands Week + Path.
  */
 export default function RoadmapCapacityStrip({ budget, progress }) {
@@ -52,34 +64,30 @@ export default function RoadmapCapacityStrip({ budget, progress }) {
 
 	if (!budget) return null;
 
-	const todayPlanned = budget.today?.planned_minutes || 0;
 	const todayBudget = budget.today?.budget_minutes || 0;
-	const weekPlanned = budget.week?.planned_minutes || 0;
+	const todaySpent = budget.today?.spent_seconds || 0;
 	const weekBudget = budget.week?.budget_minutes || 0;
+	const weekSpent = budget.week?.spent_seconds || 0;
+	const todayPlanned = budget.today?.planned_minutes || 0;
+	const weekPlanned = budget.week?.planned_minutes || 0;
 	const pathEst = progress?.estimated_minutes_total || 0;
 	const pathSpent = progress?.spent_seconds_total || 0;
 
-	const todayPct = capacityLoadPct(todayPlanned, todayBudget);
-	const weekPct = capacityLoadPct(weekPlanned, weekBudget);
+	const todayPct = capacitySpentPct(todaySpent, todayBudget);
+	const weekPct = capacitySpentPct(weekSpent, weekBudget);
 	const pathPct = capacitySpentPct(pathSpent, pathEst);
 
-	const todayCaption =
-		todayBudget > 0
-			? `${formatMinutesShort(todayPlanned)} / ${formatMinutesShort(todayBudget)}`
-			: todayPlanned > 0
-				? `${formatMinutesShort(todayPlanned)} planned · off day`
-				: 'No study day';
-
-	const weekCaption = `${formatMinutesShort(weekPlanned)} / ${formatMinutesShort(weekBudget)}`;
+	const todayCaption = spentBudgetCaption(todaySpent, todayBudget, {
+		offDay: todayBudget <= 0
+	});
+	const weekCaption = spentBudgetCaption(weekSpent, weekBudget);
 	const pathCaption =
 		pathEst > 0 || pathSpent > 0
 			? `${formatDuration(pathSpent)} / ${formatMinutesShort(pathEst)} est`
 			: 'No remaining estimate';
 
-	const todaySub =
-		budget.today?.spent_seconds > 0 ? `Spent ${formatDuration(budget.today.spent_seconds)}` : null;
-	const weekSub =
-		budget.week?.spent_seconds > 0 ? `Spent ${formatDuration(budget.week.spent_seconds)}` : null;
+	const todaySub = todayPlanned > 0 ? `${formatMinutesShort(todayPlanned)} planned` : null;
+	const weekSub = weekPlanned > 0 ? `${formatMinutesShort(weekPlanned)} planned` : null;
 
 	const todayMetric = (
 		<CapacityMetric title="Today" rawPct={todayPct} caption={todayCaption} subcaption={todaySub} />

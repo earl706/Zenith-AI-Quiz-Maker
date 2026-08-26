@@ -1,4 +1,4 @@
-import { LayoutDashboard, BookOpen, ListChecks, Target, Flame, Map } from 'lucide-react';
+import { LayoutDashboard, BookOpen, ListChecks, Target, Map } from 'lucide-react';
 
 export const navGroups = [
 	{
@@ -7,16 +7,13 @@ export const navGroups = [
 	},
 	{
 		label: 'Study',
-		items: [
-			{ to: '/progress', label: 'Progress', icon: Flame },
-			{ to: '/roadmap', label: 'Roadmap', icon: Map }
-		]
+		items: [{ to: '/roadmap', label: 'Roadmap', icon: Map }]
 	},
 	{
 		label: 'Quizzes',
 		items: [
-			{ to: '/quizzes', label: 'My Quizzes', icon: BookOpen },
-			{ to: '/create-quiz', label: 'Create Quiz', icon: ListChecks },
+			{ to: '/quizzes', label: 'Quizzes', icon: BookOpen },
+			{ to: '/create-quiz', label: 'Create', icon: ListChecks },
 			{ to: '/attempts', label: 'Attempts', icon: Target }
 		]
 	}

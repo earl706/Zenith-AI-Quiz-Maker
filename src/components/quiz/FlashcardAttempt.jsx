@@ -39,12 +39,16 @@ export default function FlashcardAttempt({
 	suggestionCorpus = [],
 	perQuestionTimerEnabled = false,
 	perQuestionTimeSeconds = 30,
-	paused = false
+	paused = false,
+	draftState = null,
+	onDraftStateChange
 }) {
-	const [index, setIndex] = useState(0);
-	const [revealedIds, setRevealedIds] = useState(() => new Set());
-	const [lockedIds, setLockedIds] = useState(() => new Set());
-	const [secondsLeft, setSecondsLeft] = useState(null);
+	const [index, setIndex] = useState(() => draftState?.index ?? 0);
+	const [revealedIds, setRevealedIds] = useState(() => new Set(draftState?.revealedIds ?? []));
+	const [lockedIds, setLockedIds] = useState(() => new Set(draftState?.lockedIds ?? []));
+	const [secondsLeft, setSecondsLeft] = useState(() =>
+		draftState?.secondsLeft != null ? draftState.secondsLeft : null
+	);
 	const total = questions.length;
 	const currentQuestion = questions[index];
 	const answer = currentQuestion ? answersByIdMap.get(currentQuestion.id) : null;
@@ -69,6 +73,8 @@ export default function FlashcardAttempt({
 	const timedOutRef = useRef(false);
 	/** Sync guard so timer-zero cannot overwrite a user answer's advance delay. */
 	const completedIdsRef = useRef(new Set());
+	/** Seconds to apply once after a draft restore; not read on every parent draft sync. */
+	const pendingRestoredSecondsRef = useRef(null);
 
 	const cancelAutoAdvance = () => {
 		if (advanceTimer.current) {
@@ -78,6 +84,26 @@ export default function FlashcardAttempt({
 	};
 
 	useEffect(() => cancelAutoAdvance, []);
+
+	useEffect(() => {
+		if (!draftState?.restoreToken) return;
+		setIndex(draftState.index ?? 0);
+		setRevealedIds(new Set(draftState.revealedIds ?? []));
+		setLockedIds(new Set(draftState.lockedIds ?? []));
+		completedIdsRef.current = new Set(draftState.lockedIds ?? []);
+		pendingRestoredSecondsRef.current =
+			draftState.secondsLeft != null ? draftState.secondsLeft : null;
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- restore only when parent issues a new token
+	}, [draftState?.restoreToken]);
+
+	useEffect(() => {
+		onDraftStateChange?.({
+			index,
+			revealedIds: [...revealedIds],
+			lockedIds: [...lockedIds],
+			secondsLeft
+		});
+	}, [index, revealedIds, lockedIds, secondsLeft, onDraftStateChange]);
 
 	const markLocked = (questionId) => {
 		setLockedIds((previous) => new Set(previous).add(questionId));
@@ -193,8 +219,22 @@ export default function FlashcardAttempt({
 		const limit = resolveQuestionTimerSeconds(currentQuestion, perQuestionTimeSeconds);
 		questionLimitRef.current = limit;
 		timedOutRef.current = false;
+		const restored = pendingRestoredSecondsRef.current;
+		if (restored != null) {
+			pendingRestoredSecondsRef.current = null;
+			setSecondsLeft(Math.min(limit, Math.max(0, restored)));
+			return;
+		}
 		setSecondsLeft(limit);
-	}, [perQuestionTimerEnabled, currentQuestion?.id, perQuestionTimeSeconds, index, locked]);
+		// draftState object syncs every tick for persistence — only restoreToken may re-init.
+	}, [
+		perQuestionTimerEnabled,
+		currentQuestion?.id,
+		perQuestionTimeSeconds,
+		index,
+		locked,
+		draftState?.restoreToken
+	]);
 
 	useEffect(() => {
 		if (!perQuestionTimerEnabled || !currentQuestion || locked || paused) return undefined;

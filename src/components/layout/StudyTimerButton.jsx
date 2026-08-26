@@ -1,7 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Coffee, Pause, Play, RotateCcw, SkipForward, Timer, Volume2 } from 'lucide-react';
 
-import { habitsApi } from '../../lib/studyResources';
 import { previewStudyAlarmSound, STUDY_ALARM_SOUNDS } from '../../lib/studyAlarm';
 import { formatTimerDisplay } from '../../lib/studyTimerFormat';
 import {
@@ -18,22 +17,8 @@ import {
 } from '../../stores/studyTimerStore';
 import { Button, Modal, ProgressRing, Select } from '../ui';
 
-const DEFAULT_HABIT_NAME = 'Daily quiz practice';
 const FREE_PRESETS = [15, 25, 45, 60];
 const DIAL_ADJUST_SECONDS = 5 * 60;
-
-function listHabits(data) {
-	const rows = Array.isArray(data) ? data : data?.results || [];
-	return rows.filter((h) => h.is_active !== false);
-}
-
-function pickDefaultHabit(habits) {
-	return (
-		habits.find((h) => h.name === DEFAULT_HABIT_NAME) ||
-		habits.find((h) => h.is_active) ||
-		habits[0]
-	);
-}
 
 export function StudyTimerButton() {
 	const [open, setOpen] = useState(false);
@@ -58,10 +43,6 @@ export function StudyTimerButton() {
 	const alarmActive = useStudyTimerStore((s) => s.alarmActive);
 	const alarmSound = useStudyTimerStore((s) => s.alarmSound);
 	const setAlarmSound = useStudyTimerStore((s) => s.setAlarmSound);
-	const attachedHabitId = useStudyTimerStore((s) => s.attachedHabitId);
-	const setAttachedHabit = useStudyTimerStore((s) => s.setAttachedHabit);
-	const applyDefaultHabit = useStudyTimerStore((s) => s.applyDefaultHabit);
-	const habitDefaultApplied = useStudyTimerStore((s) => s.habitDefaultApplied);
 
 	const phaseLabel = getPhaseLabel(phase, techniqueId, pomodoroCount, freeMode);
 	const structured = isStructuredTechnique(techniqueId);
@@ -73,17 +54,6 @@ export function StudyTimerButton() {
 	const canEditDuration = !locked && !structured;
 	const canToggleFreeMode = isFree && canEditDuration;
 	const tone = onBreak || isFreeRest ? 'success' : 'primary';
-
-	const { data: habitData, isLoading: habitsLoading } = habitsApi.useList(
-		{ is_active: true, page_size: 100 },
-		{ enabled: open }
-	);
-	const habits = listHabits(habitData);
-
-	useEffect(() => {
-		if (!open || habitDefaultApplied || habitsLoading || !habits.length) return;
-		applyDefaultHabit(pickDefaultHabit(habits));
-	}, [open, habitDefaultApplied, habitsLoading, habits, applyDefaultHabit]);
 
 	const ariaLabel = sessionActive
 		? `${isFreeRest || onBreak ? 'Rest' : 'Study timer'} ${display} remaining`
@@ -226,28 +196,6 @@ export function StudyTimerButton() {
 							{STUDY_TECHNIQUES.map((t) => (
 								<option key={t.id} value={t.id}>
 									{t.label}
-								</option>
-							))}
-						</Select>
-
-						<Select
-							label="Habit"
-							value={attachedHabitId ?? ''}
-							disabled={locked}
-							onChange={(e) => {
-								const id = e.target.value;
-								if (!id) {
-									setAttachedHabit(null);
-									return;
-								}
-								const habit = habits.find((h) => String(h.id) === String(id));
-								setAttachedHabit(habit || null);
-							}}
-						>
-							<option value="">None</option>
-							{habits.map((h) => (
-								<option key={h.id} value={h.id}>
-									{h.name}
 								</option>
 							))}
 						</Select>

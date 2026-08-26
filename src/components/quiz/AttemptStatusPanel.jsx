@@ -17,7 +17,8 @@ export default function AttemptStatusPanel({
 	onExit,
 	quizImage = null,
 	submitButtonRef = null,
-	shortcutsEnabled = true
+	shortcutsEnabled = true,
+	exitDiscardsDraft = false
 }) {
 	const [confirmOpen, setConfirmOpen] = useState(false);
 	const [exitConfirmOpen, setExitConfirmOpen] = useState(false);
@@ -215,7 +216,9 @@ export default function AttemptStatusPanel({
 				}
 			>
 				<p className="text-muted text-sm">
-					Your answers will not be submitted. You can start a new attempt from the quiz page.
+					{exitDiscardsDraft
+						? 'Your answers will not be submitted and your saved progress for this attempt will be discarded.'
+						: 'Your answers will not be submitted. You can start a new attempt from the quiz page.'}
 				</p>
 			</Modal>
 		</aside>

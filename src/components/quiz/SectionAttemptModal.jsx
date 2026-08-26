@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { get } from '../../lib/api';
+import { toast } from '../../stores/toastStore';
 import { Button, Input, Modal } from '../ui';
 
 const DEFAULT_SAMPLE = 10;
@@ -33,10 +34,32 @@ function mergeSectionCounts(sections, apiSections) {
 		apiSections.filter((s) => s?.id != null).map((s) => [s.id, sectionQuestionCount(s)])
 	);
 	return sections.map((section) => {
-		const count = byId.get(section.id);
+		const count = byId.get(section.id) ?? byId.get(Number(section.id));
 		if (count == null) return section;
 		return { ...section, question_count: count };
 	});
+}
+
+function mergeHydratedSections(prev, apiSections) {
+	if (!Array.isArray(apiSections) || !apiSections.length) return prev;
+	const prevList = Array.isArray(prev) ? prev : [];
+	const prevIds = new Set(
+		prevList.map((s) => String(s?.id)).filter((id) => id && id !== 'undefined')
+	);
+	const apiIds = new Set(
+		apiSections.map((s) => String(s?.id)).filter((id) => id && id !== 'undefined')
+	);
+	const apiCoversPrev = prevIds.size > 0 && [...prevIds].every((id) => apiIds.has(id));
+	// Replace when opening with a stub / empty list so the full quiz section set appears.
+	if (!prevList.length || (prevList.length < apiSections.length && apiCoversPrev)) {
+		return apiSections.map((section) => ({
+			id: section.id,
+			title: section.title,
+			order: section.order,
+			question_count: sectionQuestionCount(section)
+		}));
+	}
+	return mergeSectionCounts(prevList, apiSections);
 }
 
 function formatQuestionCount(count) {
@@ -78,7 +101,9 @@ export default function SectionAttemptModal({
 	useEffect(() => {
 		if (!open || !quizId || skipCountHydration) return;
 		const list = Array.isArray(sections) ? sections : [];
-		if (!list.length || !list.some(sectionNeedsCount)) return;
+		const needsFullList = list.length === 0;
+		const needsCounts = list.some(sectionNeedsCount);
+		if (!needsFullList && !needsCounts) return;
 
 		let cancelled = false;
 		(async () => {
@@ -92,7 +117,9 @@ export default function SectionAttemptModal({
 					apiSections = detail?.data?.sections || detail?.sections;
 				}
 				if (cancelled || !apiSections) return;
-				setHydratedSections((prev) => mergeSectionCounts(prev.length ? prev : list, apiSections));
+				setHydratedSections((prev) =>
+					mergeHydratedSections(prev.length ? prev : list, apiSections)
+				);
 			} catch {
 				/* keep titles without counts */
 			}
@@ -122,6 +149,30 @@ export default function SectionAttemptModal({
 	const [selected, setSelected] = useState(() => presetIds ?? allIds);
 	const [allSelected, setAllSelected] = useState(() => !presetIds);
 	const [sampleCount, setSampleCount] = useState(String(DEFAULT_SAMPLE));
+	const presetAppliedKey = useRef('');
+
+	// Re-apply initialSectionIds when the section list hydrates; toast+close if none match.
+	useEffect(() => {
+		if (!open) {
+			presetAppliedKey.current = '';
+			return;
+		}
+		if (!Array.isArray(initialSectionIds) || !initialSectionIds.length) return;
+		if (!allIds.length) return;
+
+		const key = `${allIds.map(String).join(',')}|${initialSectionIds.map(String).join(',')}`;
+		if (presetAppliedKey.current === key) return;
+		presetAppliedKey.current = key;
+
+		const matched = normalizeInitialIds(initialSectionIds, allIds);
+		if (matched) {
+			setSelected(matched);
+			setAllSelected(false);
+			return;
+		}
+		toast.error('That section is not on this quiz.');
+		onClose?.();
+	}, [open, allIds, initialSectionIds, onClose]);
 
 	const totalQuestions = useMemo(() => {
 		let sum = 0;

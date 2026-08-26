@@ -1,8 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Target } from 'lucide-react';
 
 import { api } from '../lib/api';
+import {
+	purgeStaleAttemptDrafts,
+	readAttemptDraft,
+	removeAttemptDraft,
+	removeActiveAttemptDraft,
+	slimAttemptDraftPayload,
+	writeAttemptDraft
+} from '../lib/attemptDraftStorage';
 import { toast } from '../stores/toastStore';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Badge, Button, LoadingScreen, Modal } from '../components/ui';
@@ -137,10 +146,30 @@ function focusAttemptControl(el) {
 	}
 }
 
+function orderQuestionsByIds(questions, questionIds) {
+	const byId = new Map((questions || []).map((q) => [q.id, q]));
+	const ordered = [];
+	for (const id of questionIds || []) {
+		const q = byId.get(id);
+		if (q) ordered.push(q);
+	}
+	return ordered;
+}
+
+function mergeAnswersFromDraft(questions, draftAnswers) {
+	const base = buildAnswerRecords(questions);
+	const byId = new Map((draftAnswers || []).map((a) => [a.id, a]));
+	return base.map((row) => {
+		const saved = byId.get(row.id);
+		return saved ? { ...row, ...saved, id: row.id } : row;
+	});
+}
+
 export default function QuizAttempt() {
 	const { id } = useParams();
 	const navigate = useNavigate();
 	const location = useLocation();
+	const queryClient = useQueryClient();
 	const scope = useMemo(() => parseAttemptScopeFromSearch(location.search), [location.search]);
 	const launchKey = location.state?.attemptLaunchAt;
 	const { launchAttempt, attemptModal } = useAttemptLauncher();
@@ -158,6 +187,9 @@ export default function QuizAttempt() {
 	const [roadmapProgress, setRoadmapProgress] = useState(null);
 	const [quizResults, setQuizResults] = useState(false);
 	const [retakeSettingsOpen, setRetakeSettingsOpen] = useState(false);
+	const [resumePromptOpen, setResumePromptOpen] = useState(false);
+	const [pendingDraft, setPendingDraft] = useState(null);
+	const [flashcardDraft, setFlashcardDraft] = useState(null);
 	const [answers, setAnswers] = useState([]);
 	const [quizData, setQuizData] = useState({
 		quiz_title: '',
@@ -198,7 +230,13 @@ export default function QuizAttempt() {
 	const submitButtonRef = useRef(null);
 	const focusAdvanceTimer = useRef(null);
 	const visibleQuestionsRef = useRef(visibleQuestions);
+	const attemptSnapshotRef = useRef(null);
+	const abandonDraftPersistRef = useRef(false);
 	visibleQuestionsRef.current = visibleQuestions;
+
+	const handleFlashcardDraftChange = useCallback((next) => {
+		setFlashcardDraft(next);
+	}, []);
 
 	const registerInputRef = useCallback((questionId, el) => {
 		if (el) inputRefs.current.set(questionId, el);
@@ -283,24 +321,72 @@ export default function QuizAttempt() {
 		}
 	}, [id, scope.fullQuiz, scope.sectionIds]);
 
-	const loadQuiz = useCallback(
+	const applyDraftUi = useCallback(
+		(draft, { quizData: nextQuiz, questions: nextQuestions }) => {
+			setQuizData(nextQuiz);
+			setQuestions(nextQuestions);
+			setAnswers(mergeAnswersFromDraft(nextQuestions, draft.answers));
+			setSubmittedAnswers([]);
+			setScore(0);
+			setAccuracy(0);
+			setSectionScores([]);
+			setRoadmapProgress(null);
+			setQuizResults(false);
+			setTime(draft.time ?? 0);
+			setPaused(true);
+			setIsRunning(false);
+			if (draft.questionLayout) {
+				setQuestionLayout(draft.questionLayout);
+			}
+			if (typeof draft.sectionPage === 'number') {
+				setSectionPage(draft.sectionPage);
+			}
+			const nextFlashcard = draft.flashcard
+				? { ...draft.flashcard, restoreToken: Date.now() }
+				: null;
+			setFlashcardDraft(nextFlashcard);
+		},
+		[setQuestionLayout, setSectionPage]
+	);
+
+	const abandonAttemptDraft = useCallback(() => {
+		abandonDraftPersistRef.current = true;
+		removeAttemptDraft(id, scope);
+	}, [id, scope]);
+
+	const fetchQuizQuestions = useCallback(
 		async (signal) => {
+			const sectionQuery =
+				!scope.fullQuiz && scope.sectionIds.length ? `&sections=${scope.sectionIds.join(',')}` : '';
+			const response = await api
+				.get(`/quizzes/quiz/${id}/?randomize=true${sectionQuery}`)
+				.catch(() =>
+					api.get(
+						`/quizzes/quiz/${id}/${sectionQuery ? `?sections=${scope.sectionIds.join(',')}` : ''}`
+					)
+				);
+			if (signal?.aborted) return null;
+			return parseQuizPayload(response.data);
+		},
+		[id, scope.fullQuiz, scope.sectionIds]
+	);
+
+	const loadQuizFresh = useCallback(
+		async (signal) => {
+			abandonDraftPersistRef.current = false;
+			removeActiveAttemptDraft();
 			setLoading(true);
 			try {
-				const sectionQuery =
-					!scope.fullQuiz && scope.sectionIds.length
-						? `&sections=${scope.sectionIds.join(',')}`
-						: '';
-				const response = await api
-					.get(`/quizzes/quiz/${id}/?randomize=true${sectionQuery}`)
-					.catch(() =>
-						api.get(
-							`/quizzes/quiz/${id}/${sectionQuery ? `?sections=${scope.sectionIds.join(',')}` : ''}`
-						)
-					);
-				if (signal?.aborted) return;
+				const parsed = await fetchQuizQuestions(signal);
+				if (!parsed || signal?.aborted) return;
 
-				const { quizData: nextQuiz, questions: nextQuestions } = parseQuizPayload(response.data);
+				const { quizData: nextQuiz, questions: nextQuestions } = parsed;
+
+				if (!scope.fullQuiz && scope.sectionIds.length && nextQuestions.length === 0) {
+					toast.error('That section is not on this quiz.');
+					navigate(`/quizzes/${id}`);
+					return;
+				}
 
 				let scopedQuestions = nextQuestions;
 				if (scope.sample) {
@@ -323,6 +409,7 @@ export default function QuizAttempt() {
 				setTime(0);
 				setPaused(false);
 				setIsRunning(true);
+				setFlashcardDraft(null);
 				if (!signal?.aborted) {
 					await startAttempt();
 				}
@@ -334,16 +421,173 @@ export default function QuizAttempt() {
 				if (!signal?.aborted) setLoading(false);
 			}
 		},
-		[id, navigate, scope.fullQuiz, scope.sectionIds, scope.shuffle, scope.sample, startAttempt]
+		[
+			fetchQuizQuestions,
+			id,
+			navigate,
+			scope.fullQuiz,
+			scope.sectionIds,
+			scope.shuffle,
+			scope.sample,
+			startAttempt
+		]
+	);
+
+	const persistAttemptDraft = useCallback(
+		(overrides = {}) => {
+			if (abandonDraftPersistRef.current) return;
+			const snap = attemptSnapshotRef.current;
+			if (!snap?.active || snap.quizResults || !snap.questions?.length) return;
+			try {
+				writeAttemptDraft(
+					id,
+					scope,
+					slimAttemptDraftPayload({
+						quizData: snap.quizData,
+						questions: snap.questions,
+						answers: snap.answers,
+						time: overrides.time ?? snap.time,
+						paused: overrides.paused ?? snap.paused,
+						questionLayout: snap.questionLayout,
+						sectionPage: snap.sectionPage,
+						flashcardDraft: overrides.flashcardDraft ?? snap.flashcardDraft
+					})
+				);
+			} catch {
+				// Never crash the attempt UI over draft persistence.
+			}
+		},
+		[id, scope]
 	);
 
 	useEffect(() => {
+		attemptSnapshotRef.current = {
+			active: !loading && !resumePromptOpen && !quizResults,
+			quizData,
+			questions,
+			answers,
+			time,
+			paused,
+			quizResults,
+			questionLayout,
+			sectionPage,
+			flashcardDraft
+		};
+	}, [
+		loading,
+		resumePromptOpen,
+		quizResults,
+		quizData,
+		questions,
+		answers,
+		time,
+		paused,
+		questionLayout,
+		sectionPage,
+		flashcardDraft
+	]);
+
+	useEffect(() => {
+		if (loading || resumePromptOpen || quizResults || !questions.length) return;
+		persistAttemptDraft();
+	}, [
+		loading,
+		resumePromptOpen,
+		quizResults,
+		questions.length,
+		answers,
+		paused,
+		questionLayout,
+		sectionPage,
+		flashcardDraft,
+		persistAttemptDraft
+	]);
+
+	useEffect(
+		() => () => {
+			persistAttemptDraft({ paused: true, time: attemptSnapshotRef.current?.time });
+		},
+		[persistAttemptDraft]
+	);
+
+	useEffect(() => {
+		purgeStaleAttemptDrafts();
+		if (launchKey) {
+			abandonAttemptDraft();
+			setResumePromptOpen(false);
+			setPendingDraft(null);
+			const controller = new AbortController();
+			loadQuizFresh(controller.signal);
+			return () => controller.abort();
+		}
+		const draft = readAttemptDraft(id, scope);
+		if (draft?.questionIds?.length) {
+			setPendingDraft(draft);
+			setResumePromptOpen(true);
+			setLoading(false);
+			return undefined;
+		}
+		if (draft) {
+			// Unusable / legacy oversized draft — drop and start fresh.
+			removeAttemptDraft(id, scope);
+		}
 		const controller = new AbortController();
-		// Initial load / scope change / same-URL retake via launcher state.
-		// eslint-disable-next-line react-hooks/set-state-in-effect -- intentional fetch-on-mount
-		loadQuiz(controller.signal);
+		loadQuizFresh(controller.signal);
 		return () => controller.abort();
-	}, [loadQuiz, launchKey]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps -- boot once per URL/scope/retake
+	}, [id, scope.fullQuiz, scope.sectionIds.join(','), scope.shuffle, scope.sample, launchKey]);
+
+	const handleResumeDraft = useCallback(async () => {
+		if (!pendingDraft?.questionIds?.length) {
+			setResumePromptOpen(false);
+			setPendingDraft(null);
+			loadQuizFresh(undefined);
+			return;
+		}
+		setResumePromptOpen(false);
+		setLoading(true);
+		try {
+			const parsed = await fetchQuizQuestions(undefined);
+			if (!parsed) {
+				toast.error('Could not resume attempt.');
+				abandonAttemptDraft();
+				await loadQuizFresh(undefined);
+				return;
+			}
+			const ordered = orderQuestionsByIds(parsed.questions, pendingDraft.questionIds);
+			if (ordered.length === 0) {
+				toast.error('Saved attempt no longer matches this quiz.');
+				abandonAttemptDraft();
+				await loadQuizFresh(undefined);
+				return;
+			}
+			abandonDraftPersistRef.current = false;
+			applyDraftUi(pendingDraft, { quizData: parsed.quizData, questions: ordered });
+			setPendingDraft(null);
+		} catch {
+			toast.error('Could not resume attempt.');
+			abandonAttemptDraft();
+			await loadQuizFresh(undefined);
+		} finally {
+			setLoading(false);
+		}
+	}, [
+		pendingDraft,
+		fetchQuizQuestions,
+		applyDraftUi,
+		abandonAttemptDraft,
+		loadQuizFresh,
+		id,
+		scope
+	]);
+
+	const handleDiscardDraft = useCallback(() => {
+		abandonAttemptDraft();
+		setResumePromptOpen(false);
+		setPendingDraft(null);
+		setLoading(true);
+		loadQuizFresh(undefined);
+	}, [abandonAttemptDraft, loadQuizFresh]);
 
 	useEffect(() => {
 		if (!isRunning) return undefined;
@@ -371,6 +615,8 @@ export default function QuizAttempt() {
 			setQuizResults(true);
 			setPaused(false);
 			setIsRunning(false);
+			abandonAttemptDraft();
+			queryClient.invalidateQueries({ queryKey: ['roadmaps'] });
 		} catch {
 			toast.error('Failed to submit answers.');
 		} finally {
@@ -381,6 +627,7 @@ export default function QuizAttempt() {
 	const handlePause = () => {
 		setPaused(true);
 		setIsRunning(false);
+		persistAttemptDraft({ paused: true, time });
 	};
 
 	const handleContinue = () => {
@@ -393,6 +640,7 @@ export default function QuizAttempt() {
 	};
 
 	const handleRetakeSame = () => {
+		abandonAttemptDraft();
 		navigate(`${location.pathname}${location.search}`, {
 			replace: true,
 			state: { attemptLaunchAt: Date.now() }
@@ -400,6 +648,7 @@ export default function QuizAttempt() {
 	};
 
 	const handleRetakeSettingsSaved = (payload) => {
+		abandonAttemptDraft();
 		const nextQuiz = mergeQuizAfterSettingsSave(quizData, payload, id);
 		setQuizData(nextQuiz);
 		const launchQuiz = {
@@ -440,11 +689,40 @@ export default function QuizAttempt() {
 		[quizData, questions, id]
 	);
 
-	if (loading) {
+	if (loading && !resumePromptOpen) {
 		return (
 			<>
 				{attemptModal}
 				<LoadingScreen />
+			</>
+		);
+	}
+
+	if (resumePromptOpen) {
+		return (
+			<>
+				{attemptModal}
+				<Modal
+					open
+					onClose={handleDiscardDraft}
+					title="Resume paused attempt?"
+					size="sm"
+					footer={
+						<>
+							<Button variant="secondary" className="cursor-pointer" onClick={handleDiscardDraft}>
+								Discard & restart
+							</Button>
+							<Button className="cursor-pointer" onClick={handleResumeDraft}>
+								Resume
+							</Button>
+						</>
+					}
+				>
+					<p className="text-muted text-sm">
+						You have a saved attempt for this quiz. Resume where you left off, or discard it and
+						start fresh.
+					</p>
+				</Modal>
 			</>
 		);
 	}
@@ -529,6 +807,8 @@ export default function QuizAttempt() {
 							perQuestionTimerEnabled={!!quizData.per_question_timer_enabled}
 							perQuestionTimeSeconds={quizData.per_question_time_seconds ?? 30}
 							paused={paused}
+							draftState={flashcardDraft}
+							onDraftStateChange={handleFlashcardDraftChange}
 						/>
 					) : (
 						<div onFocusCapture={handleListFocusCapture}>
@@ -579,11 +859,18 @@ export default function QuizAttempt() {
 					onPause={quizResults ? undefined : handlePause}
 					onRetake={handleRetake}
 					onRetakeSame={handleRetakeSame}
-					onBackToList={() => navigate('/quizzes')}
-					onExit={() => navigate(`/quizzes/${id}`)}
+					onBackToList={() => {
+						abandonAttemptDraft();
+						navigate('/quizzes');
+					}}
+					onExit={() => {
+						abandonAttemptDraft();
+						navigate(`/quizzes/${id}`);
+					}}
+					exitDiscardsDraft
 					quizImage={quizData.quiz_image || quizData.quiz_image_url || null}
 					submitButtonRef={submitButtonRef}
-					shortcutsEnabled={!paused && !retakeSettingsOpen}
+					shortcutsEnabled={!paused && !retakeSettingsOpen && !resumePromptOpen}
 				/>
 			</div>
 		</div>

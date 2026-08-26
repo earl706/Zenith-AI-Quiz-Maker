@@ -1,37 +1,82 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutDashboard, BookOpen, Target, Clock, Map } from 'lucide-react';
+import { LayoutDashboard, Map } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import { get } from '../lib/api';
-import { formatDate, fromNow } from '../lib/format';
-import { normalizeQuizList, quizQuestionCount } from '../lib/resources';
+import { formatDate } from '../lib/format';
 import { toast } from '../stores/toastStore';
 import { useAuthStore } from '../stores/authStore';
 import { PageHeader } from '../components/layout/PageHeader';
 import {
+	Badge,
 	Button,
 	Card,
 	CardBody,
 	CardHeader,
 	EmptyState,
 	Pagination,
-	StatCard
+	ProgressRing
 } from '../components/ui';
 import { useAttemptLauncher } from '../components/quiz/useAttemptLauncher';
+import RoadmapActivityStrip from '../components/roadmap/RoadmapActivityStrip';
 import RoadmapNodeCard, {
 	launchNodeSectionAttempt,
 	resolveNodeQuizUuid
 } from '../components/roadmap/RoadmapNodeCard';
 import { paginateClient } from '../hooks/useListControls';
 
-const DUE_TODAY_PAGE_SIZE = 5;
+const DUE_TODAY_PAGE_SIZE = 6;
 
 function greeting() {
 	const hour = new Date().getHours();
 	if (hour < 12) return 'Good morning';
 	if (hour < 18) return 'Good afternoon';
 	return 'Good evening';
+}
+
+function DashboardRoadmapCard({ roadmap, onOpen }) {
+	const percent = roadmap.progress?.percent || 0;
+
+	return (
+		<Card
+			className="flex h-full cursor-pointer flex-col transition-colors hover:border-[color-mix(in_srgb,var(--primary)_40%,var(--line))]"
+			onClick={onOpen}
+		>
+			<div className="flex flex-1 flex-col gap-2.5 p-3.5">
+				<div className="flex items-center gap-2.5">
+					<ProgressRing
+						value={percent}
+						size={40}
+						stroke={4}
+						tone="primary"
+						label={`${Math.round(percent)}`}
+					/>
+					<div className="min-w-0 flex-1">
+						<div className="flex items-start justify-between gap-1.5">
+							<div className="min-w-0">
+								<h3 className="text-fg truncate text-sm font-semibold">{roadmap.title}</h3>
+								<p className="text-muted mt-0.5 text-[11px]">
+									{roadmap.progress?.mastered}/{roadmap.progress?.total} mastered
+								</p>
+							</div>
+							{roadmap.deadline ? (
+								<Badge tone="warning" className="shrink-0 text-[10px]">
+									{formatDate(roadmap.deadline, 'dd/MM/yyyy')}
+								</Badge>
+							) : null}
+						</div>
+					</div>
+				</div>
+
+				{roadmap.activity?.days?.length ? (
+					<div onClick={(e) => e.stopPropagation()} className="min-w-0">
+						<RoadmapActivityStrip activity={roadmap.activity} compact />
+					</div>
+				) : null}
+			</div>
+		</Card>
+	);
 }
 
 export default function DashboardPage() {
@@ -41,18 +86,6 @@ export default function DashboardPage() {
 	const { launchAttempt, attemptModal } = useAttemptLauncher();
 	const [dueTodayPage, setDueTodayPage] = useState(1);
 
-	const { data: quizzes, isLoading } = useQuery({
-		queryKey: ['dashboard', 'quizzes'],
-		queryFn: () => get('/quizzes/quiz/'),
-		staleTime: 60_000,
-		refetchOnMount: true
-	});
-
-	const { data: attempts } = useQuery({
-		queryKey: ['dashboard', 'attempts'],
-		queryFn: () => get('/quizzes/quiz/attempts/')
-	});
-
 	const { data: dueTodayData, isLoading: dueTodayLoading } = useQuery({
 		queryKey: ['dashboard', 'roadmaps-due-today'],
 		queryFn: () => get('/roadmaps/due-today/'),
@@ -60,8 +93,13 @@ export default function DashboardPage() {
 		refetchOnMount: true
 	});
 
-	const quizList = normalizeQuizList(quizzes);
-	const attemptList = attempts?.results || attempts?.data || attempts || [];
+	const { data: dashboardRoadmaps, isLoading: roadmapsLoading } = useQuery({
+		queryKey: ['dashboard', 'roadmaps'],
+		queryFn: () => get('/roadmaps/dashboard/'),
+		staleTime: 60_000,
+		refetchOnMount: true
+	});
+
 	const dueTodayItems = useMemo(() => {
 		const items = Array.isArray(dueTodayData?.items) ? dueTodayData.items : [];
 		return items.filter((item) => item.status === 'available');
@@ -71,36 +109,18 @@ export default function DashboardPage() {
 		[dueTodayItems, dueTodayPage]
 	);
 
+	const roadmapList = useMemo(() => {
+		if (Array.isArray(dashboardRoadmaps?.results)) return dashboardRoadmaps.results;
+		if (Array.isArray(dashboardRoadmaps)) return dashboardRoadmaps;
+		return [];
+	}, [dashboardRoadmaps]);
+
 	useEffect(() => {
 		if (pagedDueToday.page !== dueTodayPage) setDueTodayPage(pagedDueToday.page);
 	}, [pagedDueToday.page, dueTodayPage]);
 
-	const stats = [
-		{
-			icon: BookOpen,
-			label: 'Total Quizzes',
-			value: Array.isArray(quizList) ? quizList.length : '—',
-			tone: 'primary'
-		},
-		{
-			icon: Target,
-			label: 'Total Attempts',
-			value: Array.isArray(attemptList) ? attemptList.length : '—',
-			tone: 'success'
-		},
-		{
-			icon: Clock,
-			label: 'Recent Activity',
-			value:
-				Array.isArray(attemptList) && attemptList.length > 0
-					? fromNow(attemptList[0]?.attempt_datetime || attemptList[0]?.created_at)
-					: 'None',
-			tone: 'warning'
-		}
-	];
-
-	const openQuiz = (item) => {
-		const quizUuid = resolveNodeQuizUuid(item, item.source_quiz_uuid);
+	const openQuiz = (item, sourceQuizUuid) => {
+		const quizUuid = resolveNodeQuizUuid(item, sourceQuizUuid ?? item.source_quiz_uuid);
 		if (!quizUuid) {
 			toast.error('This section is not linked to a quiz yet.');
 			return;
@@ -108,13 +128,17 @@ export default function DashboardPage() {
 		navigate(`/quizzes/${quizUuid}`);
 	};
 
-	const attemptSection = (item) => {
+	const attemptSection = (item, sourceQuizUuid) => {
 		launchNodeSectionAttempt({
 			node: item,
-			sourceQuizUuid: item.source_quiz_uuid,
+			sourceQuizUuid: sourceQuizUuid ?? item.source_quiz_uuid,
 			launchAttempt,
 			onUnlinked: () => toast.error('This section is not linked to a quiz yet.')
 		});
+	};
+
+	const openRoadmap = (id) => {
+		navigate('/roadmap', { state: { roadmapId: id } });
 	};
 
 	return (
@@ -123,17 +147,11 @@ export default function DashboardPage() {
 			<PageHeader
 				title={`${greeting()}, ${name}`}
 				icon={LayoutDashboard}
-				description="Here's a quick overview of your quizzes."
+				description="Due today and your roadmaps at a glance."
 			/>
 
-			<div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-				{stats.map((stat) => (
-					<StatCard key={stat.label} {...stat} />
-				))}
-			</div>
-
-			<div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
-				<Card className="flex h-full min-h-0 flex-col">
+			<div className="mt-6 space-y-5">
+				<Card>
 					<CardHeader
 						title="Due Today"
 						action={
@@ -142,23 +160,23 @@ export default function DashboardPage() {
 							</Button>
 						}
 					/>
-					<CardBody className="flex flex-1 flex-col">
+					<CardBody className="py-3">
 						{dueTodayLoading ? (
 							<p className="text-muted text-sm">Loading…</p>
 						) : dueTodayItems.length === 0 ? (
-							<EmptyState
-								icon={Map}
-								title="Nothing due today"
-								description="Unlocked roadmap sections due today (and overdue) will show up here."
-								action={
-									<Button size="sm" variant="secondary" onClick={() => navigate('/roadmap')}>
-										Open Roadmap
-									</Button>
-								}
-							/>
+							<p className="text-muted text-xs">
+								Nothing due today.{' '}
+								<button
+									type="button"
+									className="text-primary cursor-pointer underline-offset-2 hover:underline"
+									onClick={() => navigate('/roadmap')}
+								>
+									Open Roadmap
+								</button>
+							</p>
 						) : (
 							<>
-								<div className="flex flex-1 flex-col space-y-1">
+								<div className="grid grid-cols-1 gap-1 sm:grid-cols-2 lg:grid-cols-3">
 									{pagedDueToday.results.map((item) => (
 										<RoadmapNodeCard
 											key={`${item.roadmap_id}-${item.id}`}
@@ -183,66 +201,56 @@ export default function DashboardPage() {
 					</CardBody>
 				</Card>
 
-				<Card className="flex h-full min-h-0 flex-col">
-					<CardHeader
-						title="Recent Quizzes"
-						action={
-							<Button variant="ghost" size="sm" onClick={() => navigate('/quizzes')}>
+				<section>
+					<div className="mb-3 flex items-center justify-between gap-2">
+						<h2 className="text-fg text-sm font-semibold tracking-tight">Roadmaps</h2>
+						<div className="flex items-center gap-1">
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={() => navigate('/roadmap', { state: { openCreate: true } })}
+							>
+								Create
+							</Button>
+							<Button variant="ghost" size="sm" onClick={() => navigate('/roadmap')}>
 								View all
 							</Button>
-						}
-					/>
-					<CardBody className="flex flex-1 flex-col">
-						{isLoading ? (
-							<p className="text-muted text-sm">Loading…</p>
-						) : !Array.isArray(quizList) || quizList.length === 0 ? (
-							<EmptyState
-								icon={BookOpen}
-								title="No quizzes yet"
-								description="Create your first quiz to get started."
-								action={
-									<Button size="sm" onClick={() => navigate('/create-quiz')}>
-										Create Quiz
+						</div>
+					</div>
+
+					{roadmapsLoading ? (
+						<p className="text-muted text-sm">Loading roadmaps…</p>
+					) : roadmapList.length === 0 ? (
+						<EmptyState
+							icon={Map}
+							title="No roadmaps yet"
+							description="Fork a quiz template or one of your sectioned quizzes to get a mastery path."
+							action={
+								<div className="flex flex-wrap justify-center gap-2">
+									<Button size="sm" variant="secondary" onClick={() => navigate('/roadmap')}>
+										Open Roadmap
 									</Button>
-								}
-							/>
-						) : (
-							<div className="divide-line flex-1 divide-y">
-								{quizList.slice(0, 5).map((quiz) => (
-									<div
-										key={quiz.uuid || quiz.quiz_id}
-										className="hover:bg-surface-2 flex cursor-pointer items-center gap-3 rounded-md px-2 py-3 transition"
-										onClick={() => navigate(`/quizzes/${quiz.uuid || quiz.quiz_id}`)}
+									<Button
+										size="sm"
+										onClick={() => navigate('/roadmap', { state: { openCreate: true } })}
 									>
-										{quiz.tag_color && (
-											<div
-												className="h-3 w-3 shrink-0 rounded-full"
-												style={{ backgroundColor: quiz.tag_color }}
-											/>
-										)}
-										<div className="min-w-0 flex-1">
-											<p className="text-fg truncate text-sm font-medium">{quiz.quiz_title}</p>
-											<p className="text-muted text-xs">
-												{formatDate(quiz.created_at || quiz.date_created)} ·{' '}
-												{quizQuestionCount(quiz)} questions
-											</p>
-										</div>
-										<Button
-											variant="ghost"
-											size="sm"
-											onClick={(e) => {
-												e.stopPropagation();
-												launchAttempt(quiz);
-											}}
-										>
-											Attempt
-										</Button>
-									</div>
-								))}
-							</div>
-						)}
-					</CardBody>
-				</Card>
+										Create roadmap
+									</Button>
+								</div>
+							}
+						/>
+					) : (
+						<div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+							{roadmapList.map((roadmap) => (
+								<DashboardRoadmapCard
+									key={roadmap.id}
+									roadmap={roadmap}
+									onOpen={() => openRoadmap(roadmap.id)}
+								/>
+							))}
+						</div>
+					)}
+				</section>
 			</div>
 		</div>
 	);

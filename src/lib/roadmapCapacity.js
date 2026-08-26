@@ -43,18 +43,9 @@ export function formatMinutesShort(minutes) {
 }
 
 /**
- * Load ratio as percent (planned ÷ budget). Raw may exceed 100; ring clamps separately.
- */
-export function capacityLoadPct(plannedMinutes, budgetMinutes) {
-	const planned = Math.max(0, Number(plannedMinutes) || 0);
-	const budget = Math.max(0, Number(budgetMinutes) || 0);
-	if (budget <= 0) return planned > 0 ? 100 : 0;
-	return (planned / budget) * 100;
-}
-
-/**
- * Path study ratio: spent seconds ÷ remaining estimate (minutes).
- * Raw may exceed 100 when over estimate.
+ * Study time ratio: spent seconds ÷ budget/estimate minutes.
+ * Used for Today/Week (spent÷budget) and Path (spent÷remaining estimate).
+ * Raw may exceed 100 when over budget/estimate.
  */
 export function capacitySpentPct(spentSeconds, estimatedMinutes) {
 	const spentMin = Math.max(0, Number(spentSeconds) || 0) / 60;

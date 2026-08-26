@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { CalendarRange, Map, RefreshCw, Sparkles, Trash2 } from 'lucide-react';
 
 import { get } from '../lib/api';
@@ -44,6 +44,7 @@ import { useAttemptLauncher } from '../components/quiz/useAttemptLauncher';
 import { ToggleChip } from '../components/quiz/quizAuthoringUi';
 import RoadmapCapacityFields from '../components/roadmap/RoadmapCapacityFields';
 import RoadmapCapacityStrip from '../components/roadmap/RoadmapCapacityStrip';
+import RoadmapActivityStrip from '../components/roadmap/RoadmapActivityStrip';
 import RoadmapNodeCard, {
 	launchNodeSectionAttempt,
 	resolveNodeQuizUuid
@@ -142,6 +143,9 @@ function RoadmapListCard({
 					) : (
 						<p className="text-muted text-xs">Nothing due today — you may be ahead or done.</p>
 					)}
+					{roadmap.activity?.days?.length ? (
+						<RoadmapActivityStrip activity={roadmap.activity} className="mt-3" compact />
+					) : null}
 				</div>
 			</div>
 		</Card>
@@ -1135,6 +1139,11 @@ function RoadmapDetail({ roadmap, onBack }) {
 			</div>
 
 			{budget ? <RoadmapCapacityStrip budget={budget} progress={roadmap.progress} /> : null}
+			{roadmap.activity?.days?.length ? (
+				<div className="border-line bg-surface shrink-0 rounded-md border px-2.5 py-2">
+					<RoadmapActivityStrip activity={roadmap.activity} />
+				</div>
+			) : null}
 
 			{/* Desktop: two-column single-screen dashboard */}
 			<div className="hidden min-h-0 flex-1 gap-3 overflow-hidden lg:grid lg:grid-cols-2">
@@ -1191,12 +1200,26 @@ function RoadmapDetail({ roadmap, onBack }) {
 
 export default function RoadmapPage() {
 	const navigate = useNavigate();
+	const location = useLocation();
 	const queryClient = useQueryClient();
 	const { launchAttempt, attemptModal } = useAttemptLauncher();
 	const [forkOpen, setForkOpen] = useState(false);
 	const [selectedId, setSelectedId] = useState(null);
 	const [editPreview, setEditPreview] = useState(null);
 	const [deleteTarget, setDeleteTarget] = useState(null);
+
+	useEffect(() => {
+		const roadmapId = location.state?.roadmapId;
+		if (roadmapId != null) {
+			setSelectedId(roadmapId);
+		}
+		if (location.state?.openCreate) {
+			setForkOpen(true);
+		}
+		if (location.state?.roadmapId != null || location.state?.openCreate) {
+			navigate(location.pathname, { replace: true, state: {} });
+		}
+	}, [location.state, location.pathname, navigate]);
 
 	const { data: listData, isLoading } = roadmapsApi.useList({ status: 'active' });
 	const roadmaps = Array.isArray(listData) ? listData : listData?.results || [];
@@ -1267,7 +1290,11 @@ export default function RoadmapPage() {
 		if (detailError) {
 			return (
 				<div>
-					<Button variant="ghost" className="mb-4 h-8 px-2 text-sm" onClick={() => setSelectedId(null)}>
+					<Button
+						variant="ghost"
+						className="mb-4 h-8 px-2 text-sm"
+						onClick={() => setSelectedId(null)}
+					>
 						← All roadmaps
 					</Button>
 					<EmptyState

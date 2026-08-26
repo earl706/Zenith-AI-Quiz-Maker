@@ -82,52 +82,11 @@ export const useStudyTimerStore = create(
 			phase: 'focus',
 			freeMode: 'focus',
 			pomodoroCount: 0,
-			attachmentType: 'none',
-			attachedHabitId: null,
-			attachedHabitName: '',
-			habitDefaultApplied: false,
 
 			setAlarmSound: (alarmSound) => {
 				const s = get();
 				if (s.running || selectIntervalActive(s) || s.alarmActive) return;
 				set({ alarmSound });
-			},
-
-			setAttachedHabit: (habit) => {
-				const s = get();
-				if (s.running || selectIntervalActive(s) || s.alarmActive) return;
-				if (!habit) {
-					set({
-						attachmentType: 'none',
-						attachedHabitId: null,
-						attachedHabitName: '',
-						habitDefaultApplied: true
-					});
-					return;
-				}
-				set({
-					attachmentType: 'habit',
-					attachedHabitId: habit.id,
-					attachedHabitName: habit.name,
-					habitDefaultApplied: true
-				});
-			},
-
-			applyDefaultHabit: (habit) => {
-				const s = get();
-				if (s.habitDefaultApplied || s.running || selectIntervalActive(s) || s.alarmActive) {
-					return;
-				}
-				if (!habit) {
-					set({ habitDefaultApplied: true });
-					return;
-				}
-				set({
-					attachmentType: 'habit',
-					attachedHabitId: habit.id,
-					attachedHabitName: habit.name,
-					habitDefaultApplied: true
-				});
 			},
 
 			setTechnique: (techniqueId) => {
@@ -352,10 +311,7 @@ export const useStudyTimerStore = create(
 					actualSeconds,
 					techniqueId: s.techniqueId,
 					phase: s.phase,
-					freeMode: s.freeMode,
-					attachmentType: s.attachmentType,
-					attachedHabitId: s.attachedHabitId,
-					attachedHabitName: s.attachedHabitName
+					freeMode: s.freeMode
 				};
 			},
 
@@ -392,16 +348,19 @@ export const useStudyTimerStore = create(
 				techniqueId: s.techniqueId,
 				phase: s.phase,
 				freeMode: s.freeMode,
-				pomodoroCount: s.pomodoroCount,
-				attachmentType: s.attachmentType,
-				attachedHabitId: s.attachedHabitId,
-				attachedHabitName: s.attachedHabitName,
-				habitDefaultApplied: s.habitDefaultApplied
+				pomodoroCount: s.pomodoroCount
 			}),
-			merge: (persisted, current) => ({
-				...current,
-				...normalizePersistedTechnique(persisted)
-			})
+			merge: (persisted, current) => {
+				const next = {
+					...current,
+					...normalizePersistedTechnique(persisted)
+				};
+				delete next.attachmentType;
+				delete next.attachedHabitId;
+				delete next.attachedHabitName;
+				delete next.habitDefaultApplied;
+				return next;
+			}
 		}
 	)
 );

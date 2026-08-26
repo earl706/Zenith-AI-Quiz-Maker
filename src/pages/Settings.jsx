@@ -288,13 +288,11 @@ function NotificationPrefsCard() {
 		<Card className="lg:col-span-2">
 			<CardHeader
 				title="Study notifications"
-				subtitle="Daily streak reminders and roadmap deadline alerts (on by default)"
+				subtitle="Roadmap deadline and section-due alerts (on by default)"
 			/>
 			<CardBody className="space-y-3">
 				{[
-					['email_streak_daily', 'Email: daily streak reminder'],
 					['email_deadline', 'Email: roadmap deadline alerts'],
-					['desktop_streak_daily', 'Desktop: daily streak reminder'],
 					['desktop_deadline', 'Desktop: roadmap deadline alerts']
 				].map(([key, label]) => (
 					<label key={key} className="flex cursor-pointer items-center gap-3 text-sm">
