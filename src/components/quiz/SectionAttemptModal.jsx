@@ -4,8 +4,6 @@ import { get } from '../../lib/api';
 import { toast } from '../../stores/toastStore';
 import { Button, Input, Modal } from '../ui';
 
-const DEFAULT_SAMPLE = 10;
-
 function normalizeInitialIds(initialSectionIds, allIds) {
 	if (!Array.isArray(initialSectionIds) || !initialSectionIds.length) return null;
 	const byKey = new Map((allIds || []).map((id) => [String(id), id]));
@@ -67,11 +65,19 @@ function formatQuestionCount(count) {
 	return `${count} question${count === 1 ? '' : 's'}`;
 }
 
+function parseQuestionLimit(raw) {
+	const trimmed = String(raw ?? '').trim();
+	if (!trimmed) return null;
+	const n = Number.parseInt(trimmed, 10);
+	if (!Number.isFinite(n) || n <= 0) return 'invalid';
+	return n;
+}
+
 const DEFAULT_PRESET_HINT =
 	"Pre-selected from the section you're viewing — you can change the selection below.";
 
 /**
- * Pre-attempt settings: sections (when present) and random modes.
+ * Pre-attempt settings: sections (when present) and optional random subset.
  * onConfirm({ fullQuiz, sectionIds, shuffle?, sample? })
  *
  * initialSectionIds — when set, opens with only those sections checked (not "All").
@@ -148,8 +154,17 @@ export default function SectionAttemptModal({
 
 	const [selected, setSelected] = useState(() => presetIds ?? allIds);
 	const [allSelected, setAllSelected] = useState(() => !presetIds);
-	const [sampleCount, setSampleCount] = useState(String(DEFAULT_SAMPLE));
+	const [questionLimit, setQuestionLimit] = useState('');
 	const presetAppliedKey = useRef('');
+
+	useEffect(() => {
+		if (!open) {
+			presetAppliedKey.current = '';
+			setQuestionLimit('');
+			return;
+		}
+		setQuestionLimit('');
+	}, [open]);
 
 	// Re-apply initialSectionIds when the section list hydrates; toast+close if none match.
 	useEffect(() => {
@@ -203,6 +218,8 @@ export default function SectionAttemptModal({
 	}, [hasSections, allSelected, sorted, selected]);
 
 	const selectedSectionCount = allSelected ? sorted.length : selected.length;
+	const parsedLimit = parseQuestionLimit(questionLimit);
+	const hasSubsetLimit = parsedLimit != null && parsedLimit !== 'invalid';
 
 	const toggleAll = () => {
 		if (allSelected) {
@@ -226,13 +243,43 @@ export default function SectionAttemptModal({
 		onClose?.();
 	};
 
+	const buildScopeFromSelection = (limitRaw) => {
+		const limit = parseQuestionLimit(limitRaw);
+		if (limit === 'invalid') {
+			toast.error('Enter a positive number of questions.');
+			return null;
+		}
+		if (limit != null) {
+			if (selectedQuestionCount == null) {
+				toast.error('Question counts are still loading. Try again in a moment.');
+				return null;
+			}
+			if (selectedQuestionCount === 0) {
+				toast.error('Select at least one section with questions.');
+				return null;
+			}
+			if (limit > selectedQuestionCount) {
+				toast.error(`Only ${selectedQuestionCount} questions available in your selection.`);
+				return null;
+			}
+		}
+
+		const base =
+			hasSections && !allSelected && selected.length
+				? { fullQuiz: false, sectionIds: selected }
+				: { fullQuiz: true, sectionIds: [] };
+
+		if (limit != null) {
+			return { ...base, sample: limit };
+		}
+		return base;
+	};
+
 	const handleConfirm = () => {
 		if (!canConfirm) return;
-		if (!hasSections || allSelected) {
-			confirmWith({ fullQuiz: true, sectionIds: [] });
-		} else {
-			confirmWith({ fullQuiz: false, sectionIds: selected });
-		}
+		const scope = buildScopeFromSelection(questionLimit);
+		if (!scope) return;
+		confirmWith(scope);
 	};
 
 	const startRandomSection = () => {
@@ -245,10 +292,11 @@ export default function SectionAttemptModal({
 		confirmWith({ fullQuiz: true, sectionIds: [], shuffle: true });
 	};
 
-	const startRandomSubset = () => {
-		const n = Number.parseInt(sampleCount, 10);
-		const count = Number.isFinite(n) && n > 0 ? n : DEFAULT_SAMPLE;
-		confirmWith({ fullQuiz: true, sectionIds: [], shuffle: true, sample: count });
+	const startScopedSubset = () => {
+		if (!canConfirm) return;
+		const scope = buildScopeFromSelection(questionLimit);
+		if (!scope?.sample) return;
+		confirmWith(scope);
 	};
 
 	const startFocusedSection = () => {
@@ -311,21 +359,6 @@ export default function SectionAttemptModal({
 								onClick={startShuffledFull}
 							>
 								Full quiz (shuffled)
-							</Button>
-						</div>
-						<div className="border-line flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-end">
-							<div className="min-w-0 flex-1">
-								<Input
-									label="Random questions"
-									type="number"
-									min={1}
-									value={sampleCount}
-									onChange={(e) => setSampleCount(e.target.value)}
-									placeholder={String(DEFAULT_SAMPLE)}
-								/>
-							</div>
-							<Button type="button" variant="secondary" onClick={startRandomSubset}>
-								Start subset
 							</Button>
 						</div>
 					</div>
@@ -391,6 +424,25 @@ export default function SectionAttemptModal({
 								· {selectedSectionCount} section{selectedSectionCount === 1 ? '' : 's'}
 							</span>
 						</p>
+					</div>
+
+					<div className="border-line mt-3 flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-end">
+						<div className="min-w-0 flex-1">
+							<Input
+								label="Question limit"
+								type="number"
+								min={1}
+								max={selectedQuestionCount ?? undefined}
+								value={questionLimit}
+								onChange={(e) => setQuestionLimit(e.target.value)}
+								placeholder="All questions"
+							/>
+							<p className="text-muted mt-1.5 text-xs">
+								{selectedQuestionCount != null
+									? `Random subset from ${selectedQuestionCount} in selection. Subset attempts do not count toward roadmap mastery.`
+									: 'Random subset from your selection. Subset attempts do not count toward roadmap mastery.'}
+							</p>
+						</div>
 					</div>
 				</>
 			)}

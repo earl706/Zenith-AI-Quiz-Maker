@@ -56,7 +56,8 @@ export function slimAttemptDraftPayload({
 	paused,
 	questionLayout,
 	sectionPage,
-	flashcardDraft
+	flashcardDraft,
+	questionPoolSize = null
 }) {
 	return {
 		version: 2,
@@ -68,6 +69,8 @@ export function slimAttemptDraftPayload({
 		paused: !!paused,
 		questionLayout: questionLayout || null,
 		sectionPage: typeof sectionPage === 'number' ? sectionPage : 0,
+		questionPoolSize:
+			typeof questionPoolSize === 'number' && questionPoolSize > 0 ? questionPoolSize : null,
 		flashcard: flashcardDraft
 			? {
 					index: flashcardDraft.index ?? 0,

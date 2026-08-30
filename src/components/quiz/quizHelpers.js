@@ -852,12 +852,53 @@ export function shuffleArray(items) {
 	return next;
 }
 
-/** Random sample of up to `count` items without replacement. */
+/** Random sample of up to `count` items without replacement (order unchanged). */
+export function pickRandomQuestions(items, count) {
+	const pool = items || [];
+	const n = Math.min(Math.max(0, Math.floor(Number(count) || 0)), pool.length);
+	if (!pool.length || n <= 0) return [];
+	if (n >= pool.length) return [...pool];
+	const indices = pool.map((_, i) => i);
+	for (let i = 0; i < n; i += 1) {
+		const j = i + Math.floor(Math.random() * (indices.length - i));
+		[indices[i], indices[j]] = [indices[j], indices[i]];
+	}
+	return indices.slice(0, n).map((i) => pool[i]);
+}
+
+/** Random sample of up to `count` items without replacement, shuffled. */
 export function sampleArray(items, count) {
-	const n = Math.max(0, Math.floor(Number(count) || 0));
-	if (!items?.length || n <= 0) return [];
-	if (n >= items.length) return shuffleArray(items);
-	return shuffleArray(items).slice(0, n);
+	return shuffleArray(pickRandomQuestions(items, count));
+}
+
+/** Badge label for attempt scope (subset, sections, full quiz). */
+export function formatAttemptScopeLabel({ scope, sections, questionCount, questionPoolSize }) {
+	if (scope?.sample) {
+		const pool = questionPoolSize ?? questionCount ?? scope.sample;
+		const taken = Math.min(scope.sample, questionCount ?? scope.sample);
+		const sectionList = resolveAttemptSectionTitles(scope, sections);
+		const sectionPart = sectionList.length ? ` · Sections ${sectionList.join(', ')}` : '';
+		return `${taken} / ${pool} questions${sectionPart}`;
+	}
+	if (scope?.fullQuiz) {
+		return scope.shuffle ? 'All sections (shuffled)' : 'All sections';
+	}
+	const sectionList = resolveAttemptSectionTitles(scope, sections);
+	if (sectionList.length) {
+		return sectionList.join(', ');
+	}
+	return `${scope?.sectionIds?.length ?? 0} section${scope?.sectionIds?.length === 1 ? '' : 's'}`;
+}
+
+function resolveAttemptSectionTitles(scope, sections) {
+	const list = Array.isArray(sections) ? sections : [];
+	const byId = new Map(list.map((s) => [s.id, s.title]));
+	if (scope?.fullQuiz) {
+		return list.map((s) => s.title).filter(Boolean);
+	}
+	return (scope?.sectionIds || [])
+		.map((id) => byId.get(id) || byId.get(Number(id)))
+		.filter(Boolean);
 }
 
 export const PER_QUESTION_TIMER_MIN = 10;

@@ -18,6 +18,7 @@ import {
 	Pagination,
 	ProgressRing
 } from '../components/ui';
+import ActivityHeatmap from '../components/dashboard/ActivityHeatmap';
 import { useAttemptLauncher } from '../components/quiz/useAttemptLauncher';
 import RoadmapActivityStrip from '../components/roadmap/RoadmapActivityStrip';
 import RoadmapNodeCard, {
@@ -86,6 +87,13 @@ export default function DashboardPage() {
 	const { launchAttempt, attemptModal } = useAttemptLauncher();
 	const [dueTodayPage, setDueTodayPage] = useState(1);
 
+	const { data: activityData, isLoading: activityLoading } = useQuery({
+		queryKey: ['dashboard', 'quiz-activity'],
+		queryFn: () => get('/quizzes/quiz/activity/'),
+		staleTime: 60_000,
+		refetchOnMount: true
+	});
+
 	const { data: dueTodayData, isLoading: dueTodayLoading } = useQuery({
 		queryKey: ['dashboard', 'roadmaps-due-today'],
 		queryFn: () => get('/roadmaps/due-today/'),
@@ -147,10 +155,16 @@ export default function DashboardPage() {
 			<PageHeader
 				title={`${greeting()}, ${name}`}
 				icon={LayoutDashboard}
-				description="Due today and your roadmaps at a glance."
+				description="Activity, due today, and your roadmaps at a glance."
 			/>
 
-			<div className="mt-6 space-y-5">
+			<div className="mt-6 space-y-3">
+				<Card>
+					<CardBody className="py-3.5">
+						<ActivityHeatmap activity={activityData} loading={activityLoading} />
+					</CardBody>
+				</Card>
+
 				<Card>
 					<CardHeader
 						title="Due Today"
@@ -202,22 +216,6 @@ export default function DashboardPage() {
 				</Card>
 
 				<section>
-					<div className="mb-3 flex items-center justify-between gap-2">
-						<h2 className="text-fg text-sm font-semibold tracking-tight">Roadmaps</h2>
-						<div className="flex items-center gap-1">
-							<Button
-								variant="ghost"
-								size="sm"
-								onClick={() => navigate('/roadmap', { state: { openCreate: true } })}
-							>
-								Create
-							</Button>
-							<Button variant="ghost" size="sm" onClick={() => navigate('/roadmap')}>
-								View all
-							</Button>
-						</div>
-					</div>
-
 					{roadmapsLoading ? (
 						<p className="text-muted text-sm">Loading roadmaps…</p>
 					) : roadmapList.length === 0 ? (

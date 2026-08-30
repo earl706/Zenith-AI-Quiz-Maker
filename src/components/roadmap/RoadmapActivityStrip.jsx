@@ -58,7 +58,7 @@ export default function RoadmapActivityStrip({ activity, className, compact = fa
 							aria-label={label}
 							title={label}
 							className={cn(
-								'min-w-0 flex-1 rounded-full transition-opacity',
+								'min-w-0 flex-1 rounded-[1px] transition-opacity',
 								active ? 'bg-success hover:opacity-90' : 'bg-surface-2 hover:bg-line'
 							)}
 							onMouseEnter={(e) => {

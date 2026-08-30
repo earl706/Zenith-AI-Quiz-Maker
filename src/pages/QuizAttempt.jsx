@@ -38,7 +38,8 @@ import {
 	isIdentification,
 	isSequence,
 	parseAttemptScopeFromSearch,
-	sampleArray,
+	formatAttemptScopeLabel,
+	pickRandomQuestions,
 	shuffleArray,
 	sortQuestionsBySectionOrder,
 	ADVANCE_DELAY_CORRECT_MS,
@@ -199,6 +200,7 @@ export default function QuizAttempt() {
 		per_question_time_seconds: 30,
 		answer_suggestions_enabled: true
 	});
+	const [questionPoolSize, setQuestionPoolSize] = useState(null);
 
 	const answersMap = useMemo(() => answersById(answers), [answers]);
 	const answeredCount = useMemo(() => countAnswered(answers, questions), [answers, questions]);
@@ -314,12 +316,17 @@ export default function QuizAttempt() {
 		try {
 			await api.post(`/quizzes/quiz/attempt/${id}/`, {
 				full_quiz: scope.fullQuiz,
-				section_ids: scope.fullQuiz ? [] : scope.sectionIds
+				section_ids: scope.fullQuiz ? [] : scope.sectionIds,
+				...(scope.sample ? { question_sample_size: scope.sample } : {})
 			});
-		} catch {
+		} catch (err) {
+			const message = err?.response?.data?.error;
+			if (message) {
+				toast.error(message);
+			}
 			// Attempt start is best-effort; scoring still uses submit payload.
 		}
-	}, [id, scope.fullQuiz, scope.sectionIds]);
+	}, [id, scope.fullQuiz, scope.sectionIds, scope.sample]);
 
 	const applyDraftUi = useCallback(
 		(draft, { quizData: nextQuiz, questions: nextQuestions }) => {
@@ -332,6 +339,7 @@ export default function QuizAttempt() {
 			setSectionScores([]);
 			setRoadmapProgress(null);
 			setQuizResults(false);
+			setQuestionPoolSize(null);
 			setTime(draft.time ?? 0);
 			setPaused(true);
 			setIsRunning(false);
@@ -390,11 +398,22 @@ export default function QuizAttempt() {
 
 				let scopedQuestions = nextQuestions;
 				if (scope.sample) {
-					scopedQuestions = sampleArray(nextQuestions, scope.sample);
+					const poolSize = nextQuestions.length;
+					scopedQuestions = pickRandomQuestions(nextQuestions, scope.sample);
+					if (nextQuiz.random_question_order || scope.shuffle) {
+						scopedQuestions = shuffleArray(scopedQuestions);
+					} else {
+						scopedQuestions = sortQuestionsBySectionOrder(scopedQuestions, nextQuiz.sections || []);
+					}
+					setQuestionPoolSize(poolSize);
 				} else if (scope.shuffle) {
 					scopedQuestions = shuffleArray(nextQuestions);
+					setQuestionPoolSize(null);
 				} else if (!nextQuiz.random_question_order) {
 					scopedQuestions = sortQuestionsBySectionOrder(nextQuestions, nextQuiz.sections || []);
+					setQuestionPoolSize(null);
+				} else {
+					setQuestionPoolSize(null);
 				}
 
 				setQuizData(nextQuiz);
@@ -450,7 +469,8 @@ export default function QuizAttempt() {
 						paused: overrides.paused ?? snap.paused,
 						questionLayout: snap.questionLayout,
 						sectionPage: snap.sectionPage,
-						flashcardDraft: overrides.flashcardDraft ?? snap.flashcardDraft
+						flashcardDraft: overrides.flashcardDraft ?? snap.flashcardDraft,
+						questionPoolSize: snap.questionPoolSize
 					})
 				);
 			} catch {
@@ -471,7 +491,8 @@ export default function QuizAttempt() {
 			quizResults,
 			questionLayout,
 			sectionPage,
-			flashcardDraft
+			flashcardDraft,
+			questionPoolSize
 		};
 	}, [
 		loading,
@@ -484,7 +505,8 @@ export default function QuizAttempt() {
 		paused,
 		questionLayout,
 		sectionPage,
-		flashcardDraft
+		flashcardDraft,
+		questionPoolSize
 	]);
 
 	useEffect(() => {
@@ -563,6 +585,9 @@ export default function QuizAttempt() {
 			}
 			abandonDraftPersistRef.current = false;
 			applyDraftUi(pendingDraft, { quizData: parsed.quizData, questions: ordered });
+			setQuestionPoolSize(
+				typeof pendingDraft.questionPoolSize === 'number' ? pendingDraft.questionPoolSize : null
+			);
 			setPendingDraft(null);
 		} catch {
 			toast.error('Could not resume attempt.');
@@ -617,8 +642,9 @@ export default function QuizAttempt() {
 			setIsRunning(false);
 			abandonAttemptDraft();
 			queryClient.invalidateQueries({ queryKey: ['roadmaps'] });
-		} catch {
-			toast.error('Failed to submit answers.');
+		} catch (err) {
+			const message = err?.response?.data?.error || 'Failed to submit answers.';
+			toast.error(message);
 		} finally {
 			setSubmitting(false);
 		}
@@ -728,13 +754,12 @@ export default function QuizAttempt() {
 	}
 
 	const modeLabel = quizData.flashcard_quiz ? 'Flashcard' : 'List';
-	const scopeLabel = scope.sample
-		? `${Math.min(scope.sample, questions.length)} random questions`
-		: scope.fullQuiz
-			? scope.shuffle
-				? 'All sections (shuffled)'
-				: 'All sections'
-			: `${scope.sectionIds.length} section${scope.sectionIds.length === 1 ? '' : 's'}`;
+	const scopeLabel = formatAttemptScopeLabel({
+		scope,
+		sections: quizData.sections,
+		questionCount: questions.length,
+		questionPoolSize
+	});
 
 	return (
 		<div>
@@ -771,7 +796,7 @@ export default function QuizAttempt() {
 				actions={
 					<div className="flex flex-wrap gap-1.5">
 						<Badge tone="primary">{modeLabel}</Badge>
-						{(quizData.sections?.length > 0 || !scope.fullQuiz) && (
+						{(quizData.sections?.length > 0 || !scope.fullQuiz || scope.sample) && (
 							<Badge tone="accent">{scopeLabel}</Badge>
 						)}
 					</div>

@@ -70,7 +70,22 @@ export default function AttemptStatusPanel({
 
 			if (exitConfirmOpen) return;
 
-			if (!shortcutsEnabled || showResults) return;
+			if (!shortcutsEnabled) return;
+
+			if (showResults) {
+				if (
+					event.key === 'Enter' &&
+					!event.shiftKey &&
+					!event.metaKey &&
+					!event.ctrlKey &&
+					onRetakeSame
+				) {
+					event.preventDefault();
+					event.stopPropagation();
+					onRetakeSame();
+				}
+				return;
+			}
 
 			if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
 				event.preventDefault();
@@ -98,6 +113,7 @@ export default function AttemptStatusPanel({
 		confirmSubmit,
 		exitConfirmOpen,
 		onExit,
+		onRetakeSame,
 		requestExit,
 		requestSubmit,
 		shortcutsEnabled,
