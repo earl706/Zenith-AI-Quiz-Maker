@@ -5,8 +5,10 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn, formatDurationSeconds } from '../../lib/format';
 import { resolveQuestionImageSrc, resolveQuizImageSrc } from '../../lib/quizImages';
 import { Button, Card, CardBody, LoadingScreen, ProgressBar } from '../ui';
+import ChessPuzzleAnswerInput from './ChessPuzzleAnswerInput';
 import IdentificationAnswerInput from './IdentificationAnswerInput';
 import MathRenderer from './MathRenderer';
+import QuestionChessBoard from './QuestionChessBoard';
 import QuestionStudyFeedback from './QuestionStudyFeedback';
 import QuestionTitle from './QuestionTitle';
 import SequenceAnswerInput from './SequenceAnswerInput';
@@ -14,9 +16,11 @@ import {
 	advanceDelayForAnswer,
 	ADVANCE_DELAY_WRONG_MS,
 	getChoiceData,
+	isChessPuzzleQuestion,
 	isIdentification,
 	isMathematical,
 	isSequence,
+	chessPuzzleAnswered,
 	resolveQuestionTimerSeconds,
 	sequenceQuestionAnswered,
 	shuffleSequenceItems
@@ -33,6 +37,7 @@ export default function FlashcardAttempt({
 	onAnswerChange,
 	onIdentificationChange,
 	onSequenceChange,
+	onChessMovesChange,
 	onSubmit,
 	submitting,
 	answerSuggestionsEnabled = false,
@@ -57,6 +62,7 @@ export default function FlashcardAttempt({
 	const revealed = currentQuestion ? revealedIds.has(currentQuestion.id) : false;
 	const locked = currentQuestion ? lockedIds.has(currentQuestion.id) : false;
 	const sequence = currentQuestion ? isSequence(currentQuestion.question_type) : false;
+	const chessPuzzle = currentQuestion ? isChessPuzzleQuestion(currentQuestion) : false;
 	const displayItems = useMemo(() => {
 		if (!currentQuestion || !sequence) return [];
 		const items = currentQuestion.sequence_items || [];
@@ -64,11 +70,14 @@ export default function FlashcardAttempt({
 		return items;
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [currentQuestion?.id]);
-	const hasAnswer = sequence
-		? sequenceQuestionAnswered(currentQuestion, answer)
-		: String(answer?.userAnswer ?? '').trim() !== '';
+	const hasAnswer = chessPuzzle
+		? chessPuzzleAnswered(currentQuestion, answer)
+		: sequence
+			? sequenceQuestionAnswered(currentQuestion, answer)
+			: String(answer?.userAnswer ?? '').trim() !== '';
 
 	const advanceTimer = useRef(null);
+	const onSubmitRef = useRef(onSubmit);
 	const questionLimitRef = useRef(0);
 	const timedOutRef = useRef(false);
 	/** Sync guard so timer-zero cannot overwrite a user answer's advance delay. */
@@ -84,6 +93,10 @@ export default function FlashcardAttempt({
 	};
 
 	useEffect(() => cancelAutoAdvance, []);
+
+	useEffect(() => {
+		onSubmitRef.current = onSubmit;
+	}, [onSubmit]);
 
 	useEffect(() => {
 		if (!draftState?.restoreToken) return;
@@ -136,7 +149,7 @@ export default function FlashcardAttempt({
 		cancelAutoAdvance();
 		timedOutRef.current = false;
 		if (isLast) {
-			onSubmit?.();
+			onSubmitRef.current?.();
 			return;
 		}
 		setIndex((previous) => Math.min(previous + 1, total - 1));
@@ -164,24 +177,25 @@ export default function FlashcardAttempt({
 		}, delayMs);
 	};
 
-	const revealIdentification = (committedText) => {
+	const revealIdentification = (committedText, answerPatch = null) => {
 		if (!currentQuestion || locked || completedIdsRef.current.has(currentQuestion.id)) return;
-		const snapshot = sequence
-			? answer
-			: {
-					...answer,
-					userAnswer:
-						committedText != null && String(committedText).trim() !== ''
-							? committedText
-							: answer?.userAnswer
-				};
+		const snapshot = {
+			...answer,
+			...(answerPatch && typeof answerPatch === 'object' ? answerPatch : {}),
+			...(committedText != null && String(committedText).trim() !== ''
+				? { userAnswer: committedText }
+				: {})
+		};
 		if (sequence) {
 			if (!sequenceQuestionAnswered(currentQuestion, snapshot)) return;
+		} else if (chessPuzzle) {
+			if (!chessPuzzleAnswered(currentQuestion, snapshot)) return;
 		} else if (!String(snapshot?.userAnswer ?? '').trim()) {
 			return;
 		}
 		if (
 			!sequence &&
+			!chessPuzzle &&
 			committedText != null &&
 			String(committedText).trim() !== '' &&
 			String(committedText) !== String(answer?.userAnswer ?? '')
@@ -190,6 +204,14 @@ export default function FlashcardAttempt({
 		}
 		markCompleted(currentQuestion.id);
 		scheduleAfterReveal(advanceDelayForAnswer(currentQuestion, snapshot));
+	};
+
+	const handleEnterReveal = (patch) => {
+		if (typeof patch === 'string') {
+			revealIdentification(patch);
+			return;
+		}
+		revealIdentification(undefined, patch && typeof patch === 'object' ? patch : null);
 	};
 
 	const handleChoiceSelect = (questionId, choiceText) => {
@@ -337,28 +359,40 @@ export default function FlashcardAttempt({
 						transition={FLASHCARD_FADE}
 						className="space-y-4"
 					>
-						{sequence ? (
+						{chessPuzzle ? (
+							<ChessPuzzleAnswerInput
+								question={currentQuestion}
+								answer={answer}
+								onChessMovesChange={onChessMovesChange}
+								onEnter={handleEnterReveal}
+								disabled={revealed || locked}
+								revealed={revealed}
+							/>
+						) : sequence ? (
 							<SequenceAnswerInput
 								question={currentQuestion}
 								answer={answer}
 								displayItems={displayItems}
 								onSequenceChange={onSequenceChange}
-								onEnter={revealIdentification}
+								onEnter={handleEnterReveal}
 								autoFocus={!revealed && !locked}
 								disabled={revealed || locked}
 								revealed={revealed}
 							/>
 						) : isIdentification(currentQuestion.question_type) ? (
-							<IdentificationAnswerInput
-								answer={answer}
-								question={currentQuestion}
-								handleIdentificationAnswerChange={onIdentificationChange}
-								onEnter={revealIdentification}
-								autoFocus={!revealed && !locked}
-								disabled={revealed || locked}
-								answerSuggestionsEnabled={answerSuggestionsEnabled}
-								suggestionCorpus={suggestionCorpus}
-							/>
+							<>
+								<QuestionChessBoard question={currentQuestion} className="flex justify-center" />
+								<IdentificationAnswerInput
+									answer={answer}
+									question={currentQuestion}
+									handleIdentificationAnswerChange={onIdentificationChange}
+									onEnter={handleEnterReveal}
+									autoFocus={!revealed && !locked}
+									disabled={revealed || locked}
+									answerSuggestionsEnabled={answerSuggestionsEnabled}
+									suggestionCorpus={suggestionCorpus}
+								/>
+							</>
 						) : (
 							<Card>
 								<CardBody className="space-y-4 p-5 sm:p-6">
@@ -367,6 +401,7 @@ export default function FlashcardAttempt({
 										mathematical={math}
 										className="text-2xl"
 									/>
+									<QuestionChessBoard question={currentQuestion} />
 									{resolveQuestionImageSrc(currentQuestion) && (
 										<div className="flex w-full justify-center">
 											<img
@@ -421,7 +456,7 @@ export default function FlashcardAttempt({
 							</Card>
 						)}
 
-						{(isIdentification(currentQuestion.question_type) || sequence) &&
+						{(isIdentification(currentQuestion.question_type) || sequence || chessPuzzle) &&
 							!revealed &&
 							!locked && (
 								<Button

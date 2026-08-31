@@ -1,4 +1,27 @@
 import { answersEqual } from '../../lib/mathAnswersEqual';
+import {
+	chessPuzzleAnswered,
+	chessPuzzleCredit,
+	CHESS_PUZZLE_TYPE,
+	emptyChessSpec,
+	hasChessBoard,
+	isChessPuzzle,
+	isChessPuzzleQuestion,
+	normalizeChessSpec,
+	userPliesFromSolution
+} from '../../lib/chessHelpers';
+
+export {
+	chessPuzzleAnswered,
+	chessPuzzleCredit,
+	CHESS_PUZZLE_TYPE,
+	emptyChessSpec,
+	hasChessBoard,
+	isChessPuzzle,
+	isChessPuzzleQuestion,
+	normalizeChessSpec,
+	userPliesFromSolution
+};
 
 const MATH_TYPES = new Set([
 	'MUL-COM',
@@ -45,7 +68,8 @@ const QUESTION_TYPE_LABELS = {
 	'SEQ-NXT': 'Sequence · next step',
 	'SEQ-FUL-COM': 'Sequence · full list · math',
 	'SEQ-GAP-COM': 'Sequence · gap fill · math',
-	'SEQ-NXT-COM': 'Sequence · next step · math'
+	'SEQ-NXT-COM': 'Sequence · next step · math',
+	'CHS-PUZ': 'Chess puzzle'
 };
 
 export const SEQUENCE_ITEM_MIN = 3;
@@ -159,6 +183,11 @@ export function resolveCorrectAnswer(question) {
 			.filter(Boolean)
 			.join(' | ');
 	}
+	if (isChessPuzzleQuestion(question)) {
+		const spec = normalizeChessSpec(question?.chess_spec);
+		if (!spec) return stored;
+		return userPliesFromSolution(spec.fen, spec.solution_uci).join(' | ');
+	}
 	const choices = Array.isArray(question?.choices) ? question.choices : [];
 	let idx = Number(question?.correct_answer_index);
 	if (!Number.isInteger(idx) || idx < 0) idx = 0;
@@ -191,7 +220,14 @@ export function sequenceModeFromType(questionType) {
 	return 'gap';
 }
 
-export function questionTypeFromFlags({ mathematical, identification, sequence, sequenceMode }) {
+export function questionTypeFromFlags({
+	mathematical,
+	identification,
+	sequence,
+	sequenceMode,
+	chessPuzzle
+}) {
+	if (chessPuzzle) return CHESS_PUZZLE_TYPE;
 	if (sequence) {
 		const mode =
 			sequenceMode === 'full' ? 'SEQ-FUL' : sequenceMode === 'next' ? 'SEQ-NXT' : 'SEQ-GAP';
@@ -208,6 +244,7 @@ export function flagsFromQuestionType(questionType) {
 		mathematical: MATH_TYPES.has(t) || t.endsWith('-COM'),
 		identification: t === 'IDE' || t === 'IDE-COM',
 		sequence,
+		chessPuzzle: isChessPuzzle(t),
 		sequenceMode: sequenceModeFromType(t)
 	};
 }
@@ -302,6 +339,20 @@ export function interpolateSequenceStem(stem, items) {
 		if (item.role === 'blank') return '____';
 		return String(item.text || '').trim() || `{{${raw}}}`;
 	});
+}
+
+export function authoringChessFields(raw, flags = {}) {
+	const spec = normalizeChessSpec(raw?.chess_spec || raw?.chessSpec);
+	const chessPuzzle = !!(
+		flags.chessPuzzle ||
+		raw?.chessPuzzle ||
+		isChessPuzzle(raw?.question_type) ||
+		(spec?.solution_uci?.length ?? 0) > 0
+	);
+	return {
+		chessPuzzle,
+		chessSpec: spec || emptyChessSpec()
+	};
 }
 
 export function authoringSequenceFields(raw, flags = {}) {
@@ -693,8 +744,71 @@ export function buildAnswerRecords(questions) {
 		correctAnswer: resolveCorrectAnswer(q),
 		questionType: q.question_type,
 		userAnswer: '',
-		userSequence: []
+		userSequence: [],
+		userChessMoves: []
 	}));
+}
+
+/** Strip attempt rows to the fields the submit API grades (avoids oversized / non-JSON payloads). */
+export function serializeAnswersForSubmit(answers) {
+	return (answers || []).map((row) => {
+		const userSequence = Array.isArray(row?.userSequence)
+			? row.userSequence.map((item) => {
+					if (!item || typeof item !== 'object') return item;
+					return {
+						id: item.id,
+						text: item.text ?? ''
+					};
+				})
+			: [];
+		const userChessMoves = Array.isArray(row?.userChessMoves)
+			? row.userChessMoves
+					.map((move) => {
+						if (typeof move === 'string') return move.trim();
+						if (move && typeof move === 'object') {
+							const uci = move.uci || move.move;
+							if (uci) return String(uci).trim();
+							if (move.from && move.to) {
+								return `${move.from}${move.to}${move.promotion || ''}`.trim();
+							}
+						}
+						return '';
+					})
+					.filter(Boolean)
+			: [];
+		return {
+			id: row?.id,
+			userAnswer: row?.userAnswer ?? '',
+			userSequence,
+			userChessMoves
+		};
+	});
+}
+
+export function extractSubmitError(err, fallback = 'Failed to submit answers.') {
+	const data = err?.response?.data;
+	if (!data) {
+		return err?.message || fallback;
+	}
+	if (typeof data.error === 'string' && data.error.trim()) {
+		return data.error;
+	}
+	if (typeof data.detail === 'string' && data.detail.trim()) {
+		return data.detail;
+	}
+	if (Array.isArray(data.detail)) {
+		return data.detail
+			.map((item) => {
+				if (typeof item === 'string') return item;
+				if (item && typeof item === 'object') {
+					return String(item.string || item.message || item);
+				}
+				return String(item);
+			})
+			.filter(Boolean)
+			.join('; ');
+	}
+	return fallback;
 }
 
 export function sequenceQuestionAnswered(question, answer) {
@@ -736,6 +850,9 @@ export function sequenceSlotCredit(question, answer) {
 /** Full credit only (sequences: credit === 1; partial counts as incorrect). */
 export function isAttemptAnswerFullyCorrect(question, answer) {
 	if (!question) return false;
+	if (isChessPuzzleQuestion(question)) {
+		return chessPuzzleCredit(question, answer) === 1;
+	}
 	if (isSequence(question.question_type)) {
 		return sequenceSlotCredit(question, answer) === 1;
 	}
@@ -763,6 +880,7 @@ export function countAnswered(answers, questions = []) {
 	const byId = new Map((questions || []).map((q) => [q.id, q]));
 	return answers.filter((a) => {
 		const q = byId.get(a.id);
+		if (q && isChessPuzzleQuestion(q)) return chessPuzzleAnswered(q, a);
 		if (q && isSequence(q.question_type)) return sequenceQuestionAnswered(q, a);
 		return String(a.userAnswer ?? '').trim() !== '';
 	}).length;

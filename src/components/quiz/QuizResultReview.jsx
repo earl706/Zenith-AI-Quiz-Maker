@@ -10,15 +10,21 @@ import CreateRoadmapFromQuizModal from '../roadmap/CreateRoadmapFromQuizModal';
 import { Badge, Button, Card, CardBody, ProgressRing } from '../ui';
 import QuestionTitle from './QuestionTitle';
 import MathRenderer from './MathRenderer';
+import QuestionChessBoard from './QuestionChessBoard';
 import {
 	getChoiceData,
 	accuracyTone,
+	chessPuzzleCredit,
+	isChessPuzzleQuestion,
 	isIdentification,
 	isMathematical,
 	isSequence,
+	isAttemptAnswerFullyCorrect,
+	resolveCorrectAnswer,
 	sequenceSlotCredit,
 	formatScore
 } from './quizHelpers';
+import { formatUciList, userPliesFromSolution, normalizeChessSpec } from '../../lib/chessHelpers';
 import QuizQuestionListLayout from './QuizQuestionListLayout';
 import { useQuestionDisplayLayout } from './useQuestionDisplayLayout';
 
@@ -326,13 +332,26 @@ function ResultSummary({ score, accuracy, time, correctCount, total, sectionScor
 	);
 }
 
-function IdentificationResult({ submitted, correct, math }) {
+function resolveReviewCorrectAnswer(question, submitted) {
+	const stored = String(submitted?.correctAnswer ?? '').trim();
+	if (stored) return stored;
+	return String(resolveCorrectAnswer(question) ?? '').trim();
+}
+
+function answerCredit(question, submitted) {
+	if (!question) return 0;
+	if (isChessPuzzleQuestion(question)) return chessPuzzleCredit(question, submitted);
+	if (isSequence(question.question_type)) return sequenceSlotCredit(question, submitted);
+	return isAttemptAnswerFullyCorrect(question, submitted) ? 1 : 0;
+}
+
+function IdentificationResult({ submitted, correctAnswer, correct, math }) {
 	return (
 		<div className="grid gap-2 sm:grid-cols-2">
 			<div>
 				<p className="text-muted mb-1.5 text-xs font-medium">Correct answer</p>
 				<div className="border-success/20 bg-success/10 rounded-md border p-2.5">
-					<AnswerText value={submitted?.correctAnswer} mathematical={math} displayMode />
+					<AnswerText value={correctAnswer} mathematical={math} displayMode />
 				</div>
 			</div>
 			<div>
@@ -350,13 +369,19 @@ function IdentificationResult({ submitted, correct, math }) {
 	);
 }
 
-function ChoiceResult({ choices, submitted, math }) {
+function ChoiceResult({ choices, submitted, question, correctAnswer, math }) {
 	return (
 		<ul className="space-y-1.5">
 			{(choices || []).map((choice, ci) => {
 				const choiceData = getChoiceData(choice);
-				const isCorrectChoice = choiceData.text === submitted?.correctAnswer;
-				const isUserChoice = choiceData.text === submitted?.userAnswer;
+				const isCorrectChoice = answersEqual(choiceData.text, correctAnswer, {
+					mathematical: math,
+					questionType: question?.question_type ?? submitted?.questionType
+				});
+				const isUserChoice = answersEqual(choiceData.text, submitted?.userAnswer ?? '', {
+					mathematical: math,
+					questionType: question?.question_type ?? submitted?.questionType
+				});
 				const isWrongPick = isUserChoice && !isCorrectChoice;
 
 				return (
@@ -473,17 +498,35 @@ function SequenceResult({ question, submitted, math }) {
 	);
 }
 
+function ChessPuzzleResult({ question, submitted }) {
+	const spec = normalizeChessSpec(question?.chess_spec);
+	if (!spec) return null;
+	const expected = userPliesFromSolution(spec.fen, spec.solution_uci);
+	const played = submitted?.userChessMoves || [];
+	return (
+		<div className="grid gap-3 sm:grid-cols-2">
+			<div>
+				<p className="text-muted mb-1.5 text-xs font-medium">Your moves</p>
+				<p className="font-mono text-sm">{formatUciList(played) || '—'}</p>
+			</div>
+			<div>
+				<p className="text-muted mb-1.5 text-xs font-medium">Solution</p>
+				<p className="font-mono text-sm">{formatUciList(expected)}</p>
+			</div>
+			<div className="sm:col-span-2">
+				<QuestionChessBoard question={question} />
+			</div>
+		</div>
+	);
+}
+
 function ResultQuestionCard({ question, submitted, index }) {
 	const math = isMathematical(question.question_type);
 	const identification = isIdentification(question.question_type);
 	const sequence = isSequence(question.question_type);
-	const credit = sequence
-		? sequenceSlotCredit(question, submitted)
-		: answersEqual(submitted?.correctAnswer, submitted?.userAnswer, {
-					questionType: question?.question_type ?? submitted?.questionType
-			  })
-			? 1
-			: 0;
+	const chessPuzzle = isChessPuzzleQuestion(question);
+	const correctAnswer = resolveReviewCorrectAnswer(question, submitted);
+	const credit = answerCredit(question, submitted);
 	const correct = credit === 1;
 	const questionImage = resolveQuestionImageSrc(question);
 
@@ -498,7 +541,7 @@ function ResultQuestionCard({ question, submitted, index }) {
 				<div className="flex items-center justify-between gap-3 pt-4">
 					<p className="text-muted text-xs font-medium tabular-nums">Q{index + 1}</p>
 					<Badge tone={correct ? 'success' : credit > 0 ? 'warning' : 'danger'}>
-						{sequence && credit !== 1 && credit > 0 ? (
+						{(sequence || chessPuzzle) && credit !== 1 && credit > 0 ? (
 							formatScore(credit)
 						) : correct ? (
 							<Check size={12} aria-hidden />
@@ -520,12 +563,25 @@ function ResultQuestionCard({ question, submitted, index }) {
 					</div>
 				)}
 
-				{sequence ? (
+				{chessPuzzle ? (
+					<ChessPuzzleResult question={question} submitted={submitted} />
+				) : sequence ? (
 					<SequenceResult question={question} submitted={submitted} math={math} />
 				) : identification ? (
-					<IdentificationResult submitted={submitted} correct={correct} math={math} />
+					<IdentificationResult
+						submitted={submitted}
+						correctAnswer={correctAnswer}
+						correct={correct}
+						math={math}
+					/>
 				) : (
-					<ChoiceResult choices={question.choices} submitted={submitted} math={math} />
+					<ChoiceResult
+						choices={question.choices}
+						submitted={submitted}
+						question={question}
+						correctAnswer={correctAnswer}
+						math={math}
+					/>
 				)}
 				<TeachingContent question={question} />
 			</CardBody>
@@ -548,32 +604,26 @@ export default function QuizResultReview({
 	const [questionLayout, setQuestionLayout] = useQuestionDisplayLayout();
 	const [answerFilter, setAnswerFilter] = useState(RESULT_FILTER_ALL);
 
-	const reviewItems = useMemo(
-		() =>
-			questions.map((question, index) => ({
-				question,
-				submitted: submittedAnswers[index],
-				correct: isSequence(question.question_type)
-					? sequenceSlotCredit(question, submittedAnswers[index]) === 1
-					: answersEqual(
-							submittedAnswers[index]?.correctAnswer,
-							submittedAnswers[index]?.userAnswer,
-							{
-								mathematical: isMathematical(question.question_type),
-								questionType: question.question_type ?? submittedAnswers[index]?.questionType
-							}
-						)
-			})),
-		[questions, submittedAnswers]
-	);
-
 	const submittedByQuestionId = useMemo(() => {
 		const map = new Map();
-		reviewItems.forEach(({ question, submitted }) => {
-			if (question?.id != null) map.set(question.id, submitted);
+		(submittedAnswers || []).forEach((answer) => {
+			if (answer?.id != null) map.set(answer.id, answer);
 		});
 		return map;
-	}, [reviewItems]);
+	}, [submittedAnswers]);
+
+	const reviewItems = useMemo(
+		() =>
+			questions.map((question) => {
+				const submitted = submittedByQuestionId.get(question.id);
+				return {
+					question,
+					submitted,
+					correct: isAttemptAnswerFullyCorrect(question, submitted)
+				};
+			}),
+		[questions, submittedByQuestionId]
+	);
 
 	const correctByQuestionId = useMemo(() => {
 		const map = new Map();
@@ -640,9 +690,7 @@ export default function QuizResultReview({
 								<ResultQuestionCard
 									key={question.id ?? resolvedIndex}
 									question={question}
-									submitted={
-										submittedByQuestionId.get(question.id) ?? submittedAnswers[resolvedIndex]
-									}
+									submitted={submittedByQuestionId.get(question.id)}
 									index={resolvedIndex}
 								/>
 							);

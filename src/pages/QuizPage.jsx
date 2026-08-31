@@ -36,6 +36,7 @@ import {
 } from '../components/ui';
 import MathRenderer from '../components/quiz/MathRenderer';
 import MergeQuizzesModal from '../components/quiz/MergeQuizzesModal';
+import QuestionChessBoard from '../components/quiz/QuestionChessBoard';
 import QuestionTitle from '../components/quiz/QuestionTitle';
 import { PersistedQuizSettingsModal } from '../components/quiz/QuizSettingsModal';
 import QuizQuestionListLayout from '../components/quiz/QuizQuestionListLayout';
@@ -423,6 +424,8 @@ export default function QuizPage() {
 												mathematical={math}
 												className="text-base"
 											/>
+
+											<QuestionChessBoard question={question} />
 
 											{question.question_image && (
 												<div className="flex justify-center">

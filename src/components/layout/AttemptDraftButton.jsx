@@ -17,6 +17,12 @@ function countDraftAnswers(answers) {
 		) {
 			return true;
 		}
+		if (
+			Array.isArray(a?.userChessMoves) &&
+			a.userChessMoves.some((x) => String(x ?? '').trim() !== '')
+		) {
+			return true;
+		}
 		return false;
 	}).length;
 }

@@ -10,6 +10,7 @@ import {
 	ListOrdered,
 	Plus,
 	Sigma,
+	Swords,
 	Type,
 	X
 } from 'lucide-react';
@@ -107,12 +108,18 @@ export function QuestionTypeFlagToggles({ question, onToggle, onToggleImages }) 
 				onClick={() => onToggle('mathematical', !question.mathematical)}
 			/>
 			<IconToggleButton
+				active={!!question.chessPuzzle}
+				label="Chess puzzle"
+				icon={Swords}
+				onClick={() => onToggle('chessPuzzle', !question.chessPuzzle)}
+			/>
+			<IconToggleButton
 				active={!!question.sequence}
 				label="Sequence"
 				icon={ListOrdered}
 				onClick={() => onToggle('sequence', !question.sequence)}
 			/>
-			{!question.sequence && (
+			{!question.sequence && !question.chessPuzzle && (
 				<IconToggleButton
 					active={!!question.identification}
 					label="Identification"
@@ -120,14 +127,17 @@ export function QuestionTypeFlagToggles({ question, onToggle, onToggleImages }) 
 					onClick={() => onToggle('identification', !question.identification)}
 				/>
 			)}
-			{!question.identification && !question.mathematical && !question.sequence && (
-				<IconToggleButton
-					active={!!question.showChoiceImages}
-					label="Choice images"
-					icon={ImageIcon}
-					onClick={onToggleImages}
-				/>
-			)}
+			{!question.identification &&
+				!question.mathematical &&
+				!question.sequence &&
+				!question.chessPuzzle && (
+					<IconToggleButton
+						active={!!question.showChoiceImages}
+						label="Choice images"
+						icon={ImageIcon}
+						onClick={onToggleImages}
+					/>
+				)}
 		</div>
 	);
 }

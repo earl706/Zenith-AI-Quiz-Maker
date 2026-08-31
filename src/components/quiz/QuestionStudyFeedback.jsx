@@ -3,7 +3,13 @@ import { BookOpen, CheckCircle2, XCircle } from 'lucide-react';
 import { cn } from '../../lib/format';
 import { answersEqual } from '../../lib/mathAnswersEqual';
 import MathRenderer from './MathRenderer';
-import { isMathematical, resolveCorrectAnswer } from './quizHelpers';
+import {
+	isChessPuzzleQuestion,
+	isMathematical,
+	resolveCorrectAnswer,
+	chessPuzzleCredit
+} from './quizHelpers';
+import { formatUciList } from '../../lib/chessHelpers';
 
 function ContentBlock({ label, value }) {
 	if (!String(value || '').trim()) return null;
@@ -17,18 +23,52 @@ function ContentBlock({ label, value }) {
 
 export default function QuestionStudyFeedback({ question, answer }) {
 	const sequence = String(question?.question_type || '').startsWith('SEQ');
+	const chessPuzzle = isChessPuzzleQuestion(question);
 	const selected = String(answer?.userAnswer ?? '').trim();
 	const correctAnswer = String(answer?.correctAnswer ?? '').trim()
 		? String(answer.correctAnswer).trim()
 		: String(resolveCorrectAnswer(question) ?? '').trim();
-	if (!sequence && !selected) return null;
+	if (!sequence && !chessPuzzle && !selected) return null;
 	const math = isMathematical(question?.question_type);
-	const correct = sequence
-		? false
-		: answersEqual(correctAnswer, selected, {
-				mathematical: math,
-				questionType: question?.question_type ?? answer?.questionType
-			});
+	const correct = chessPuzzle
+		? chessPuzzleCredit(question, answer) === 1
+		: sequence
+			? false
+			: answersEqual(correctAnswer, selected, {
+					mathematical: math,
+					questionType: question?.question_type ?? answer?.questionType
+				});
+	if (chessPuzzle) {
+		return (
+			<div
+				className={cn(
+					'w-full space-y-3 rounded-md border p-4 text-left',
+					correct ? 'border-success/25 bg-success/5' : 'border-danger/25 bg-danger/5'
+				)}
+			>
+				<div
+					className={cn(
+						'flex items-center gap-2 text-sm font-semibold',
+						correct ? 'text-success' : 'text-danger'
+					)}
+				>
+					{correct ? <CheckCircle2 size={16} aria-hidden /> : <XCircle size={16} aria-hidden />}
+					{correct ? 'Correct' : 'Review this line'}
+				</div>
+				{!correct && (
+					<p className="text-muted text-sm">
+						Solution: <span className="text-fg font-mono">{correctAnswer}</span>
+					</p>
+				)}
+				{(answer?.userChessMoves || []).length > 0 && (
+					<p className="text-muted text-sm">
+						You played:{' '}
+						<span className="text-fg font-mono">{formatUciList(answer.userChessMoves)}</span>
+					</p>
+				)}
+			</div>
+		);
+	}
 	if (sequence) {
 		if (!(question?.explanation || question?.worked_solution || question?.source_citation)) {
 			return null;

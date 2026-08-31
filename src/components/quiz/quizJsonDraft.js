@@ -202,6 +202,15 @@ function authoringQuestionToExportShape(q, index, sections) {
 					order: i
 				}))
 			: [],
+		chess_spec:
+			q.chessPuzzle || q.chessSpec?.fen
+				? {
+						fen: q.chessSpec?.fen || '',
+						orientation: q.chessSpec?.orientation || 'white',
+						solution_uci: q.chessSpec?.solution_uci || [],
+						arrows: q.chessSpec?.arrows || []
+					}
+				: undefined,
 		has_choice_images: !!q.hasChoiceImages || (q.choiceImageUrls || []).some(Boolean),
 		question_image_url: usableUrl(q.question_image_url),
 		order: index,
@@ -335,7 +344,8 @@ function validateParsedQuiz(data) {
 				'SEQ-NXT',
 				'SEQ-FUL-COM',
 				'SEQ-GAP-COM',
-				'SEQ-NXT-COM'
+				'SEQ-NXT-COM',
+				'CHS-PUZ'
 			].includes(type)
 		) {
 			diagnostics.push({

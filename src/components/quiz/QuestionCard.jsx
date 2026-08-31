@@ -1,7 +1,9 @@
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 
+import ChessPuzzleAnswerInput from './ChessPuzzleAnswerInput';
 import IdentificationAnswerInput from './IdentificationAnswerInput';
 import MathRenderer from './MathRenderer';
+import QuestionChessBoard from './QuestionChessBoard';
 import QuestionStudyFeedback from './QuestionStudyFeedback';
 import QuestionTitle from './QuestionTitle';
 import SequenceAnswerInput from './SequenceAnswerInput';
@@ -9,18 +11,34 @@ import { resolveQuestionImageSrc, resolveQuizImageSrc } from '../../lib/quizImag
 import {
 	getChoiceData,
 	isAttemptAnswerFullyCorrect,
+	isChessPuzzleQuestion,
 	isMathematical,
 	isSequence,
+	chessPuzzleAnswered,
 	sequenceQuestionAnswered,
 	shuffleSequenceItems
 } from './quizHelpers';
 
-export default function QuestionCard({
+function answerForQuestion(answers, questionId) {
+	return answers.find((a) => a.id === questionId);
+}
+
+function questionCardPropsEqual(prev, next) {
+	if (prev.question !== next.question) return false;
+	if (prev.answerSuggestionsEnabled !== next.answerSuggestionsEnabled) return false;
+	if (prev.autoFocus !== next.autoFocus) return false;
+	if (prev.suggestionCorpus !== next.suggestionCorpus) return false;
+	const id = prev.question.id;
+	return answerForQuestion(prev.answers, id) === answerForQuestion(next.answers, id);
+}
+
+function QuestionCard({
 	question,
 	answers,
 	handleAnswerChange,
 	handleIdentificationAnswerChange,
 	handleSequenceChange,
+	handleChessMovesChange,
 	answerSuggestionsEnabled = false,
 	suggestionCorpus = [],
 	autoFocus = false,
@@ -33,6 +51,7 @@ export default function QuestionCard({
 	const questionImage = resolveQuestionImageSrc(question);
 	const identification = question.question_type === 'IDE' || question.question_type === 'IDE-COM';
 	const sequence = isSequence(question.question_type);
+	const chessPuzzle = isChessPuzzleQuestion(question);
 	const displayItems = useMemo(() => {
 		const items = question.sequence_items || [];
 		if (!sequence) return items;
@@ -41,16 +60,18 @@ export default function QuestionCard({
 		// Shuffle once per question mount.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [question.id]);
-	const hasAnswer = sequence
-		? sequenceQuestionAnswered(question, answer)
-		: String(answer?.userAnswer ?? '').trim() !== '';
+	const hasAnswer = chessPuzzle
+		? chessPuzzleAnswered(question, answer)
+		: sequence
+			? sequenceQuestionAnswered(question, answer)
+			: String(answer?.userAnswer ?? '').trim() !== '';
 
 	const notifyAnswered = (answerSnapshot) => {
 		onAnswered?.(question.id, isAttemptAnswerFullyCorrect(question, answerSnapshot));
 	};
 
 	const revealIfAnswered = (committedText) => {
-		if (sequence) {
+		if (chessPuzzle || sequence) {
 			if (!hasAnswer || revealed) return;
 			setRevealed(true);
 			notifyAnswered(answer);
@@ -67,7 +88,16 @@ export default function QuestionCard({
 
 	return (
 		<div className="space-y-3">
-			{sequence ? (
+			{chessPuzzle ? (
+				<ChessPuzzleAnswerInput
+					question={question}
+					answer={answer}
+					onChessMovesChange={handleChessMovesChange}
+					onEnter={revealIfAnswered}
+					disabled={revealed}
+					revealed={revealed}
+				/>
+			) : sequence ? (
 				<SequenceAnswerInput
 					question={question}
 					answer={answer}
@@ -79,17 +109,20 @@ export default function QuestionCard({
 					revealed={revealed}
 				/>
 			) : identification ? (
-				<IdentificationAnswerInput
-					answer={answer}
-					question={question}
-					handleIdentificationAnswerChange={handleIdentificationAnswerChange}
-					onEnter={revealIfAnswered}
-					autoFocus={autoFocus && !revealed}
-					disabled={revealed}
-					answerSuggestionsEnabled={answerSuggestionsEnabled}
-					suggestionCorpus={suggestionCorpus}
-					inputRef={inputRef}
-				/>
+				<>
+					<QuestionChessBoard question={question} className="mb-3 flex justify-center" />
+					<IdentificationAnswerInput
+						answer={answer}
+						question={question}
+						handleIdentificationAnswerChange={handleIdentificationAnswerChange}
+						onEnter={revealIfAnswered}
+						autoFocus={autoFocus && !revealed}
+						disabled={revealed}
+						answerSuggestionsEnabled={answerSuggestionsEnabled}
+						suggestionCorpus={suggestionCorpus}
+						inputRef={inputRef}
+					/>
+				</>
 			) : (
 				<div className="border-line bg-surface flex w-full flex-col items-center rounded-md border p-6">
 					<QuestionTitle
@@ -97,6 +130,8 @@ export default function QuestionCard({
 						mathematical={isMathematical(question.question_type)}
 						className="mb-3 text-2xl"
 					/>
+
+					<QuestionChessBoard question={question} />
 
 					{questionImage && (
 						<div className="mb-4 flex w-full justify-center">
@@ -159,7 +194,7 @@ export default function QuestionCard({
 					</div>
 				</div>
 			)}
-			{(identification || sequence) && !revealed && (
+			{(identification || sequence || chessPuzzle) && !revealed && (
 				<button
 					type="button"
 					disabled={!hasAnswer}
@@ -173,3 +208,5 @@ export default function QuestionCard({
 		</div>
 	);
 }
+
+export default memo(QuestionCard, questionCardPropsEqual);

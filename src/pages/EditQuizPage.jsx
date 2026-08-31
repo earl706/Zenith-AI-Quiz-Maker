@@ -32,6 +32,7 @@ import {
 } from '../components/ui';
 import MathInput from '../components/quiz/MathInput';
 import SequenceItemEditor from '../components/quiz/SequenceItemEditor';
+import ChessSpecEditor from '../components/quiz/ChessSpecEditor';
 import {
 	canUseSectionQuestionLayout,
 	createSection,
@@ -42,6 +43,7 @@ import {
 	questionTypeFromFlags,
 	flagsFromQuestionType,
 	authoringSequenceFields,
+	authoringChessFields,
 	defaultSequenceItems,
 	duplicateAuthoringQuestion,
 	questionsGroupedBySection,
@@ -103,6 +105,8 @@ function getDefaultQuestion(id, randomChoices = false, sectionKey = null) {
 		sequenceMode: 'gap',
 		sequenceOrderMatters: true,
 		sequenceItems: [],
+		chessPuzzle: false,
+		chessSpec: { fen: '', orientation: 'white', solution_uci: [], arrows: [] },
 		randomChoices,
 		hasChoiceImages: false,
 		showChoiceImages: false,
@@ -323,6 +327,7 @@ export default function EditQuizPage() {
 						mathematical,
 						identification,
 						...authoringSequenceFields(question, flags),
+						...authoringChessFields(question, flags),
 						randomChoices: !!question.random_choices,
 						hasChoiceImages,
 						showChoiceImages: hasChoiceImages,
@@ -357,7 +362,14 @@ export default function EditQuizPage() {
 			qs.map((q) => {
 				if (q.id !== qid) return q;
 				const next = { ...q, [field]: value };
+				if (field === 'chessPuzzle' && value === true) {
+					next.sequence = false;
+					next.identification = false;
+					next.showChoiceImages = false;
+					next.hasChoiceImages = false;
+				}
 				if (field === 'sequence' && value === true) {
+					next.chessPuzzle = false;
 					next.identification = false;
 					next.showChoiceImages = false;
 					next.hasChoiceImages = false;
@@ -377,6 +389,7 @@ export default function EditQuizPage() {
 				}
 				if (field === 'identification' && value === true) {
 					next.sequence = false;
+					next.chessPuzzle = false;
 				}
 				if ((field === 'identification' || field === 'mathematical') && value === true) {
 					next.showChoiceImages = false;
@@ -783,15 +796,17 @@ export default function EditQuizPage() {
 						question: question.title,
 						question_type: questionTypeFromFlags(question),
 						order: qi,
-						choices_array: question.sequence ? [] : choices,
-						choice_images: question.sequence ? [] : choiceImages,
-						choice_image_urls: question.sequence ? [] : choiceImageUrls,
-						correct_answer: question.sequence
-							? (question.sequenceItems || [])
-									.filter((item) => item.role === 'blank')
-									.map((item) => item.text)
-									.join(' | ')
-							: choices[correctIndex] || '',
+						choices_array: question.sequence || question.chessPuzzle ? [] : choices,
+						choice_images: question.sequence || question.chessPuzzle ? [] : choiceImages,
+						choice_image_urls: question.sequence || question.chessPuzzle ? [] : choiceImageUrls,
+						correct_answer: question.chessPuzzle
+							? (question.chessSpec?.solution_uci || []).join(' | ')
+							: question.sequence
+								? (question.sequenceItems || [])
+										.filter((item) => item.role === 'blank')
+										.map((item) => item.text)
+										.join(' | ')
+								: choices[correctIndex] || '',
 						correct_answer_index: correctIndex,
 						random_choices: !!question.randomChoices,
 						sequence_order_matters: question.sequenceOrderMatters !== false,
@@ -802,6 +817,15 @@ export default function EditQuizPage() {
 									order: si
 								}))
 							: [],
+						chess_spec:
+							question.chessPuzzle || question.chessSpec?.fen
+								? {
+										fen: question.chessSpec?.fen || '',
+										orientation: question.chessSpec?.orientation || 'white',
+										solution_uci: question.chessSpec?.solution_uci || [],
+										arrows: question.chessSpec?.arrows || []
+									}
+								: null,
 						has_choice_images: hasChoiceImages,
 						explanation: question.explanation || '',
 						worked_solution: question.workedSolution || '',
@@ -1145,6 +1169,17 @@ export default function EditQuizPage() {
 																}
 															/>
 
+															{!question.sequence && (
+																<ChessSpecEditor
+																	value={question.chessSpec}
+																	recordMode={!!question.chessPuzzle}
+																	questionType={questionTypeFromFlags(question)}
+																	onChange={(spec) =>
+																		handleInputChange(question.id, 'chessSpec', spec)
+																	}
+																/>
+															)}
+
 															<div className="space-y-1.5">
 																{question.sequence ? (
 																	<>
@@ -1198,6 +1233,11 @@ export default function EditQuizPage() {
 																			}
 																		/>
 																	</>
+																) : question.chessPuzzle ? (
+																	<p className="text-muted text-xs">
+																		Record the solution line on the board above. For single-move
+																		tactics, play one move; for opening drills, play the full line.
+																	</p>
 																) : question.mathematical ? (
 																	<MathInput
 																		handleChoicesChange={handleChoicesChange}

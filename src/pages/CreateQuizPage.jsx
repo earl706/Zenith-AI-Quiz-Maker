@@ -55,6 +55,7 @@ import {
 	PLAIN_IDE_TEXT_INPUT_AUTO_OFF,
 	flagsFromQuestionType,
 	authoringSequenceFields,
+	authoringChessFields,
 	defaultSequenceItems,
 	duplicateAuthoringQuestion
 } from '../components/quiz/quizHelpers';
@@ -129,6 +130,8 @@ function getDefaultQuestion(id, randomChoices = false, sectionKey = null) {
 		sequenceMode: 'gap',
 		sequenceOrderMatters: true,
 		sequenceItems: [],
+		chessPuzzle: false,
+		chessSpec: { fen: '', orientation: 'white', solution_uci: [], arrows: [] },
 		randomChoices,
 		hasChoiceImages: false,
 		showChoiceImages: false,
@@ -321,6 +324,7 @@ export default function CreateQuizPage() {
 					mathematical: flags.mathematical,
 					identification: flags.identification,
 					...authoringSequenceFields(q, flags),
+					...authoringChessFields(q, flags),
 					randomChoices: !!q.random_choices,
 					hasChoiceImages,
 					showChoiceImages: hasChoiceImages,
@@ -817,6 +821,7 @@ export default function CreateQuizPage() {
 					question.identification ? 'true' : 'false'
 				);
 				formData.append(`questions[${qi}][mathematical]`, question.mathematical ? 'true' : 'false');
+				formData.append(`questions[${qi}][chessPuzzle]`, question.chessPuzzle ? 'true' : 'false');
 				formData.append(`questions[${qi}][sequence]`, question.sequence ? 'true' : 'false');
 				formData.append(`questions[${qi}][sequenceMode]`, question.sequenceMode || 'gap');
 				formData.append(
@@ -827,6 +832,14 @@ export default function CreateQuizPage() {
 					formData.append(`questions[${qi}][sequence_items][${si}][text]`, item.text || '');
 					formData.append(`questions[${qi}][sequence_items][${si}][role]`, item.role || 'blank');
 				});
+				const spec = question.chessSpec;
+				if (spec?.fen) {
+					formData.append(`questions[${qi}][chess_spec][fen]`, spec.fen);
+					formData.append(`questions[${qi}][chess_spec][orientation]`, spec.orientation || 'white');
+					(spec.solution_uci || []).forEach((move, mi) => {
+						formData.append(`questions[${qi}][chess_spec][solution_uci][${mi}]`, move);
+					});
+				}
 				formData.append(`questions[${qi}][order]`, String(qi));
 				formData.append(`questions[${qi}][explanation]`, question.explanation || '');
 				formData.append(`questions[${qi}][worked_solution]`, question.workedSolution || '');

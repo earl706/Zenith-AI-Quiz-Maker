@@ -33,6 +33,7 @@ import {
 	buildAnswerRecords,
 	canUseSectionQuestionLayout,
 	countAnswered,
+	extractSubmitError,
 	groupQuestionsByApiSection,
 	identificationAnswerCorpus,
 	isIdentification,
@@ -40,6 +41,7 @@ import {
 	parseAttemptScopeFromSearch,
 	formatAttemptScopeLabel,
 	pickRandomQuestions,
+	serializeAnswersForSubmit,
 	shuffleArray,
 	sortQuestionsBySectionOrder,
 	ADVANCE_DELAY_CORRECT_MS,
@@ -192,6 +194,14 @@ export default function QuizAttempt() {
 	const [pendingDraft, setPendingDraft] = useState(null);
 	const [flashcardDraft, setFlashcardDraft] = useState(null);
 	const [answers, setAnswers] = useState([]);
+	const answersRef = useRef([]);
+	const commitAnswers = useCallback((updater) => {
+		setAnswers((prev) => {
+			const next = typeof updater === 'function' ? updater(prev) : updater;
+			answersRef.current = next;
+			return next;
+		});
+	}, []);
 	const [quizData, setQuizData] = useState({
 		quiz_title: '',
 		flashcard_quiz: false,
@@ -300,17 +310,33 @@ export default function QuizAttempt() {
 		[]
 	);
 
-	const handleAnswerChange = useCallback((qid, field, value) => {
-		setAnswers((prev) => prev.map((a) => (a.id === qid ? { ...a, [field]: value } : a)));
-	}, []);
+	const handleAnswerChange = useCallback(
+		(qid, field, value) => {
+			commitAnswers((prev) => prev.map((a) => (a.id === qid ? { ...a, [field]: value } : a)));
+		},
+		[commitAnswers]
+	);
 
-	const handleIdentificationAnswerChange = useCallback((qid, value) => {
-		setAnswers((prev) => prev.map((a) => (a.id === qid ? { ...a, userAnswer: value } : a)));
-	}, []);
+	const handleIdentificationAnswerChange = useCallback(
+		(qid, value) => {
+			commitAnswers((prev) => prev.map((a) => (a.id === qid ? { ...a, userAnswer: value } : a)));
+		},
+		[commitAnswers]
+	);
 
-	const handleSequenceChange = useCallback((qid, userSequence) => {
-		setAnswers((prev) => prev.map((a) => (a.id === qid ? { ...a, userSequence } : a)));
-	}, []);
+	const handleSequenceChange = useCallback(
+		(qid, userSequence) => {
+			commitAnswers((prev) => prev.map((a) => (a.id === qid ? { ...a, userSequence } : a)));
+		},
+		[commitAnswers]
+	);
+
+	const handleChessMovesChange = useCallback(
+		(qid, userChessMoves) => {
+			commitAnswers((prev) => prev.map((a) => (a.id === qid ? { ...a, userChessMoves } : a)));
+		},
+		[commitAnswers]
+	);
 
 	const startAttempt = useCallback(async () => {
 		try {
@@ -332,7 +358,9 @@ export default function QuizAttempt() {
 		(draft, { quizData: nextQuiz, questions: nextQuestions }) => {
 			setQuizData(nextQuiz);
 			setQuestions(nextQuestions);
-			setAnswers(mergeAnswersFromDraft(nextQuestions, draft.answers));
+			const mergedAnswers = mergeAnswersFromDraft(nextQuestions, draft.answers);
+			answersRef.current = mergedAnswers;
+			setAnswers(mergedAnswers);
 			setSubmittedAnswers([]);
 			setScore(0);
 			setAccuracy(0);
@@ -418,7 +446,9 @@ export default function QuizAttempt() {
 
 				setQuizData(nextQuiz);
 				setQuestions(scopedQuestions);
-				setAnswers(buildAnswerRecords(scopedQuestions));
+				const answerRecords = buildAnswerRecords(scopedQuestions);
+				answersRef.current = answerRecords;
+				setAnswers(answerRecords);
 				setSubmittedAnswers([]);
 				setScore(0);
 				setAccuracy(0);
@@ -631,20 +661,35 @@ export default function QuizAttempt() {
 		}
 		try {
 			setSubmitting(true);
-			const response = await api.post(`/quizzes/quiz/submit/${id}/`, { answers, time });
-			setSubmittedAnswers(Array.from(response.data.answers || []));
-			setScore(response.data.score);
-			setAccuracy(response.data.accuracy);
-			setSectionScores(response.data.section_scores || []);
-			setRoadmapProgress(response.data.roadmap_progress || null);
+			const currentAnswers = answersRef.current.length ? answersRef.current : answers;
+			const payload = serializeAnswersForSubmit(currentAnswers);
+			if (payload.length === 0) {
+				toast.error('No answers to submit.');
+				return;
+			}
+			const response = await api.post(`/quizzes/quiz/submit/${id}/`, {
+				answers: payload,
+				time
+			});
+			setSubmittedAnswers(
+				currentAnswers.map((row) => ({
+					...row,
+					userAnswer: row.userAnswer ?? '',
+					userSequence: row.userSequence ?? [],
+					userChessMoves: row.userChessMoves ?? []
+				}))
+			);
+			setScore(response.data?.score ?? 0);
+			setAccuracy(response.data?.accuracy ?? 0);
+			setSectionScores(response.data?.section_scores || []);
+			setRoadmapProgress(response.data?.roadmap_progress || null);
 			setQuizResults(true);
 			setPaused(false);
 			setIsRunning(false);
 			abandonAttemptDraft();
 			queryClient.invalidateQueries({ queryKey: ['roadmaps'] });
 		} catch (err) {
-			const message = err?.response?.data?.error || 'Failed to submit answers.';
-			toast.error(message);
+			toast.error(extractSubmitError(err));
 		} finally {
 			setSubmitting(false);
 		}
@@ -825,6 +870,7 @@ export default function QuizAttempt() {
 							onAnswerChange={handleAnswerChange}
 							onIdentificationChange={handleIdentificationAnswerChange}
 							onSequenceChange={handleSequenceChange}
+							onChessMovesChange={handleChessMovesChange}
 							onSubmit={submitAnswers}
 							submitting={submitting}
 							answerSuggestionsEnabled={quizData.answer_suggestions_enabled !== false}
@@ -856,6 +902,7 @@ export default function QuizAttempt() {
 											handleAnswerChange={handleAnswerChange}
 											handleIdentificationAnswerChange={handleIdentificationAnswerChange}
 											handleSequenceChange={handleSequenceChange}
+											handleChessMovesChange={handleChessMovesChange}
 											answerSuggestionsEnabled={quizData.answer_suggestions_enabled !== false}
 											suggestionCorpus={suggestionCorpus}
 											autoFocus={
