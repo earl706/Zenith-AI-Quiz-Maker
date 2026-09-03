@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { ArrowLeftRight } from 'lucide-react';
 
 import { post } from '../../lib/api';
 import { queryClient } from '../../lib/queryClient';
@@ -62,11 +63,9 @@ export default function MergeQuizzesModal({
 		const sourcePref = initialSourceUuid ? String(initialSourceUuid) : '';
 		const targetPref = initialTargetUuid ? String(initialTargetUuid) : '';
 
-		let target =
-			targetPref && options.some((o) => o.uuid === targetPref) ? targetPref : '';
+		let target = targetPref && options.some((o) => o.uuid === targetPref) ? targetPref : '';
 		if (!target) {
-			target =
-				options.find((o) => o.uuid !== sourcePref)?.uuid || options[0]?.uuid || '';
+			target = options.find((o) => o.uuid !== sourcePref)?.uuid || options[0]?.uuid || '';
 		}
 
 		const sourceCandidates = options.filter((o) => o.uuid !== target);
@@ -139,7 +138,13 @@ export default function MergeQuizzesModal({
 
 	const sourceOptions = options.filter((o) => o.uuid !== targetUuid);
 	const canPreview = targetUuid && sourceUuid && targetUuid !== sourceUuid;
+	const canSwap = Boolean(targetUuid && sourceUuid);
 	const colliding = (preview?.sections || []).filter((s) => s.collision);
+
+	const swapTargetSource = () => {
+		setTargetUuid(sourceUuid);
+		setSourceUuid(targetUuid);
+	};
 
 	return (
 		<Modal
@@ -187,7 +192,7 @@ export default function MergeQuizzesModal({
 				</p>
 
 				{!preview && (
-					<div className="grid gap-3 sm:grid-cols-2">
+					<div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
 						<Select
 							label="Target (keep)"
 							value={targetUuid}
@@ -205,6 +210,18 @@ export default function MergeQuizzesModal({
 								</option>
 							))}
 						</Select>
+						<Button
+							type="button"
+							variant="secondary"
+							size="icon"
+							className="justify-self-center"
+							disabled={!canSwap}
+							aria-label="Swap target and source"
+							title="Swap target and source"
+							onClick={swapTargetSource}
+						>
+							<ArrowLeftRight size={16} />
+						</Button>
 						<Select
 							label="Source (copy from)"
 							value={sourceUuid}
@@ -297,7 +314,7 @@ export default function MergeQuizzesModal({
 							<label className="border-line flex cursor-pointer items-start gap-2 rounded-md border p-3 text-sm">
 								<input
 									type="checkbox"
-									className="mt-0.5 accent-primary"
+									className="accent-primary mt-0.5"
 									checked={includeUnsectioned}
 									onChange={(e) => setIncludeUnsectioned(e.target.checked)}
 								/>
