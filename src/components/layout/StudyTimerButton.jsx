@@ -1,7 +1,23 @@
 import { useState } from 'react';
-import { Coffee, Pause, Play, RotateCcw, SkipForward, Timer, Volume2 } from 'lucide-react';
+import {
+	Bell,
+	Brain,
+	Coffee,
+	Gauge,
+	Hourglass,
+	Music2,
+	Pause,
+	Play,
+	Radio,
+	RotateCcw,
+	SkipForward,
+	Timer,
+	Volume1,
+	Zap
+} from 'lucide-react';
 
 import { previewStudyAlarmSound, STUDY_ALARM_SOUNDS } from '../../lib/studyAlarm';
+import { cn } from '../../lib/format';
 import { formatTimerDisplay } from '../../lib/studyTimerFormat';
 import {
 	getPhaseLabel,
@@ -15,10 +31,54 @@ import {
 	selectOnBreak,
 	useStudyTimerStore
 } from '../../stores/studyTimerStore';
-import { Button, Modal, ProgressRing, Select } from '../ui';
+import { Button, Modal, ProgressRing } from '../ui';
 
 const FREE_PRESETS = [15, 25, 45, 60];
 const DIAL_ADJUST_SECONDS = 5 * 60;
+
+const TECHNIQUE_ICONS = {
+	pomodoro: Timer,
+	'52-17': Hourglass,
+	'deep-work': Brain,
+	[STUDY_TECHNIQUE_FREE]: Gauge
+};
+
+const TECHNIQUE_SHORT_LABELS = {
+	pomodoro: 'Pomodoro',
+	'52-17': '52/17',
+	'deep-work': 'Deep',
+	[STUDY_TECHNIQUE_FREE]: 'Free'
+};
+
+const ALARM_ICONS = {
+	chime: Music2,
+	bell: Bell,
+	digital: Radio,
+	soft: Volume1,
+	urgent: Zap
+};
+
+function IconChoice({ selected, disabled, icon: Icon, label, onClick, ariaLabel }) {
+	return (
+		<button
+			type="button"
+			disabled={disabled}
+			onClick={onClick}
+			aria-label={ariaLabel || label}
+			aria-pressed={selected}
+			title={label}
+			className={cn(
+				'inline-flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-md px-1 py-1 transition-colors duration-150',
+				'focus-visible:outline-primary focus-visible:outline-2 focus-visible:outline-offset-2',
+				'disabled:pointer-events-none disabled:opacity-50',
+				selected ? 'text-primary' : 'text-muted hover:text-fg'
+			)}
+		>
+			<Icon size={16} aria-hidden />
+			<span className="text-xxs max-w-full truncate font-medium tracking-wide">{label}</span>
+		</button>
+	);
+}
 
 export function StudyTimerButton() {
 	const [open, setOpen] = useState(false);
@@ -54,6 +114,7 @@ export function StudyTimerButton() {
 	const canEditDuration = !locked && !structured;
 	const canToggleFreeMode = isFree && canEditDuration;
 	const tone = onBreak || isFreeRest ? 'success' : 'primary';
+	const activeTechniqueId = techniqueId === 'rest' ? STUDY_TECHNIQUE_FREE : techniqueId;
 
 	const ariaLabel = sessionActive
 		? `${isFreeRest || onBreak ? 'Rest' : 'Study timer'} ${display} remaining`
@@ -187,44 +248,48 @@ export function StudyTimerButton() {
 					)}
 
 					<div className="space-y-3">
-						<Select
-							label="Technique"
-							value={techniqueId === 'rest' ? STUDY_TECHNIQUE_FREE : techniqueId}
-							disabled={locked}
-							onChange={(e) => setTechnique(e.target.value)}
-						>
-							{STUDY_TECHNIQUES.map((t) => (
-								<option key={t.id} value={t.id}>
-									{t.label}
-								</option>
-							))}
-						</Select>
-
-						<div className="flex items-end gap-2">
-							<div className="min-w-0 flex-1">
-								<Select
-									label="Alarm"
-									value={alarmSound}
-									disabled={locked}
-									onChange={(e) => setAlarmSound(e.target.value)}
-								>
-									{STUDY_ALARM_SOUNDS.map((s) => (
-										<option key={s.id} value={s.id}>
-											{s.label}
-										</option>
-									))}
-								</Select>
+						<div className="space-y-1.5">
+							<p className="text-fg text-sm font-medium">Technique</p>
+							<div className="flex gap-1.5" role="group" aria-label="Technique">
+								{STUDY_TECHNIQUES.map((t) => {
+									const Icon = TECHNIQUE_ICONS[t.id] || Timer;
+									const shortLabel = TECHNIQUE_SHORT_LABELS[t.id] || t.label;
+									return (
+										<IconChoice
+											key={t.id}
+											icon={Icon}
+											label={shortLabel}
+											ariaLabel={t.label}
+											selected={activeTechniqueId === t.id}
+											disabled={locked}
+											onClick={() => setTechnique(t.id)}
+										/>
+									);
+								})}
 							</div>
-							<Button
-								size="icon"
-								variant="secondary"
-								disabled={locked}
-								onClick={() => previewStudyAlarmSound(alarmSound)}
-								aria-label="Preview alarm"
-								className="mb-0.5 shrink-0"
-							>
-								<Volume2 size={16} />
-							</Button>
+						</div>
+
+						<div className="space-y-1.5">
+							<p className="text-fg text-sm font-medium">Alarm</p>
+							<div className="flex gap-1.5" role="group" aria-label="Alarm">
+								{STUDY_ALARM_SOUNDS.map((s) => {
+									const Icon = ALARM_ICONS[s.id] || Bell;
+									return (
+										<IconChoice
+											key={s.id}
+											icon={Icon}
+											label={s.label}
+											ariaLabel={`${s.label} alarm`}
+											selected={alarmSound === s.id}
+											disabled={locked}
+											onClick={() => {
+												setAlarmSound(s.id);
+												previewStudyAlarmSound(s.id);
+											}}
+										/>
+									);
+								})}
+							</div>
 						</div>
 					</div>
 				</div>

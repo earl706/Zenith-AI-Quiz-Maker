@@ -51,7 +51,7 @@ import RoadmapNodeCard, {
 } from '../components/roadmap/RoadmapNodeCard';
 import { paginateClient } from '../hooks/useListControls';
 
-const PATH_PAGE_SIZE = 9;
+const PATH_PAGE_SIZE = 8;
 const TODAY_PAGE_SIZE = 4;
 const WEEK_PAGE_SIZE = 1;
 

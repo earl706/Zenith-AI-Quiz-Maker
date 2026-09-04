@@ -1,8 +1,8 @@
 import { Chess } from 'chess.js';
 
 export const CHESS_PUZZLE_TYPE = 'CHS-PUZ';
-export const CHESS_USER_MOVE_MAX = 10;
-export const CHESS_SOLUTION_MAX_PLIES = 20;
+export const CHESS_USER_MOVE_MAX = 20;
+export const CHESS_SOLUTION_MAX_PLIES = 40;
 
 export function isChessPuzzle(questionType) {
 	return String(questionType || '') === CHESS_PUZZLE_TYPE;
@@ -123,7 +123,9 @@ export function buildPlayedLine(fen, solutionUci, userMoves) {
 				.toLowerCase();
 			userIdx += 1;
 			if (!userMoveMatchesExpected(moveUci, expectedUser[userIdx - 1])) {
+				// Snap back: do not apply the wrong move to the board.
 				onSolution = false;
+				break;
 			}
 		} else {
 			if (!onSolution) break;
@@ -131,7 +133,6 @@ export function buildPlayedLine(fen, solutionUci, userMoves) {
 		}
 		if (!applyUciMove(game, moveUci)) break;
 		line.push(moveUci);
-		if (!onSolution) break;
 	}
 
 	if (!onSolution) {
@@ -184,6 +185,7 @@ export function chessPuzzleAnswered(question, answer) {
 	const spec = normalizeChessSpec(question?.chess_spec || question?.chessSpec);
 	if (!spec) return false;
 	const expected = userPliesFromSolution(spec.fen, spec.solution_uci);
+	if (!expected.length) return false;
 	const played = (answer?.userChessMoves || [])
 		.map((m) =>
 			String(m || '')
@@ -191,9 +193,15 @@ export function chessPuzzleAnswered(question, answer) {
 				.toLowerCase()
 		)
 		.filter(Boolean);
-	return played.length >= expected.length && expected.length > 0;
+	if (!played.length) return false;
+	for (let i = 0; i < played.length; i += 1) {
+		if (i >= expected.length) return true;
+		if (!userMoveMatchesExpected(played[i], expected[i])) return true;
+	}
+	return played.length >= expected.length;
 }
 
+/** Binary credit: 1 only when every user ply matches; first error or incomplete = 0. */
 export function chessPuzzleCredit(question, answer) {
 	if (!isChessPuzzleQuestion(question)) return 0;
 	const spec = normalizeChessSpec(question?.chess_spec || question?.chessSpec);
@@ -207,12 +215,11 @@ export function chessPuzzleCredit(question, answer) {
 				.toLowerCase()
 		)
 		.filter(Boolean);
-	let hits = 0;
+	if (played.length !== expected.length) return 0;
 	for (let i = 0; i < expected.length; i += 1) {
-		if (played[i] !== expected[i]) break;
-		hits += 1;
+		if (!userMoveMatchesExpected(played[i], expected[i])) return 0;
 	}
-	return Math.round((hits / expected.length) * 100) / 100;
+	return 1;
 }
 
 export function formatUciList(moves) {

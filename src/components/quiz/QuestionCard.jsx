@@ -71,7 +71,17 @@ function QuestionCard({
 	};
 
 	const revealIfAnswered = (committedText) => {
-		if (chessPuzzle || sequence) {
+		if (chessPuzzle) {
+			if (revealed) return;
+			const patch = committedText && typeof committedText === 'object' ? committedText : null;
+			const snapshot = { ...answer, ...(patch || {}) };
+			if (!chessPuzzleAnswered(question, snapshot)) return;
+			setRevealed(true);
+			notifyAnswered(snapshot);
+			onIdentificationRevealed?.(question.id);
+			return;
+		}
+		if (sequence) {
 			if (!hasAnswer || revealed) return;
 			setRevealed(true);
 			notifyAnswered(answer);

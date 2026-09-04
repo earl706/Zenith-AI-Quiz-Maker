@@ -62,8 +62,11 @@ function ChessPuzzleAnswerInput({
 				attempt.uci === expected || (expected?.length === 4 && attempt.uci === `${expected}q`);
 			if (!matchesExpected) {
 				setLocked(true);
-				setFeedback('Incorrect — review the solution after submit.');
-				onChessMovesChange?.(question.id, [...played, attempt.uci]);
+				setFeedback('Incorrect.');
+				setSelectedSquare(null);
+				const nextPlayed = [...played, attempt.uci];
+				onChessMovesChange?.(question.id, nextPlayed);
+				onEnter?.({ userChessMoves: nextPlayed });
 				return false;
 			}
 			const resolvedUci = expected || attempt.uci;

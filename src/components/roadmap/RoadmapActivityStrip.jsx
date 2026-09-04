@@ -18,10 +18,15 @@ function tileTooltip(day) {
 
 /**
  * Status-page style quiz activity strip (finished linked-quiz attempts).
- * Default window comes from the API (60 local days). Green = ≥1 completed
- * attempt that day; muted = none. Display-only.
+ * Default window comes from the API (roadmap ~60–90 local days; quiz list 60).
+ * Green = ≥1 completed attempt that day; muted = none. Display-only.
  */
-export default function RoadmapActivityStrip({ activity, className, compact = false }) {
+export default function RoadmapActivityStrip({
+	activity,
+	className,
+	compact = false,
+	showHeader = true
+}) {
 	const [tip, setTip] = useState(null);
 
 	const days = activity?.days;
@@ -37,12 +42,14 @@ export default function RoadmapActivityStrip({ activity, className, compact = fa
 			onClick={(e) => e.stopPropagation()}
 			onKeyDown={(e) => e.stopPropagation()}
 		>
-			<div className="mb-1.5 flex items-center justify-between gap-2">
-				<p className="text-muted text-[10px] font-medium tracking-wide uppercase">Activity</p>
-				<p className="text-muted text-[10px] tabular-nums">
-					{activeDays}/{windowDays} active days
-				</p>
-			</div>
+			{showHeader ? (
+				<div className="mb-1.5 flex items-center justify-between gap-2">
+					<p className="text-muted text-[10px] font-medium tracking-wide uppercase">Activity</p>
+					<p className="text-muted text-[10px] tabular-nums">
+						{activeDays}/{windowDays} active days
+					</p>
+				</div>
+			) : null}
 			<div
 				className={cn('relative flex w-full items-stretch gap-px', barH)}
 				role="img"

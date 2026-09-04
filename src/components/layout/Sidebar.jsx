@@ -23,11 +23,11 @@ function IconWell({ collapsed, active = false, children }) {
 			{active ? (
 				<motion.span
 					layoutId="nav-active"
-					className="bg-primary/12 absolute inset-0 rounded-lg"
+					className="bg-primary/12 absolute inset-0 rounded-sm"
 					transition={{ type: 'spring', stiffness: 400, damping: 32 }}
 				/>
 			) : (
-				<span className="bg-surface-2 absolute inset-0 rounded-lg opacity-0 transition-opacity group-hover:opacity-100" />
+				<span className="bg-surface-2 absolute inset-0 rounded-sm opacity-0 transition-opacity group-hover:opacity-100" />
 			)}
 			{children}
 		</span>
