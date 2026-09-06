@@ -1,6 +1,7 @@
 import { memo, useMemo, useState } from 'react';
 
 import ChessPuzzleAnswerInput from './ChessPuzzleAnswerInput';
+import CodeAnswerInput from './CodeAnswerInput';
 import IdentificationAnswerInput from './IdentificationAnswerInput';
 import MathRenderer from './MathRenderer';
 import QuestionChessBoard from './QuestionChessBoard';
@@ -12,9 +13,11 @@ import {
 	getChoiceData,
 	isAttemptAnswerFullyCorrect,
 	isChessPuzzleQuestion,
+	isCodeQuestion,
 	isMathematical,
 	isSequence,
 	chessPuzzleAnswered,
+	codeQuestionAnswered,
 	sequenceQuestionAnswered,
 	shuffleSequenceItems
 } from './quizHelpers';
@@ -52,6 +55,7 @@ function QuestionCard({
 	const identification = question.question_type === 'IDE' || question.question_type === 'IDE-COM';
 	const sequence = isSequence(question.question_type);
 	const chessPuzzle = isChessPuzzleQuestion(question);
+	const codeQuiz = isCodeQuestion(question);
 	const displayItems = useMemo(() => {
 		const items = question.sequence_items || [];
 		if (!sequence) return items;
@@ -62,9 +66,11 @@ function QuestionCard({
 	}, [question.id]);
 	const hasAnswer = chessPuzzle
 		? chessPuzzleAnswered(question, answer)
-		: sequence
-			? sequenceQuestionAnswered(question, answer)
-			: String(answer?.userAnswer ?? '').trim() !== '';
+		: codeQuiz
+			? codeQuestionAnswered(question, answer)
+			: sequence
+				? sequenceQuestionAnswered(question, answer)
+				: String(answer?.userAnswer ?? '').trim() !== '';
 
 	const notifyAnswered = (answerSnapshot) => {
 		onAnswered?.(question.id, isAttemptAnswerFullyCorrect(question, answerSnapshot));
@@ -107,6 +113,25 @@ function QuestionCard({
 					disabled={revealed}
 					revealed={revealed}
 				/>
+			) : codeQuiz ? (
+				<>
+					<QuestionTitle text={question.question} mathematical={false} className="mb-3 text-2xl" />
+					{questionImage && (
+						<div className="mb-4 flex w-full justify-center">
+							<img
+								src={questionImage}
+								alt="Question"
+								className="h-auto max-h-[200px] w-full max-w-md object-contain"
+							/>
+						</div>
+					)}
+					<CodeAnswerInput
+						question={question}
+						value={answer?.userAnswer || ''}
+						disabled={revealed}
+						onChange={(text) => handleIdentificationAnswerChange(question.id, text)}
+					/>
+				</>
 			) : sequence ? (
 				<SequenceAnswerInput
 					question={question}
@@ -204,7 +229,7 @@ function QuestionCard({
 					</div>
 				</div>
 			)}
-			{(identification || sequence || chessPuzzle) && !revealed && (
+			{(identification || sequence || chessPuzzle || codeQuiz) && !revealed && (
 				<button
 					type="button"
 					disabled={!hasAnswer}

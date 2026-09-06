@@ -17,7 +17,9 @@ import {
 	parseOptionalTimerSeconds,
 	questionTypeFromFlags,
 	resolveAuthoringSectionIndex,
-	authoringSequenceFields
+	authoringSequenceFields,
+	authoringChessFields,
+	authoringCodeFields
 } from './quizHelpers';
 
 export function persistableNumericId(value) {
@@ -156,6 +158,8 @@ export function mapJsonQuestionToAuthoring(q, index, { templateStyle, sections }
 		mathematical: flags.mathematical,
 		identification: flags.identification,
 		...authoringSequenceFields(q, flags),
+		...authoringChessFields(q, flags),
+		...authoringCodeFields(q, flags),
 		randomChoices: !!(q.random_choices ?? q.randomChoices),
 		hasChoiceImages,
 		showChoiceImages: hasChoiceImages,
@@ -209,6 +213,13 @@ function authoringQuestionToExportShape(q, index, sections) {
 						orientation: q.chessSpec?.orientation || 'white',
 						solution_uci: q.chessSpec?.solution_uci || [],
 						arrows: q.chessSpec?.arrows || []
+					}
+				: undefined,
+		code_spec:
+			q.codeQuiz || q.codeSpec?.solution
+				? {
+						language: q.codeSpec?.language || 'plaintext',
+						solution: q.codeSpec?.solution || ''
 					}
 				: undefined,
 		has_choice_images: !!q.hasChoiceImages || (q.choiceImageUrls || []).some(Boolean),

@@ -6,6 +6,7 @@ import { cn, formatDurationSeconds } from '../../lib/format';
 import { resolveQuestionImageSrc, resolveQuizImageSrc } from '../../lib/quizImages';
 import { Button, Card, CardBody, LoadingScreen, ProgressBar } from '../ui';
 import ChessPuzzleAnswerInput from './ChessPuzzleAnswerInput';
+import CodeAnswerInput from './CodeAnswerInput';
 import IdentificationAnswerInput from './IdentificationAnswerInput';
 import MathRenderer from './MathRenderer';
 import QuestionChessBoard from './QuestionChessBoard';
@@ -17,10 +18,12 @@ import {
 	ADVANCE_DELAY_WRONG_MS,
 	getChoiceData,
 	isChessPuzzleQuestion,
+	isCodeQuestion,
 	isIdentification,
 	isMathematical,
 	isSequence,
 	chessPuzzleAnswered,
+	codeQuestionAnswered,
 	resolveQuestionTimerSeconds,
 	sequenceQuestionAnswered,
 	shuffleSequenceItems
@@ -63,6 +66,7 @@ export default function FlashcardAttempt({
 	const locked = currentQuestion ? lockedIds.has(currentQuestion.id) : false;
 	const sequence = currentQuestion ? isSequence(currentQuestion.question_type) : false;
 	const chessPuzzle = currentQuestion ? isChessPuzzleQuestion(currentQuestion) : false;
+	const codeQuiz = currentQuestion ? isCodeQuestion(currentQuestion) : false;
 	const displayItems = useMemo(() => {
 		if (!currentQuestion || !sequence) return [];
 		const items = currentQuestion.sequence_items || [];
@@ -72,9 +76,11 @@ export default function FlashcardAttempt({
 	}, [currentQuestion?.id]);
 	const hasAnswer = chessPuzzle
 		? chessPuzzleAnswered(currentQuestion, answer)
-		: sequence
-			? sequenceQuestionAnswered(currentQuestion, answer)
-			: String(answer?.userAnswer ?? '').trim() !== '';
+		: codeQuiz
+			? codeQuestionAnswered(currentQuestion, answer)
+			: sequence
+				? sequenceQuestionAnswered(currentQuestion, answer)
+				: String(answer?.userAnswer ?? '').trim() !== '';
 
 	const advanceTimer = useRef(null);
 	const onSubmitRef = useRef(onSubmit);
@@ -190,6 +196,8 @@ export default function FlashcardAttempt({
 			if (!sequenceQuestionAnswered(currentQuestion, snapshot)) return;
 		} else if (chessPuzzle) {
 			if (!chessPuzzleAnswered(currentQuestion, snapshot)) return;
+		} else if (codeQuiz) {
+			if (!codeQuestionAnswered(currentQuestion, snapshot)) return;
 		} else if (!String(snapshot?.userAnswer ?? '').trim()) {
 			return;
 		}
@@ -368,6 +376,29 @@ export default function FlashcardAttempt({
 								disabled={revealed || locked}
 								revealed={revealed}
 							/>
+						) : codeQuiz ? (
+							<>
+								<QuestionTitle
+									text={currentQuestion.question}
+									mathematical={false}
+									className="text-2xl"
+								/>
+								{resolveQuestionImageSrc(currentQuestion) && (
+									<div className="flex w-full justify-center">
+										<img
+											src={resolveQuestionImageSrc(currentQuestion)}
+											alt=""
+											className="h-auto max-h-48 w-full max-w-md object-contain"
+										/>
+									</div>
+								)}
+								<CodeAnswerInput
+									question={currentQuestion}
+									value={answer?.userAnswer || ''}
+									disabled={revealed || locked}
+									onChange={(text) => onIdentificationChange?.(currentQuestion.id, text)}
+								/>
+							</>
 						) : sequence ? (
 							<SequenceAnswerInput
 								question={currentQuestion}
@@ -456,7 +487,10 @@ export default function FlashcardAttempt({
 							</Card>
 						)}
 
-						{(isIdentification(currentQuestion.question_type) || sequence || chessPuzzle) &&
+						{(isIdentification(currentQuestion.question_type) ||
+							sequence ||
+							chessPuzzle ||
+							codeQuiz) &&
 							!revealed &&
 							!locked && (
 								<Button

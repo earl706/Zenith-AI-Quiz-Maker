@@ -10,6 +10,16 @@ import {
 	normalizeChessSpec,
 	userPliesFromSolution
 } from '../../lib/chessHelpers';
+import {
+	CODE_QUESTION_TYPE,
+	codeQuestionAnswered,
+	codeQuestionCredit,
+	emptyCodeSpec,
+	isCodeQuestion,
+	isCodeType,
+	normalizeCodeSpec
+} from '../../lib/codeHelpers';
+import { formatCodeStyle } from '../../lib/codeAnswersEqual';
 
 export {
 	chessPuzzleAnswered,
@@ -20,7 +30,15 @@ export {
 	isChessPuzzle,
 	isChessPuzzleQuestion,
 	normalizeChessSpec,
-	userPliesFromSolution
+	userPliesFromSolution,
+	CODE_QUESTION_TYPE,
+	codeQuestionAnswered,
+	codeQuestionCredit,
+	emptyCodeSpec,
+	isCodeQuestion,
+	isCodeType,
+	normalizeCodeSpec,
+	formatCodeStyle
 };
 
 const MATH_TYPES = new Set([
@@ -69,7 +87,8 @@ const QUESTION_TYPE_LABELS = {
 	'SEQ-FUL-COM': 'Sequence · full list · math',
 	'SEQ-GAP-COM': 'Sequence · gap fill · math',
 	'SEQ-NXT-COM': 'Sequence · next step · math',
-	'CHS-PUZ': 'Chess puzzle'
+	'CHS-PUZ': 'Chess puzzle',
+	COD: 'Code'
 };
 
 export const SEQUENCE_ITEM_MIN = 3;
@@ -188,6 +207,10 @@ export function resolveCorrectAnswer(question) {
 		if (!spec) return stored;
 		return userPliesFromSolution(spec.fen, spec.solution_uci).join(' | ');
 	}
+	if (isCodeQuestion(question)) {
+		const spec = normalizeCodeSpec(question?.code_spec || question?.codeSpec);
+		return spec?.solution ?? stored;
+	}
 	const choices = Array.isArray(question?.choices) ? question.choices : [];
 	let idx = Number(question?.correct_answer_index);
 	if (!Number.isInteger(idx) || idx < 0) idx = 0;
@@ -225,9 +248,11 @@ export function questionTypeFromFlags({
 	identification,
 	sequence,
 	sequenceMode,
-	chessPuzzle
+	chessPuzzle,
+	codeQuiz
 }) {
 	if (chessPuzzle) return CHESS_PUZZLE_TYPE;
+	if (codeQuiz) return CODE_QUESTION_TYPE;
 	if (sequence) {
 		const mode =
 			sequenceMode === 'full' ? 'SEQ-FUL' : sequenceMode === 'next' ? 'SEQ-NXT' : 'SEQ-GAP';
@@ -245,6 +270,7 @@ export function flagsFromQuestionType(questionType) {
 		identification: t === 'IDE' || t === 'IDE-COM',
 		sequence,
 		chessPuzzle: isChessPuzzle(t),
+		codeQuiz: isCodeType(t),
 		sequenceMode: sequenceModeFromType(t)
 	};
 }
@@ -310,6 +336,8 @@ export function duplicateAuthoringQuestion(question) {
 		choiceImagePreviews: [...(question.choiceImagePreviews || [])],
 		choiceImageUrls: [...(question.choiceImageUrls || [])],
 		sequenceItems,
+		chessSpec: question.chessSpec ? { ...question.chessSpec } : emptyChessSpec(),
+		codeSpec: question.codeSpec ? { ...question.codeSpec } : emptyCodeSpec(),
 		_jsonId: undefined,
 		_jsonIndex: undefined,
 		_reviewKind: undefined,
@@ -352,6 +380,20 @@ export function authoringChessFields(raw, flags = {}) {
 	return {
 		chessPuzzle,
 		chessSpec: spec || emptyChessSpec()
+	};
+}
+
+export function authoringCodeFields(raw, flags = {}) {
+	const spec = normalizeCodeSpec(raw?.code_spec || raw?.codeSpec);
+	const codeQuiz = !!(
+		flags.codeQuiz ||
+		raw?.codeQuiz ||
+		isCodeType(raw?.question_type) ||
+		Boolean(spec?.solution?.trim())
+	);
+	return {
+		codeQuiz,
+		codeSpec: spec || emptyCodeSpec()
 	};
 }
 
@@ -853,6 +895,9 @@ export function isAttemptAnswerFullyCorrect(question, answer) {
 	if (isChessPuzzleQuestion(question)) {
 		return chessPuzzleCredit(question, answer) === 1;
 	}
+	if (isCodeQuestion(question)) {
+		return codeQuestionCredit(question, answer) === 1;
+	}
 	if (isSequence(question.question_type)) {
 		return sequenceSlotCredit(question, answer) === 1;
 	}
@@ -881,6 +926,7 @@ export function countAnswered(answers, questions = []) {
 	return answers.filter((a) => {
 		const q = byId.get(a.id);
 		if (q && isChessPuzzleQuestion(q)) return chessPuzzleAnswered(q, a);
+		if (q && isCodeQuestion(q)) return codeQuestionAnswered(q, a);
 		if (q && isSequence(q.question_type)) return sequenceQuestionAnswered(q, a);
 		return String(a.userAnswer ?? '').trim() !== '';
 	}).length;

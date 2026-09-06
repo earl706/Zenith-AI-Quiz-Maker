@@ -6,6 +6,7 @@ import {
 	ChevronsLeft,
 	ChevronsRight,
 	ChevronsUp,
+	Code2,
 	Image as ImageIcon,
 	ListOrdered,
 	Plus,
@@ -97,7 +98,7 @@ export function IconToggleButton({ active, onClick, label, icon: Icon, disabled 
 	);
 }
 
-/** Math / Seq / ID / Images flags on a question card header. */
+/** Math / Chess / Code / Seq / ID / Images flags on a question card header. */
 export function QuestionTypeFlagToggles({ question, onToggle, onToggleImages }) {
 	return (
 		<div className="flex items-center gap-1">
@@ -106,6 +107,7 @@ export function QuestionTypeFlagToggles({ question, onToggle, onToggleImages }) 
 				label="Math"
 				icon={Sigma}
 				onClick={() => onToggle('mathematical', !question.mathematical)}
+				disabled={!!question.codeQuiz}
 			/>
 			<IconToggleButton
 				active={!!question.chessPuzzle}
@@ -114,12 +116,18 @@ export function QuestionTypeFlagToggles({ question, onToggle, onToggleImages }) 
 				onClick={() => onToggle('chessPuzzle', !question.chessPuzzle)}
 			/>
 			<IconToggleButton
+				active={!!question.codeQuiz}
+				label="Code"
+				icon={Code2}
+				onClick={() => onToggle('codeQuiz', !question.codeQuiz)}
+			/>
+			<IconToggleButton
 				active={!!question.sequence}
 				label="Sequence"
 				icon={ListOrdered}
 				onClick={() => onToggle('sequence', !question.sequence)}
 			/>
-			{!question.sequence && !question.chessPuzzle && (
+			{!question.sequence && !question.chessPuzzle && !question.codeQuiz && (
 				<IconToggleButton
 					active={!!question.identification}
 					label="Identification"
@@ -130,7 +138,8 @@ export function QuestionTypeFlagToggles({ question, onToggle, onToggleImages }) 
 			{!question.identification &&
 				!question.mathematical &&
 				!question.sequence &&
-				!question.chessPuzzle && (
+				!question.chessPuzzle &&
+				!question.codeQuiz && (
 					<IconToggleButton
 						active={!!question.showChoiceImages}
 						label="Choice images"

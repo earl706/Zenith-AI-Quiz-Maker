@@ -15,7 +15,9 @@ import {
 	getChoiceData,
 	accuracyTone,
 	chessPuzzleCredit,
+	codeQuestionCredit,
 	isChessPuzzleQuestion,
+	isCodeQuestion,
 	isIdentification,
 	isMathematical,
 	isSequence,
@@ -25,6 +27,7 @@ import {
 	formatScore
 } from './quizHelpers';
 import { formatUciList, userPliesFromSolution, normalizeChessSpec } from '../../lib/chessHelpers';
+import CodeAnswerInput from './CodeAnswerInput';
 import QuizQuestionListLayout from './QuizQuestionListLayout';
 import { useQuestionDisplayLayout } from './useQuestionDisplayLayout';
 
@@ -341,6 +344,7 @@ function resolveReviewCorrectAnswer(question, submitted) {
 function answerCredit(question, submitted) {
 	if (!question) return 0;
 	if (isChessPuzzleQuestion(question)) return chessPuzzleCredit(question, submitted);
+	if (isCodeQuestion(question)) return codeQuestionCredit(question, submitted);
 	if (isSequence(question.question_type)) return sequenceSlotCredit(question, submitted);
 	return isAttemptAnswerFullyCorrect(question, submitted) ? 1 : 0;
 }
@@ -520,11 +524,37 @@ function ChessPuzzleResult({ question, submitted }) {
 	);
 }
 
+function CodeResult({ question, submitted, correct }) {
+	const expected = resolveCorrectAnswer(question);
+	return (
+		<div className="grid gap-3 sm:grid-cols-2">
+			<div>
+				<p className="text-muted mb-1.5 text-xs font-medium">Your answer</p>
+				<div
+					className={cn(
+						'rounded-md border p-2',
+						correct ? 'border-success/20 bg-success/10' : 'border-danger/20 bg-danger/10'
+					)}
+				>
+					<CodeAnswerInput question={question} value={submitted?.userAnswer || ''} readOnly />
+				</div>
+			</div>
+			<div>
+				<p className="text-muted mb-1.5 text-xs font-medium">Expected solution</p>
+				<div className="border-success/20 bg-success/10 rounded-md border p-2">
+					<CodeAnswerInput question={question} value={expected || ''} readOnly />
+				</div>
+			</div>
+		</div>
+	);
+}
+
 function ResultQuestionCard({ question, submitted, index }) {
 	const math = isMathematical(question.question_type);
 	const identification = isIdentification(question.question_type);
 	const sequence = isSequence(question.question_type);
 	const chessPuzzle = isChessPuzzleQuestion(question);
+	const codeQuiz = isCodeQuestion(question);
 	const correctAnswer = resolveReviewCorrectAnswer(question, submitted);
 	const credit = answerCredit(question, submitted);
 	const correct = credit === 1;
@@ -565,6 +595,8 @@ function ResultQuestionCard({ question, submitted, index }) {
 
 				{chessPuzzle ? (
 					<ChessPuzzleResult question={question} submitted={submitted} />
+				) : codeQuiz ? (
+					<CodeResult question={question} submitted={submitted} correct={correct} />
 				) : sequence ? (
 					<SequenceResult question={question} submitted={submitted} math={math} />
 				) : identification ? (

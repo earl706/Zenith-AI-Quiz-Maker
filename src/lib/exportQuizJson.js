@@ -87,6 +87,7 @@ function persistableNumericId(value) {
 function questionTypeHint(question) {
 	if (question?.question_type) return question.question_type;
 	if (question?.chess_puzzle || question?.chessPuzzle) return 'CHS-PUZ';
+	if (question?.code_quiz || question?.codeQuiz) return 'COD';
 	if (question?.mathematical) return question?.identification ? 'IDE-COM' : 'MUL-COM';
 	if (question?.identification) return 'IDE';
 	return '';
@@ -186,6 +187,14 @@ export function buildTemplateStyleQuizJson(quiz, questions, options = {}) {
 					? chessSpec.solution_uci
 					: chessSpec.solutionUci || [],
 				arrows: chessSpec.arrows || []
+			};
+		}
+
+		const codeSpec = q.code_spec || q.codeSpec;
+		if (codeSpec?.solution != null && String(codeSpec.solution).trim()) {
+			row.code_spec = {
+				language: codeSpec.language || 'plaintext',
+				solution: String(codeSpec.solution)
 			};
 		}
 

@@ -36,6 +36,7 @@ import {
 } from '../components/ui';
 import MathRenderer from '../components/quiz/MathRenderer';
 import MergeQuizzesModal from '../components/quiz/MergeQuizzesModal';
+import CodeAnswerInput from '../components/quiz/CodeAnswerInput';
 import QuestionChessBoard from '../components/quiz/QuestionChessBoard';
 import QuestionTitle from '../components/quiz/QuestionTitle';
 import { PersistedQuizSettingsModal } from '../components/quiz/QuizSettingsModal';
@@ -53,9 +54,12 @@ import {
 	getAttemptStats,
 	getChoiceData,
 	groupQuestionsByApiSection,
+	isCodeQuestion,
 	isMathematical,
 	isSequence,
+	normalizeCodeSpec,
 	questionTypeLabel,
+	resolveCorrectAnswer,
 	sortQuestionsBySectionOrder
 } from '../components/quiz/quizHelpers';
 import { useAttemptLauncher } from '../components/quiz/useAttemptLauncher';
@@ -409,6 +413,10 @@ export default function QuizPage() {
 									(question?.id != null && questionNumberById.get(question.id)) || index + 1;
 								const choices = Array.isArray(question.choices) ? question.choices : [];
 								const math = isMathematical(question.question_type);
+								const codeQuiz = isCodeQuestion(question);
+								const codeSpec = normalizeCodeSpec(question.code_spec || question.codeSpec);
+								const codeSolution =
+									codeSpec?.solution || (codeQuiz ? resolveCorrectAnswer(question) : '');
 
 								return (
 									<Card key={question.id ?? index} className="overflow-hidden">
@@ -425,7 +433,7 @@ export default function QuizPage() {
 												className="text-base"
 											/>
 
-											<QuestionChessBoard question={question} />
+											{!codeQuiz && <QuestionChessBoard question={question} />}
 
 											{question.question_image && (
 												<div className="flex justify-center">
@@ -440,55 +448,60 @@ export default function QuizPage() {
 												</div>
 											)}
 
-											{!isSequence(question.question_type) && choices.length > 0 && (
-												<div
-													className={
-														math
-															? 'flex w-full flex-col items-stretch gap-3'
-															: 'flex flex-wrap justify-center gap-2'
-													}
-												>
-													{choices.map((choice, ci) => {
-														const {
-															text: choiceText,
-															image: choiceImage,
-															id: choiceId
-														} = getChoiceData(choice);
-														if (!choiceText && !choiceImage) return null;
+											{codeQuiz ? (
+												<CodeAnswerInput question={question} value={codeSolution} readOnly />
+											) : (
+												!isSequence(question.question_type) &&
+												choices.length > 0 && (
+													<div
+														className={
+															math
+																? 'flex w-full flex-col items-stretch gap-3'
+																: 'flex flex-wrap justify-center gap-2'
+														}
+													>
+														{choices.map((choice, ci) => {
+															const {
+																text: choiceText,
+																image: choiceImage,
+																id: choiceId
+															} = getChoiceData(choice);
+															if (!choiceText && !choiceImage) return null;
 
-														return (
-															<div
-																key={choiceId ?? ci}
-																className={cn(
-																	'bg-surface-2 flex flex-col items-center gap-2 rounded-md',
-																	math
-																		? 'w-full max-w-full min-w-0 px-5 py-4'
-																		: 'max-w-full min-w-30 px-4 py-2.5 sm:max-w-3xl'
-																)}
-															>
-																{choiceImage && (
-																	<img
-																		src={resolveQuizImageSrc(choiceImage) || choiceImage}
-																		alt=""
-																		className="max-h-20 rounded-md object-cover"
-																	/>
-																)}
-																{choiceText &&
-																	(math ? (
-																		<div className="w-full min-w-0 overflow-x-auto py-1 text-center">
-																			<div className="inline-block min-w-min px-1">
-																				<MathRenderer expression={choiceText} displayMode />
+															return (
+																<div
+																	key={choiceId ?? ci}
+																	className={cn(
+																		'bg-surface-2 flex flex-col items-center gap-2 rounded-md',
+																		math
+																			? 'w-full max-w-full min-w-0 px-5 py-4'
+																			: 'max-w-full min-w-30 px-4 py-2.5 sm:max-w-3xl'
+																	)}
+																>
+																	{choiceImage && (
+																		<img
+																			src={resolveQuizImageSrc(choiceImage) || choiceImage}
+																			alt=""
+																			className="max-h-20 rounded-md object-cover"
+																		/>
+																	)}
+																	{choiceText &&
+																		(math ? (
+																			<div className="w-full min-w-0 overflow-x-auto py-1 text-center">
+																				<div className="inline-block min-w-min px-1">
+																					<MathRenderer expression={choiceText} displayMode />
+																				</div>
 																			</div>
-																		</div>
-																	) : (
-																		<span className="text-fg text-center text-sm font-medium">
-																			{choiceText}
-																		</span>
-																	))}
-															</div>
-														);
-													})}
-												</div>
+																		) : (
+																			<span className="text-fg text-center text-sm font-medium">
+																				{choiceText}
+																			</span>
+																		))}
+																</div>
+															);
+														})}
+													</div>
+												)
 											)}
 
 											{isSequence(question.question_type) &&
