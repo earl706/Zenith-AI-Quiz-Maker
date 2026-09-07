@@ -356,7 +356,8 @@ function validateParsedQuiz(data) {
 				'SEQ-FUL-COM',
 				'SEQ-GAP-COM',
 				'SEQ-NXT-COM',
-				'CHS-PUZ'
+				'CHS-PUZ',
+				'COD'
 			].includes(type)
 		) {
 			diagnostics.push({
