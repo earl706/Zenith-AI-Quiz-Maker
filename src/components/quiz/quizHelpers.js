@@ -685,22 +685,45 @@ export function questionAuthoringCardId(questionId) {
 	return `authoring-q-${questionId}`;
 }
 
+/** App main scroller used by attempt + authoring scroll-to-center helpers. */
+export function getAttemptScroller() {
+	if (typeof document === 'undefined') return null;
+	return document.getElementById('main-content');
+}
+
+/**
+ * Center an element in #main-content (nested overflow; works in Tauri WebKit).
+ * Falls back to scrollIntoView when the scroller is missing.
+ */
+export function scrollAttemptElementToCenter(el, { behavior = 'smooth' } = {}) {
+	if (!el) return;
+	const scroller = getAttemptScroller();
+	if (!scroller) {
+		el.scrollIntoView?.({ behavior, block: 'center', inline: 'nearest' });
+		return;
+	}
+	const scrollerRect = scroller.getBoundingClientRect();
+	const elRect = el.getBoundingClientRect();
+	const delta = elRect.top + elRect.height / 2 - (scrollerRect.top + scrollerRect.height / 2);
+	if (Math.abs(delta) < 1) return;
+	scroller.scrollBy({ top: delta, behavior });
+}
+
+/** True when el is a sequence blank input / math-field under [data-sequence-answer]. */
+export function isSequenceBlankControl(el) {
+	if (!el || typeof el.closest !== 'function') return false;
+	if (!el.closest('[data-sequence-answer]')) return false;
+	const tag = el.tagName?.toLowerCase?.();
+	return tag === 'input' || tag === 'textarea' || tag === 'math-field';
+}
+
 /** Center a question card in #main-content after in-section reorder. */
 export function scrollAuthoringQuestionIntoView(questionId) {
 	if (questionId == null || typeof document === 'undefined') return;
 	const run = () => {
 		const el = document.getElementById(questionAuthoringCardId(questionId));
 		if (!el) return;
-		const scroller = document.getElementById('main-content');
-		if (!scroller) {
-			el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
-			return;
-		}
-		const scrollerRect = scroller.getBoundingClientRect();
-		const elRect = el.getBoundingClientRect();
-		const delta = elRect.top + elRect.height / 2 - (scrollerRect.top + scrollerRect.height / 2);
-		if (Math.abs(delta) < 1) return;
-		scroller.scrollBy({ top: delta, behavior: 'smooth' });
+		scrollAttemptElementToCenter(el);
 	};
 	requestAnimationFrame(() => requestAnimationFrame(run));
 }

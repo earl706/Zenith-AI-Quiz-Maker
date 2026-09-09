@@ -1,7 +1,7 @@
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 
 import { cn } from '../../lib/format';
-import MathFieldInput from './MathFieldInput';
+import MathFieldInput, { tryFocusMathField } from './MathFieldInput';
 import MathRenderer from './MathRenderer';
 import QuestionTitle from './QuestionTitle';
 import { resolveQuestionImageSrc } from '../../lib/quizImages';
@@ -9,8 +9,20 @@ import {
 	PLAIN_IDE_TEXT_INPUT_AUTO_OFF,
 	interpolateSequenceStem,
 	isMathematical,
+	isSequenceBlankControl,
+	scrollAttemptElementToCenter,
 	sequenceBlanks
 } from './quizHelpers';
+
+function focusSequenceBlankControl(el) {
+	if (!el) return;
+	const tag = el.tagName?.toLowerCase?.();
+	if (tag === 'math-field') {
+		tryFocusMathField(el, { preventScroll: true });
+	} else {
+		el.focus?.({ preventScroll: true });
+	}
+}
 
 export default function SequenceAnswerInput({
 	question,
@@ -26,6 +38,7 @@ export default function SequenceAnswerInput({
 	const items = displayItems || question.sequence_items || [];
 	const questionImage = resolveQuestionImageSrc(question);
 	const stem = interpolateSequenceStem(question.question, question.sequence_items || items);
+	const blankRefs = useRef(new Map());
 	const byId = useMemo(() => {
 		const map = new Map();
 		for (const row of answer?.userSequence || []) {
@@ -33,6 +46,16 @@ export default function SequenceAnswerInput({
 		}
 		return map;
 	}, [answer?.userSequence]);
+
+	const blankIds = useMemo(
+		() => sequenceBlanks(items).map((item) => item.id),
+		[items]
+	);
+
+	const firstBlankItemIndex = useMemo(
+		() => items.findIndex((it) => it.role === 'blank'),
+		[items]
+	);
 
 	const setBlank = (itemId, text) => {
 		const blanks = sequenceBlanks(items);
@@ -43,16 +66,51 @@ export default function SequenceAnswerInput({
 		onSequenceChange?.(question.id, next);
 	};
 
-	const handleKeyDown = (event) => {
+	const setBlankRef = (itemId, el) => {
+		if (el) blankRefs.current.set(itemId, el);
+		else blankRefs.current.delete(itemId);
+	};
+
+	const focusBlankById = (itemId) => {
+		const el = blankRefs.current.get(itemId);
+		if (!el || el.disabled) return;
+		focusSequenceBlankControl(el);
+		requestAnimationFrame(() => scrollAttemptElementToCenter(el));
+	};
+
+	/** Enter: next blank (center input); last blank → parent onEnter (reveal). */
+	const advanceOrSubmit = (fromItemId) => {
+		const idx = blankIds.indexOf(fromItemId);
+		if (idx >= 0 && idx < blankIds.length - 1) {
+			focusBlankById(blankIds[idx + 1]);
+			return;
+		}
+		onEnter?.();
+	};
+
+	const handleBlankFocusCapture = (event) => {
+		const target = event.target;
+		if (!isSequenceBlankControl(target)) return;
+		const related = event.relatedTarget;
+		const root = event.currentTarget;
+		if (!related || !root.contains(related) || !isSequenceBlankControl(related)) return;
+		scrollAttemptElementToCenter(target);
+	};
+
+	const handleKeyDown = (event, itemId) => {
 		if (event.nativeEvent?.isComposing) return;
 		if (event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
 			event.preventDefault();
-			onEnter?.();
+			advanceOrSubmit(itemId);
 		}
 	};
 
 	return (
-		<div className="border-line bg-surface flex w-full flex-col items-center rounded-md border p-6">
+		<div
+			className="border-line bg-surface flex w-full flex-col items-center rounded-md border p-6"
+			data-sequence-answer=""
+			onFocusCapture={handleBlankFocusCapture}
+		>
 			<QuestionTitle text={stem} mathematical={math} className="mb-3 text-2xl" />
 			{questionImage && (
 				<div className="mb-4 flex w-full justify-center">
@@ -78,26 +136,24 @@ export default function SequenceAnswerInput({
 										<MathFieldInput
 											value={userText}
 											onChange={(latex) => setBlank(item.id, latex)}
-											onEnter={() => onEnter?.()}
+											onEnter={() => advanceOrSubmit(item.id)}
 											placeholder={`Step ${index + 1}`}
 											aria-label={`Sequence blank ${index + 1}`}
-											autoFocus={
-												autoFocus && index === items.findIndex((it) => it.role === 'blank')
-											}
+											autoFocus={autoFocus && index === firstBlankItemIndex}
+											fieldRef={(el) => setBlankRef(item.id, el)}
 											className="w-full"
 											disabled={disabled}
 										/>
 									) : (
 										<input
 											type="text"
+											ref={(el) => setBlankRef(item.id, el)}
 											value={userText}
 											onChange={(e) => setBlank(item.id, e.target.value)}
-											onKeyDown={handleKeyDown}
+											onKeyDown={(e) => handleKeyDown(e, item.id)}
 											placeholder={`Item ${index + 1}`}
 											aria-label={`Sequence blank ${index + 1}`}
-											autoFocus={
-												autoFocus && index === items.findIndex((it) => it.role === 'blank')
-											}
+											autoFocus={autoFocus && index === firstBlankItemIndex}
 											disabled={disabled}
 											{...PLAIN_IDE_TEXT_INPUT_AUTO_OFF}
 											className="border-line bg-surface-2 text-fg focus:border-primary w-full rounded-md border px-3 py-2 text-xl focus:outline-none"

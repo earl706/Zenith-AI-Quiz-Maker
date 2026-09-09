@@ -38,9 +38,11 @@ import {
 	identificationAnswerCorpus,
 	isIdentification,
 	isSequence,
+	isSequenceBlankControl,
 	parseAttemptScopeFromSearch,
 	formatAttemptScopeLabel,
 	pickRandomQuestions,
+	scrollAttemptElementToCenter,
 	serializeAnswersForSubmit,
 	shuffleArray,
 	sortQuestionsBySectionOrder,
@@ -118,25 +120,6 @@ function mergeQuizAfterSettingsSave(quiz, payload, id) {
 		}
 	}
 	return next;
-}
-
-function getAttemptScroller() {
-	return document.getElementById('main-content');
-}
-
-/** Center an element in the app main scroller (nested overflow; works in Tauri WebKit). */
-function scrollAttemptElementToCenter(el, { behavior = 'smooth' } = {}) {
-	if (!el) return;
-	const scroller = getAttemptScroller();
-	if (!scroller) {
-		el.scrollIntoView?.({ behavior, block: 'center' });
-		return;
-	}
-	const scrollerRect = scroller.getBoundingClientRect();
-	const elRect = el.getBoundingClientRect();
-	const delta = elRect.top + elRect.height / 2 - (scrollerRect.top + scrollerRect.height / 2);
-	if (Math.abs(delta) < 1) return;
-	scroller.scrollBy({ top: delta, behavior });
 }
 
 function focusAttemptControl(el) {
@@ -280,6 +263,20 @@ export default function QuizAttempt() {
 	const handleListFocusCapture = useCallback((event) => {
 		const card = event.target?.closest?.('[data-attempt-question-id]');
 		if (!card || !event.currentTarget.contains(card)) return;
+		// Sequence blank→blank (Tab/Enter): SequenceAnswerInput centers the input.
+		const target = event.target;
+		const related = event.relatedTarget;
+		const seqRoot = target?.closest?.('[data-sequence-answer]');
+		if (
+			seqRoot &&
+			card.contains(seqRoot) &&
+			isSequenceBlankControl(target) &&
+			related &&
+			seqRoot.contains(related) &&
+			isSequenceBlankControl(related)
+		) {
+			return;
+		}
 		scrollAttemptElementToCenter(card);
 	}, []);
 
