@@ -912,6 +912,49 @@ export function sequenceSlotCredit(question, answer) {
 	return Math.round((hits / blanks.length) * 100) / 100;
 }
 
+/**
+ * Per-blank correct/incorrect for attempt cues.
+ * itemIds: only grade these blank ids (progressive Enter checks); omit for all blanks.
+ * order_matters false → bag-match (each checked blank consumes one matching correct text).
+ */
+export function sequenceBlankVerdicts(question, answer, { itemIds, items } = {}) {
+	const blanks = sequenceBlanks(items || question?.sequence_items);
+	const verdicts = new Map();
+	if (!blanks.length) return verdicts;
+
+	const qtype = question?.question_type;
+	const byId = new Map((answer?.userSequence || []).map((row) => [row.id, row.text ?? '']));
+	const orderMatters = question?.sequence_order_matters !== false;
+	const idFilter = itemIds == null ? null : new Set(itemIds);
+
+	if (orderMatters) {
+		for (const item of blanks) {
+			if (idFilter && !idFilter.has(item.id)) continue;
+			verdicts.set(
+				item.id,
+				answersEqual(item.text, byId.get(item.id) ?? '', { questionType: qtype })
+			);
+		}
+		return verdicts;
+	}
+
+	const remainingCorrect = blanks.map((item) => item.text);
+	for (const item of blanks) {
+		if (idFilter && !idFilter.has(item.id)) continue;
+		const userText = byId.get(item.id) ?? '';
+		const idx = remainingCorrect.findIndex((text) =>
+			answersEqual(text, userText, { questionType: qtype })
+		);
+		if (idx >= 0) {
+			verdicts.set(item.id, true);
+			remainingCorrect.splice(idx, 1);
+		} else {
+			verdicts.set(item.id, false);
+		}
+	}
+	return verdicts;
+}
+
 /** Full credit only (sequences: credit === 1; partial counts as incorrect). */
 export function isAttemptAnswerFullyCorrect(question, answer) {
 	if (!question) return false;

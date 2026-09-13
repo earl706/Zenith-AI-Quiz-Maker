@@ -46,6 +46,34 @@
 	cursor: not-allowed;
 }
 
+/* Sequence attempt: subtle correct/wrong border after Enter / Check answer */
+.math-field-input.seq-blank-ok {
+	border-color: color-mix(in srgb, var(--success) 50%, transparent);
+	opacity: 1;
+}
+
+.math-field-input.seq-blank-bad {
+	border-color: color-mix(in srgb, var(--danger) 50%, transparent);
+	opacity: 1;
+}
+
+.math-field-input.seq-blank-ok:focus,
+.math-field-input.seq-blank-ok:focus-within,
+.math-field-input.seq-blank-bad:focus,
+.math-field-input.seq-blank-bad:focus-within {
+	box-shadow: none;
+}
+
+.math-field-input.seq-blank-ok:focus,
+.math-field-input.seq-blank-ok:focus-within {
+	border-color: color-mix(in srgb, var(--success) 50%, transparent);
+}
+
+.math-field-input.seq-blank-bad:focus,
+.math-field-input.seq-blank-bad:focus-within {
+	border-color: color-mix(in srgb, var(--danger) 50%, transparent);
+}
+
 /* Soften MathLive chrome inside our bordered field */
 .math-field-input::part(virtual-keyboard-toggle),
 .math-field-input::part(menu-toggle) {

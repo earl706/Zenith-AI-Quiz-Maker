@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { cn } from '../../lib/format';
 import MathFieldInput, { tryFocusMathField } from './MathFieldInput';
@@ -11,6 +11,7 @@ import {
 	isMathematical,
 	isSequenceBlankControl,
 	scrollAttemptElementToCenter,
+	sequenceBlankVerdicts,
 	sequenceBlanks
 } from './quizHelpers';
 
@@ -22,6 +23,11 @@ function focusSequenceBlankControl(el) {
 	} else {
 		el.focus?.({ preventScroll: true });
 	}
+}
+
+function blankCueClass(checked, correct) {
+	if (!checked) return 'border-line focus:border-primary';
+	return correct ? 'border-success/50 seq-blank-ok' : 'border-danger/50 seq-blank-bad';
 }
 
 export default function SequenceAnswerInput({
@@ -39,6 +45,8 @@ export default function SequenceAnswerInput({
 	const questionImage = resolveQuestionImageSrc(question);
 	const stem = interpolateSequenceStem(question.question, question.sequence_items || items);
 	const blankRefs = useRef(new Map());
+	const [checkedIds, setCheckedIds] = useState([]);
+
 	const byId = useMemo(() => {
 		const map = new Map();
 		for (const row of answer?.userSequence || []) {
@@ -47,17 +55,40 @@ export default function SequenceAnswerInput({
 		return map;
 	}, [answer?.userSequence]);
 
-	const blankIds = useMemo(
-		() => sequenceBlanks(items).map((item) => item.id),
-		[items]
+	const blankIds = useMemo(() => sequenceBlanks(items).map((item) => item.id), [items]);
+
+	const firstBlankItemIndex = useMemo(() => items.findIndex((it) => it.role === 'blank'), [items]);
+
+	const checkedSet = useMemo(() => new Set(checkedIds), [checkedIds]);
+
+	const verdicts = useMemo(
+		() =>
+			sequenceBlankVerdicts(question, answer, {
+				itemIds: checkedIds,
+				items
+			}),
+		[question, answer, checkedIds, items]
 	);
 
-	const firstBlankItemIndex = useMemo(
-		() => items.findIndex((it) => it.role === 'blank'),
-		[items]
-	);
+	useEffect(() => {
+		setCheckedIds([]);
+	}, [question.id]);
+
+	useEffect(() => {
+		if (!revealed) return;
+		setCheckedIds((prev) => {
+			const next = blankIds.filter((id) => id != null);
+			if (prev.length === next.length && next.every((id, i) => id === prev[i])) return prev;
+			return next;
+		});
+	}, [revealed, blankIds]);
+
+	const markChecked = (itemId) => {
+		setCheckedIds((prev) => (prev.includes(itemId) ? prev : [...prev, itemId]));
+	};
 
 	const setBlank = (itemId, text) => {
+		if (checkedSet.has(itemId)) return;
 		const blanks = sequenceBlanks(items);
 		const next = blanks.map((item) => ({
 			id: item.id,
@@ -78,8 +109,9 @@ export default function SequenceAnswerInput({
 		requestAnimationFrame(() => scrollAttemptElementToCenter(el));
 	};
 
-	/** Enter: next blank (center input); last blank → parent onEnter (reveal). */
-	const advanceOrSubmit = (fromItemId) => {
+	/** Enter: lock+cue this blank, then next blank (center) or parent onEnter. */
+	const commitBlankAndAdvance = (fromItemId) => {
+		markChecked(fromItemId);
 		const idx = blankIds.indexOf(fromItemId);
 		if (idx >= 0 && idx < blankIds.length - 1) {
 			focusBlankById(blankIds[idx + 1]);
@@ -101,7 +133,7 @@ export default function SequenceAnswerInput({
 		if (event.nativeEvent?.isComposing) return;
 		if (event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
 			event.preventDefault();
-			advanceOrSubmit(itemId);
+			commitBlankAndAdvance(itemId);
 		}
 	};
 
@@ -125,24 +157,27 @@ export default function SequenceAnswerInput({
 				{items.map((item, index) => {
 					const isBlank = item.role === 'blank';
 					const userText = byId.get(item.id) ?? '';
+					const blankChecked = isBlank && checkedSet.has(item.id);
+					const blankCorrect = blankChecked ? verdicts.get(item.id) === true : null;
+					const blankDisabled = disabled || blankChecked;
 					return (
 						<li key={item.id ?? index} className="flex items-start gap-2">
 							<span className="text-muted mt-2 w-6 shrink-0 text-right text-sm tabular-nums">
 								{index + 1}.
 							</span>
 							<div className="min-w-0 flex-1">
-								{isBlank && !revealed ? (
+								{isBlank ? (
 									math ? (
 										<MathFieldInput
 											value={userText}
 											onChange={(latex) => setBlank(item.id, latex)}
-											onEnter={() => advanceOrSubmit(item.id)}
+											onEnter={() => commitBlankAndAdvance(item.id)}
 											placeholder={`Step ${index + 1}`}
 											aria-label={`Sequence blank ${index + 1}`}
-											autoFocus={autoFocus && index === firstBlankItemIndex}
+											autoFocus={autoFocus && index === firstBlankItemIndex && !blankChecked}
 											fieldRef={(el) => setBlankRef(item.id, el)}
-											className="w-full"
-											disabled={disabled}
+											className={cn('w-full', blankCueClass(blankChecked, blankCorrect))}
+											disabled={blankDisabled}
 										/>
 									) : (
 										<input
@@ -153,10 +188,14 @@ export default function SequenceAnswerInput({
 											onKeyDown={(e) => handleKeyDown(e, item.id)}
 											placeholder={`Item ${index + 1}`}
 											aria-label={`Sequence blank ${index + 1}`}
-											autoFocus={autoFocus && index === firstBlankItemIndex}
-											disabled={disabled}
+											autoFocus={autoFocus && index === firstBlankItemIndex && !blankChecked}
+											disabled={blankDisabled}
 											{...PLAIN_IDE_TEXT_INPUT_AUTO_OFF}
-											className="border-line bg-surface-2 text-fg focus:border-primary w-full rounded-md border px-3 py-2 text-xl focus:outline-none"
+											className={cn(
+												'bg-surface-2 text-fg w-full rounded-md border px-3 py-2 text-xl focus:outline-none disabled:cursor-not-allowed',
+												blankCueClass(blankChecked, blankCorrect),
+												blankChecked && 'disabled:opacity-100'
+											)}
 										/>
 									)
 								) : (
@@ -169,24 +208,9 @@ export default function SequenceAnswerInput({
 										)}
 									>
 										{math ? (
-											<MathRenderer
-												expression={
-													revealed && isBlank
-														? item.text
-														: isBlank
-															? userText || item.text
-															: item.text
-												}
-												displayMode={false}
-											/>
+											<MathRenderer expression={item.text} displayMode={false} />
 										) : (
-											<span>
-												{revealed && isBlank
-													? item.text
-													: isBlank
-														? userText || item.text
-														: item.text}
-											</span>
+											<span>{item.text}</span>
 										)}
 									</div>
 								)}
@@ -195,25 +219,6 @@ export default function SequenceAnswerInput({
 					);
 				})}
 			</ol>
-			{revealed && (
-				<div className="border-line mt-4 w-full border-t pt-3">
-					<p className="text-muted mb-2 text-[0.7rem] font-semibold tracking-wide uppercase">
-						Correct sequence
-					</p>
-					<ol className="space-y-1">
-						{(question.sequence_items || []).map((item, index) => (
-							<li key={`correct-${item.id ?? index}`} className="flex gap-2 text-xl">
-								<span className="text-muted w-6 text-right tabular-nums">{index + 1}.</span>
-								{math ? (
-									<MathRenderer expression={item.text} displayMode={false} />
-								) : (
-									<span className="text-fg">{item.text}</span>
-								)}
-							</li>
-						))}
-					</ol>
-				</div>
-			)}
 		</div>
 	);
 }
