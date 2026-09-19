@@ -123,9 +123,6 @@ export default function SequenceAnswerInput({
 	const handleBlankFocusCapture = (event) => {
 		const target = event.target;
 		if (!isSequenceBlankControl(target)) return;
-		const related = event.relatedTarget;
-		const root = event.currentTarget;
-		if (!related || !root.contains(related) || !isSequenceBlankControl(related)) return;
 		scrollAttemptElementToCenter(target);
 	};
 

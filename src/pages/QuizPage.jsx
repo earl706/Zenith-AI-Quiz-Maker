@@ -167,7 +167,7 @@ export default function QuizPage() {
 
 	const handleHeaderAttempt = () => {
 		if (!viewingSectionLayout) {
-			launchAttempt(quiz);
+			launchAttempt(quiz, { questions: orderedQuestions });
 			return;
 		}
 		const group = sectionGroups[sectionPage];
@@ -179,7 +179,8 @@ export default function QuizPage() {
 		}
 		launchAttempt(quiz, {
 			initialSectionIds: [sectionId],
-			highlightedSectionId: sectionId
+			highlightedSectionId: sectionId,
+			questions: orderedQuestions
 		});
 	};
 
@@ -541,7 +542,11 @@ export default function QuizPage() {
 					{attempts.length === 0 ? (
 						<Card className="p-6 text-center">
 							<p className="text-muted text-sm">No attempts yet.</p>
-							<Button size="sm" className="mt-3" onClick={() => launchAttempt(quiz)}>
+							<Button
+								size="sm"
+								className="mt-3"
+								onClick={() => launchAttempt(quiz, { questions: orderedQuestions })}
+							>
 								<Play size={14} /> Start one
 							</Button>
 						</Card>

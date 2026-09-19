@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 import { cn, formatDurationSeconds } from '../../lib/format';
+import { answersEqual } from '../../lib/mathAnswersEqual';
 import { resolveQuestionImageSrc, resolveQuizImageSrc } from '../../lib/quizImages';
 import { Button, Card, CardBody, LoadingScreen, ProgressBar } from '../ui';
 import ChessPuzzleAnswerInput from './ChessPuzzleAnswerInput';
@@ -26,7 +27,8 @@ import {
 	codeQuestionAnswered,
 	resolveQuestionTimerSeconds,
 	sequenceQuestionAnswered,
-	shuffleSequenceItems
+	shuffleSequenceItems,
+	resolveCorrectAnswer
 } from './quizHelpers';
 
 const FLASHCARD_FADE = {
@@ -49,10 +51,12 @@ export default function FlashcardAttempt({
 	perQuestionTimeSeconds = 30,
 	paused = false,
 	draftState = null,
-	onDraftStateChange
+	onDraftStateChange,
+	studyMode = false
 }) {
 	const [index, setIndex] = useState(() => draftState?.index ?? 0);
 	const [revealedIds, setRevealedIds] = useState(() => new Set(draftState?.revealedIds ?? []));
+	const [peekedIds, setPeekedIds] = useState(() => new Set(draftState?.peekedIds ?? []));
 	const [lockedIds, setLockedIds] = useState(() => new Set(draftState?.lockedIds ?? []));
 	const [secondsLeft, setSecondsLeft] = useState(() =>
 		draftState?.secondsLeft != null ? draftState.secondsLeft : null
@@ -63,6 +67,7 @@ export default function FlashcardAttempt({
 	const isLast = index === total - 1;
 	const math = currentQuestion ? isMathematical(currentQuestion.question_type) : false;
 	const revealed = currentQuestion ? revealedIds.has(currentQuestion.id) : false;
+	const peeked = currentQuestion ? peekedIds.has(currentQuestion.id) : false;
 	const locked = currentQuestion ? lockedIds.has(currentQuestion.id) : false;
 	const sequence = currentQuestion ? isSequence(currentQuestion.question_type) : false;
 	const chessPuzzle = currentQuestion ? isChessPuzzleQuestion(currentQuestion) : false;
@@ -90,6 +95,9 @@ export default function FlashcardAttempt({
 	const completedIdsRef = useRef(new Set());
 	/** Seconds to apply once after a draft restore; not read on every parent draft sync. */
 	const pendingRestoredSecondsRef = useRef(null);
+	const goPrevRef = useRef(() => {});
+	const goNextRef = useRef(() => {});
+	const peekToggleRef = useRef(() => {});
 
 	const cancelAutoAdvance = () => {
 		if (advanceTimer.current) {
@@ -108,6 +116,7 @@ export default function FlashcardAttempt({
 		if (!draftState?.restoreToken) return;
 		setIndex(draftState.index ?? 0);
 		setRevealedIds(new Set(draftState.revealedIds ?? []));
+		setPeekedIds(new Set(draftState.peekedIds ?? []));
 		setLockedIds(new Set(draftState.lockedIds ?? []));
 		completedIdsRef.current = new Set(draftState.lockedIds ?? []);
 		pendingRestoredSecondsRef.current =
@@ -119,10 +128,11 @@ export default function FlashcardAttempt({
 		onDraftStateChange?.({
 			index,
 			revealedIds: [...revealedIds],
+			peekedIds: [...peekedIds],
 			lockedIds: [...lockedIds],
 			secondsLeft
 		});
-	}, [index, revealedIds, lockedIds, secondsLeft, onDraftStateChange]);
+	}, [index, revealedIds, peekedIds, lockedIds, secondsLeft, onDraftStateChange]);
 
 	const markLocked = (questionId) => {
 		setLockedIds((previous) => new Set(previous).add(questionId));
@@ -132,10 +142,24 @@ export default function FlashcardAttempt({
 		setRevealedIds((previous) => new Set(previous).add(questionId));
 	};
 
+	const markPeeked = (questionId) => {
+		setPeekedIds((previous) => new Set(previous).add(questionId));
+	};
+
+	const togglePeeked = (questionId) => {
+		setPeekedIds((previous) => {
+			const next = new Set(previous);
+			if (next.has(questionId)) next.delete(questionId);
+			else next.add(questionId);
+			return next;
+		});
+	};
+
 	const markCompleted = (questionId) => {
 		completedIdsRef.current.add(questionId);
 		markLocked(questionId);
 		markRevealed(questionId);
+		markPeeked(questionId);
 	};
 
 	const goTo = (next) => {
@@ -174,6 +198,33 @@ export default function FlashcardAttempt({
 		}
 		goTo((index + 1) % total);
 	};
+
+	goPrevRef.current = goPrev;
+	goNextRef.current = goNext;
+	peekToggleRef.current = () => {
+		if (!studyMode || !currentQuestion) return;
+		togglePeeked(currentQuestion.id);
+	};
+
+	useEffect(() => {
+		if (paused || submitting) return undefined;
+		const onKey = (event) => {
+			if (event.nativeEvent?.isComposing) return;
+			if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
+			const prev = event.code === 'BracketLeft' || event.key === '[';
+			const next = event.code === 'BracketRight' || event.key === ']';
+			const peek = event.code === 'KeyP' || event.key.toLowerCase() === 'p';
+			if (!prev && !next && !peek) return;
+			if (peek && !studyMode) return;
+			event.preventDefault();
+			event.stopPropagation();
+			if (prev) goPrevRef.current();
+			else if (next) goNextRef.current();
+			else peekToggleRef.current();
+		};
+		document.addEventListener('keydown', onKey, true);
+		return () => document.removeEventListener('keydown', onKey, true);
+	}, [paused, submitting, studyMode]);
 
 	const scheduleAfterReveal = (delayMs) => {
 		cancelAutoAdvance();
@@ -293,6 +344,10 @@ export default function FlashcardAttempt({
 	const progressPct = limit > 0 ? (remaining / limit) * 100 : 0;
 	const warning = remaining <= Math.max(5, Math.ceil(limit * 0.25));
 	const timerTone = warning ? 'danger' : 'primary';
+	const showKey = peeked;
+	const keyAnswer = String(answer?.correctAnswer ?? '').trim()
+		? String(answer.correctAnswer).trim()
+		: String(resolveCorrectAnswer(currentQuestion) ?? '').trim();
 
 	return (
 		<div className="space-y-4">
@@ -349,10 +404,17 @@ export default function FlashcardAttempt({
 					className="flex-1"
 					onClick={goPrev}
 					disabled={submitting || perQuestionTimerEnabled}
+					title="Previous (⌘[)"
 				>
 					<ChevronLeft size={16} /> Prev
 				</Button>
-				<Button variant="secondary" className="flex-1" onClick={goNext} disabled={submitting}>
+				<Button
+					variant="secondary"
+					className="flex-1"
+					onClick={goNext}
+					disabled={submitting}
+					title="Next (⌘])"
+				>
 					Next <ChevronRight size={16} />
 				</Button>
 			</div>
@@ -458,7 +520,13 @@ export default function FlashcardAttempt({
 														locked || submitting ? 'cursor-not-allowed' : 'cursor-pointer',
 														selected
 															? 'bg-primary text-primary-fg ring-primary/30 ring-2 ring-offset-2 ring-offset-[var(--surface)]'
-															: 'bg-surface-2 text-fg hover:bg-primary/10'
+															: showKey &&
+																  answersEqual(choiceData.text, keyAnswer, {
+																		mathematical: math,
+																		questionType: currentQuestion.question_type
+																  })
+																? 'border-success/40 bg-success/10 text-fg ring-success/30 ring-1'
+																: 'bg-surface-2 text-fg hover:bg-primary/10'
 													)}
 												>
 													<div className="flex flex-col items-center gap-2">
@@ -487,6 +555,17 @@ export default function FlashcardAttempt({
 							</Card>
 						)}
 
+						{studyMode && (
+							<Button
+								className="w-full"
+								variant="secondary"
+								disabled={submitting}
+								onClick={() => togglePeeked(currentQuestion.id)}
+								title={peeked ? 'Hide answer (⌘P)' : 'Show answer (⌘P)'}
+							>
+								{peeked ? 'Hide answer' : 'Show answer'}
+							</Button>
+						)}
 						{(isIdentification(currentQuestion.question_type) ||
 							sequence ||
 							chessPuzzle ||
@@ -502,7 +581,13 @@ export default function FlashcardAttempt({
 									Check answer
 								</Button>
 							)}
-						{revealed && <QuestionStudyFeedback question={currentQuestion} answer={answer} />}
+						{((!studyMode && revealed) || peeked) && (
+							<QuestionStudyFeedback
+								question={currentQuestion}
+								answer={answer}
+								showSolution={showKey}
+							/>
+						)}
 					</motion.div>
 				</AnimatePresence>
 			</div>

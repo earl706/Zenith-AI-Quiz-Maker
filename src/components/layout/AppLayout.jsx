@@ -27,7 +27,7 @@ export function AppLayout() {
 			<div className="flex min-h-0 min-w-0 flex-1 flex-col">
 				<Topbar />
 				<main className="relative min-h-0 flex-1 overflow-y-auto" id="main-content">
-					<div className="mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+					<div className="max-w-8xl mx-auto w-full px-4 py-6 sm:px-6 lg:px-8">
 						<Suspense fallback={<LoadingScreen />}>
 							<Outlet />
 						</Suspense>

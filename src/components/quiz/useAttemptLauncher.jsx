@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { buildAttemptQuery } from './quizHelpers';
+import { buildAttemptQuery, slimQuestionCatalog } from './quizHelpers';
 import SectionAttemptModal from './SectionAttemptModal';
 
 function attemptLaunchState() {
@@ -41,6 +41,8 @@ function sectionsWithQuestionCounts(quiz) {
  *   skipModal?: boolean,
  *   presetHint?: string  // override SectionAttemptModal preset helper text
  *   skipCountHydration?: boolean  // skip summary fetch (roadmap stub sections)
+ *   questions?: object[]  // optional stems for the question picker
+ *   initialStudyMode?: boolean
  * })
  */
 export function useAttemptLauncher() {
@@ -52,11 +54,16 @@ export function useAttemptLauncher() {
 			if (!quiz) return;
 			const id = quiz.uuid || quiz.quiz_id || quiz.id;
 			if (!id) return;
-			const sections = sectionsWithQuestionCounts(quiz);
+			const rawQuestions =
+				Array.isArray(options.questions) && options.questions.length
+					? options.questions
+					: quiz.questions;
+			const sections = sectionsWithQuestionCounts({ ...quiz, questions: rawQuestions });
 			const initialSectionIds = Array.isArray(options.initialSectionIds)
 				? options.initialSectionIds.filter((id) => id != null && id !== '')
 				: [];
 			const highlightedSectionId = options.highlightedSectionId ?? initialSectionIds[0] ?? null;
+			const questions = slimQuestionCatalog(rawQuestions);
 
 			if (options.skipModal && initialSectionIds.length > 0) {
 				navigate(
@@ -76,7 +83,9 @@ export function useAttemptLauncher() {
 				initialSectionIds: initialSectionIds.length ? initialSectionIds : null,
 				highlightedSectionId,
 				presetHint: options.presetHint ?? null,
-				skipCountHydration: Boolean(options.skipCountHydration)
+				skipCountHydration: Boolean(options.skipCountHydration),
+				questions,
+				initialStudyMode: Boolean(options.initialStudyMode)
 			});
 		},
 		[navigate]
@@ -85,14 +94,16 @@ export function useAttemptLauncher() {
 	const closeModal = useCallback(() => setTarget(null), []);
 
 	const confirmScope = useCallback(
-		({ fullQuiz, sectionIds, shuffle, sample }) => {
+		({ fullQuiz, sectionIds, shuffle, sample, questionIds, studyMode }) => {
 			if (!target?.id) return;
 			navigate(
 				`/quizzes/attempt/${target.id}${buildAttemptQuery({
 					fullQuiz,
 					sectionIds,
 					shuffle,
-					sample
+					sample,
+					questionIds,
+					studyMode
 				})}`,
 				{ state: attemptLaunchState() }
 			);
@@ -114,6 +125,8 @@ export function useAttemptLauncher() {
 			highlightedSectionId={target.highlightedSectionId}
 			presetHint={target.presetHint}
 			skipCountHydration={target.skipCountHydration}
+			questions={target.questions}
+			initialStudyMode={target.initialStudyMode}
 		/>
 	) : null;
 

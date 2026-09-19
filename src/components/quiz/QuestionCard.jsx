@@ -1,5 +1,6 @@
-import { memo, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 
+import { answersEqual } from '../../lib/mathAnswersEqual';
 import ChessPuzzleAnswerInput from './ChessPuzzleAnswerInput';
 import CodeAnswerInput from './CodeAnswerInput';
 import IdentificationAnswerInput from './IdentificationAnswerInput';
@@ -18,6 +19,7 @@ import {
 	isSequence,
 	chessPuzzleAnswered,
 	codeQuestionAnswered,
+	resolveCorrectAnswer,
 	sequenceQuestionAnswered,
 	shuffleSequenceItems
 } from './quizHelpers';
@@ -30,6 +32,7 @@ function questionCardPropsEqual(prev, next) {
 	if (prev.question !== next.question) return false;
 	if (prev.answerSuggestionsEnabled !== next.answerSuggestionsEnabled) return false;
 	if (prev.autoFocus !== next.autoFocus) return false;
+	if (prev.studyMode !== next.studyMode) return false;
 	if (prev.suggestionCorpus !== next.suggestionCorpus) return false;
 	const id = prev.question.id;
 	return answerForQuestion(prev.answers, id) === answerForQuestion(next.answers, id);
@@ -47,9 +50,22 @@ function QuestionCard({
 	autoFocus = false,
 	onAnswered,
 	onIdentificationRevealed,
+	studyMode = false,
 	inputRef = null
 }) {
 	const [revealed, setRevealed] = useState(false);
+	const [peeked, setPeeked] = useState(false);
+
+	useEffect(() => {
+		if (!studyMode) return undefined;
+		const onToggle = (event) => {
+			if (String(event.detail?.questionId) !== String(question.id)) return;
+			setPeeked((visible) => !visible);
+		};
+		window.addEventListener('zenith-study-peek-toggle', onToggle);
+		return () => window.removeEventListener('zenith-study-peek-toggle', onToggle);
+	}, [studyMode, question.id]);
+
 	const answer = answers.find((a) => a.id === question.id);
 	const questionImage = resolveQuestionImageSrc(question);
 	const identification = question.question_type === 'IDE' || question.question_type === 'IDE-COM';
@@ -72,6 +88,11 @@ function QuestionCard({
 				? sequenceQuestionAnswered(question, answer)
 				: String(answer?.userAnswer ?? '').trim() !== '';
 
+	const showKey = peeked;
+	const keyAnswer = String(answer?.correctAnswer ?? '').trim()
+		? String(answer.correctAnswer).trim()
+		: String(resolveCorrectAnswer(question) ?? '').trim();
+
 	const notifyAnswered = (answerSnapshot) => {
 		onAnswered?.(question.id, isAttemptAnswerFullyCorrect(question, answerSnapshot));
 	};
@@ -83,6 +104,7 @@ function QuestionCard({
 			const snapshot = { ...answer, ...(patch || {}) };
 			if (!chessPuzzleAnswered(question, snapshot)) return;
 			setRevealed(true);
+			setPeeked(true);
 			notifyAnswered(snapshot);
 			onIdentificationRevealed?.(question.id);
 			return;
@@ -90,6 +112,7 @@ function QuestionCard({
 		if (sequence) {
 			if (!hasAnswer || revealed) return;
 			setRevealed(true);
+			setPeeked(true);
 			notifyAnswered(answer);
 			onIdentificationRevealed?.(question.id);
 			return;
@@ -98,6 +121,7 @@ function QuestionCard({
 		if (!String(text ?? '').trim() || revealed) return;
 		const nextAnswer = { ...answer, userAnswer: text };
 		setRevealed(true);
+		setPeeked(true);
 		notifyAnswered(nextAnswer);
 		onIdentificationRevealed?.(question.id);
 	};
@@ -195,12 +219,19 @@ function QuestionCard({
 										handleAnswerChange(question.id, 'userAnswer', choiceText);
 										if (revealed) return;
 										setRevealed(true);
+										setPeeked(true);
 										notifyAnswered(nextAnswer);
 									}}
 									className={`w-full cursor-pointer rounded-md p-3 text-center font-semibold transition ${
 										answer.userAnswer === choiceText
 											? 'bg-primary text-primary-fg'
-											: 'bg-surface-2 text-fg hover:bg-primary/10'
+											: showKey &&
+												  answersEqual(choiceText, keyAnswer, {
+														mathematical: isMathematical(question.question_type),
+														questionType: question.question_type
+												  })
+												? 'border-success/40 bg-success/10 text-fg ring-success/30 ring-1'
+												: 'bg-surface-2 text-fg hover:bg-primary/10'
 									}`}
 								>
 									<div className="flex flex-col items-center gap-2">
@@ -229,6 +260,16 @@ function QuestionCard({
 					</div>
 				</div>
 			)}
+			{studyMode && (
+				<button
+					type="button"
+					onClick={() => setPeeked((visible) => !visible)}
+					title={peeked ? 'Hide answer (⌘P)' : 'Show answer (⌘P)'}
+					className="border-line bg-surface text-fg hover:bg-surface-2 w-full cursor-pointer rounded-md border px-4 py-2 text-sm font-semibold"
+				>
+					{peeked ? 'Hide answer' : 'Show answer'}
+				</button>
+			)}
 			{(identification || sequence || chessPuzzle || codeQuiz) && !revealed && (
 				<button
 					type="button"
@@ -239,7 +280,9 @@ function QuestionCard({
 					Check answer
 				</button>
 			)}
-			{revealed && <QuestionStudyFeedback question={question} answer={answer} />}
+			{((!studyMode && revealed) || peeked) && (
+				<QuestionStudyFeedback question={question} answer={answer} showSolution={showKey} />
+			)}
 		</div>
 	);
 }

@@ -42,6 +42,7 @@ import {
 	parseAttemptScopeFromSearch,
 	formatAttemptScopeLabel,
 	pickRandomQuestions,
+	questionsInScopeOrder,
 	scrollAttemptElementToCenter,
 	serializeAnswersForSubmit,
 	shuffleArray,
@@ -224,6 +225,7 @@ export default function QuizAttempt() {
 	const cardRefs = useRef(new Map());
 	const submitButtonRef = useRef(null);
 	const focusAdvanceTimer = useRef(null);
+	const lastFocusedQuestionIdRef = useRef(null);
 	const visibleQuestionsRef = useRef(visibleQuestions);
 	const attemptSnapshotRef = useRef(null);
 	const abandonDraftPersistRef = useRef(false);
@@ -248,37 +250,70 @@ export default function QuizAttempt() {
 		if (!card) return;
 
 		const ideInput = inputRefs.current.get(questionId);
+		let control = null;
 		if (ideInput && !ideInput.disabled) {
+			control = ideInput;
 			focusAttemptControl(ideInput);
 		} else {
-			const nextControl = card.querySelector(
+			control = card.querySelector(
 				'input:not([disabled]), textarea:not([disabled]), math-field:not([disabled]), button:not([disabled])'
 			);
-			focusAttemptControl(nextControl);
+			focusAttemptControl(control);
 		}
-		// Layout may still be settling (feedback block); center after paint.
-		requestAnimationFrame(() => scrollAttemptElementToCenter(card));
+		lastFocusedQuestionIdRef.current = String(questionId);
+		requestAnimationFrame(() => {
+			if (isSequenceBlankControl(control)) {
+				scrollAttemptElementToCenter(control);
+			} else {
+				scrollAttemptElementToCenter(card);
+			}
+		});
 	}, []);
 
 	const handleListFocusCapture = useCallback((event) => {
 		const card = event.target?.closest?.('[data-attempt-question-id]');
 		if (!card || !event.currentTarget.contains(card)) return;
-		// Sequence blank→blank (Tab/Enter): SequenceAnswerInput centers the input.
+		const focusedId = card.getAttribute('data-attempt-question-id');
+		if (focusedId != null && focusedId !== '') lastFocusedQuestionIdRef.current = focusedId;
 		const target = event.target;
-		const related = event.relatedTarget;
-		const seqRoot = target?.closest?.('[data-sequence-answer]');
-		if (
-			seqRoot &&
-			card.contains(seqRoot) &&
-			isSequenceBlankControl(target) &&
-			related &&
-			seqRoot.contains(related) &&
-			isSequenceBlankControl(related)
-		) {
-			return;
-		}
+		if (isSequenceBlankControl(target)) return;
 		scrollAttemptElementToCenter(card);
 	}, []);
+
+	useEffect(() => {
+		if (
+			!scope.studyMode ||
+			quizResults ||
+			paused ||
+			quizData.flashcard_quiz ||
+			retakeSettingsOpen ||
+			resumePromptOpen
+		) {
+			return undefined;
+		}
+		const onKey = (event) => {
+			if (event.nativeEvent?.isComposing) return;
+			if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
+			if (event.code !== 'KeyP' && event.key.toLowerCase() !== 'p') return;
+			event.preventDefault();
+			event.stopPropagation();
+			const fromFocus = document.activeElement?.closest?.('[data-attempt-question-id]');
+			const focusedId = fromFocus?.getAttribute('data-attempt-question-id');
+			const questionId =
+				focusedId || lastFocusedQuestionIdRef.current || visibleQuestionsRef.current[0]?.id;
+			if (questionId == null || questionId === '') return;
+			window.dispatchEvent(new CustomEvent('zenith-study-peek-toggle', { detail: { questionId } }));
+		};
+		document.addEventListener('keydown', onKey, true);
+		return () => document.removeEventListener('keydown', onKey, true);
+	}, [
+		scope.studyMode,
+		quizResults,
+		paused,
+		quizData.flashcard_quiz,
+		retakeSettingsOpen,
+		resumePromptOpen
+	]);
 
 	const handleQuestionAnswered = useCallback(
 		(questionId, fullyCorrect = false) => {
@@ -337,10 +372,12 @@ export default function QuizAttempt() {
 
 	const startAttempt = useCallback(async () => {
 		try {
+			const sampleSize = scope.questionIds?.length || scope.sample;
 			await api.post(`/quizzes/quiz/attempt/${id}/`, {
 				full_quiz: scope.fullQuiz,
 				section_ids: scope.fullQuiz ? [] : scope.sectionIds,
-				...(scope.sample ? { question_sample_size: scope.sample } : {})
+				...(sampleSize ? { question_sample_size: sampleSize } : {}),
+				...(scope.studyMode ? { study_mode: true } : {})
 			});
 		} catch (err) {
 			const message = err?.response?.data?.error;
@@ -349,7 +386,7 @@ export default function QuizAttempt() {
 			}
 			// Attempt start is best-effort; scoring still uses submit payload.
 		}
-	}, [id, scope.fullQuiz, scope.sectionIds, scope.sample]);
+	}, [id, scope.fullQuiz, scope.sectionIds, scope.sample, scope.questionIds, scope.studyMode]);
 
 	const applyDraftUi = useCallback(
 		(draft, { quizData: nextQuiz, questions: nextQuestions }) => {
@@ -422,7 +459,20 @@ export default function QuizAttempt() {
 				}
 
 				let scopedQuestions = nextQuestions;
-				if (scope.sample) {
+				if (scope.questionIds?.length) {
+					const poolSize = nextQuestions.length;
+					scopedQuestions = questionsInScopeOrder(
+						nextQuestions,
+						scope.questionIds,
+						nextQuiz.sections || []
+					);
+					if (!scopedQuestions.length) {
+						toast.error('Those questions are not on this quiz.');
+						navigate(`/quizzes/${id}`);
+						return;
+					}
+					setQuestionPoolSize(poolSize);
+				} else if (scope.sample) {
 					const poolSize = nextQuestions.length;
 					scopedQuestions = pickRandomQuestions(nextQuestions, scope.sample);
 					if (nextQuiz.random_question_order || scope.shuffle) {
@@ -475,6 +525,7 @@ export default function QuizAttempt() {
 			scope.sectionIds,
 			scope.shuffle,
 			scope.sample,
+			scope.questionIds,
 			startAttempt
 		]
 	);
@@ -584,7 +635,15 @@ export default function QuizAttempt() {
 		loadQuizFresh(controller.signal);
 		return () => controller.abort();
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- boot once per URL/scope/retake
-	}, [id, scope.fullQuiz, scope.sectionIds.join(','), scope.shuffle, scope.sample, launchKey]);
+	}, [
+		id,
+		scope.fullQuiz,
+		scope.sectionIds.join(','),
+		scope.shuffle,
+		scope.sample,
+		scope.questionIds.join(','),
+		launchKey
+	]);
 
 	const handleResumeDraft = useCallback(async () => {
 		if (!pendingDraft?.questionIds?.length) {
@@ -666,7 +725,8 @@ export default function QuizAttempt() {
 			}
 			const response = await api.post(`/quizzes/quiz/submit/${id}/`, {
 				answers: payload,
-				time
+				time,
+				...(scope.studyMode ? { study_mode: true } : {})
 			});
 			setSubmittedAnswers(
 				currentAnswers.map((row) => ({
@@ -729,7 +789,8 @@ export default function QuizAttempt() {
 			initialSectionIds,
 			highlightedSectionId:
 				!scope.fullQuiz && scope.sectionIds.length === 1 ? scope.sectionIds[0] : undefined,
-			presetHint: 'Pre-selected from your last attempt — you can change the selection below.'
+			presetHint: 'Pre-selected from your last attempt — you can change the selection below.',
+			initialStudyMode: !!scope.studyMode
 		});
 	};
 
@@ -834,13 +895,23 @@ export default function QuizAttempt() {
 			<PageHeader
 				title={quizData.quiz_title || 'Quiz attempt'}
 				icon={Target}
-				description={quizResults ? 'Review your answers' : 'Answer each question, then submit'}
+				description={
+					quizResults
+						? scope.studyMode
+							? 'Practice review — this attempt did not count toward mastery'
+							: 'Review your answers'
+						: scope.studyMode
+							? 'Study mode: show or hide answers anytime. Scored, but not for mastery.'
+							: 'Answer each question, then submit'
+				}
 				actions={
 					<div className="flex flex-wrap gap-1.5">
 						<Badge tone="primary">{modeLabel}</Badge>
-						{(quizData.sections?.length > 0 || !scope.fullQuiz || scope.sample) && (
-							<Badge tone="accent">{scopeLabel}</Badge>
-						)}
+						{scope.studyMode && <Badge tone="accent">Study</Badge>}
+						{(quizData.sections?.length > 0 ||
+							!scope.fullQuiz ||
+							scope.sample ||
+							scope.questionIds?.length > 0) && <Badge tone="accent">{scopeLabel}</Badge>}
 					</div>
 				}
 			/>
@@ -877,6 +948,7 @@ export default function QuizAttempt() {
 							paused={paused}
 							draftState={flashcardDraft}
 							onDraftStateChange={handleFlashcardDraftChange}
+							studyMode={!!scope.studyMode}
 						/>
 					) : (
 						<div onFocusCapture={handleListFocusCapture}>
@@ -906,6 +978,7 @@ export default function QuizAttempt() {
 												firstIdentificationId != null && question.id === firstIdentificationId
 											}
 											onAnswered={handleQuestionAnswered}
+											studyMode={!!scope.studyMode}
 											inputRef={
 												isIdentification(question.question_type)
 													? (el) => registerInputRef(question.id, el)

@@ -18,7 +18,14 @@ export function buildAttemptDraftKey(quizId, scope) {
 		: [...(scope?.sectionIds || [])].sort((a, b) => a - b).join('-') || 'none';
 	const shuffle = scope?.shuffle ? '1' : '0';
 	const sample = scope?.sample != null ? String(scope.sample) : '';
-	return `${quizId}|${sections}|${shuffle}|${sample}`;
+	const picked = [...(scope?.questionIds || [])]
+		.map((id) => Number.parseInt(String(id), 10))
+		.filter((n) => Number.isFinite(n))
+		.sort((a, b) => a - b);
+	const base = picked.length
+		? `${quizId}|${sections}|${shuffle}|${sample}|q${picked.join('-')}`
+		: `${quizId}|${sections}|${shuffle}|${sample}`;
+	return scope?.studyMode ? `${base}|s1` : base;
 }
 
 export function buildAttemptPath(quizId, scope) {
@@ -26,7 +33,9 @@ export function buildAttemptPath(quizId, scope) {
 		fullQuiz: scope?.fullQuiz ?? true,
 		sectionIds: scope?.sectionIds ?? [],
 		shuffle: !!scope?.shuffle,
-		sample: scope?.sample ?? null
+		sample: scope?.sample ?? null,
+		questionIds: scope?.questionIds ?? [],
+		studyMode: !!scope?.studyMode
 	})}`;
 }
 
@@ -40,7 +49,9 @@ function normalizeScope(scope) {
 		fullQuiz: !!scope?.fullQuiz,
 		sectionIds: [...(scope?.sectionIds || [])],
 		shuffle: !!scope?.shuffle,
-		sample: scope?.sample ?? null
+		sample: scope?.sample ?? null,
+		questionIds: [...(scope?.questionIds || [])],
+		studyMode: !!scope?.studyMode
 	};
 }
 
@@ -75,6 +86,7 @@ export function slimAttemptDraftPayload({
 			? {
 					index: flashcardDraft.index ?? 0,
 					revealedIds: flashcardDraft.revealedIds || [],
+					peekedIds: flashcardDraft.peekedIds || [],
 					lockedIds: flashcardDraft.lockedIds || [],
 					secondsLeft: flashcardDraft.secondsLeft ?? null
 				}

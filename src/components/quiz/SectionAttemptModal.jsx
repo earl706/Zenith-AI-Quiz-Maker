@@ -1,8 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 
 import { get } from '../../lib/api';
 import { toast } from '../../stores/toastStore';
-import { Button, Input, Modal } from '../ui';
+import { Button, Modal } from '../ui';
+import InlineLatexText from './InlineLatexText';
+import {
+	groupQuestionsByApiSection,
+	questionTypeLabel,
+	questionsInScopeOrder,
+	slimQuestionCatalog
+} from './quizHelpers';
 
 function normalizeInitialIds(initialSectionIds, allIds) {
 	if (!Array.isArray(initialSectionIds) || !initialSectionIds.length) return null;
@@ -65,44 +73,62 @@ function formatQuestionCount(count) {
 	return `${count} question${count === 1 ? '' : 's'}`;
 }
 
-function parseQuestionLimit(raw) {
-	const trimmed = String(raw ?? '').trim();
-	if (!trimmed) return null;
-	const n = Number.parseInt(trimmed, 10);
-	if (!Number.isFinite(n) || n <= 0) return 'invalid';
-	return n;
+function sameId(a, b) {
+	return a != null && b != null && String(a) === String(b);
 }
+
+function extractCatalogQuestions(payload) {
+	if (!payload || typeof payload !== 'object') return [];
+	const questions = payload.questions || payload.quiz?.questions || payload.data?.questions || [];
+	return slimQuestionCatalog(questions);
+}
+
+const EMPTY_QUESTIONS = [];
 
 const DEFAULT_PRESET_HINT =
 	"Pre-selected from the section you're viewing — you can change the selection below.";
 
 /**
- * Pre-attempt settings: sections (when present) and optional random subset.
- * onConfirm({ fullQuiz, sectionIds, shuffle?, sample? })
+ * Pre-attempt settings: sections (when present) and optional hand-picked questions.
+ * onConfirm({ fullQuiz, sectionIds, shuffle?, sample?, questionIds?, studyMode? })
  *
  * initialSectionIds — when set, opens with only those sections checked (not "All").
  * highlightedSectionId — subtle hint for the section that drove the pre-selection.
  * presetHint — optional override for the preset helper line under Quick start.
- * quizId — used to hydrate per-section question_count when callers omit it.
+ * quizId — used to hydrate per-section question_count and the question catalog.
+ * questions — optional already-loaded stems (Quiz page / retake) to skip catalog fetch.
  * skipCountHydration — skip the full-quiz summary fetch (roadmap stub sections).
+ * initialStudyMode — when true, opens with Study mode checked.
  */
 export default function SectionAttemptModal({
 	open,
 	onClose,
 	sections = [],
+	questions: initialQuestions = EMPTY_QUESTIONS,
 	quizTitle = 'Quiz',
 	quizId = null,
 	onConfirm,
 	initialSectionIds = null,
 	highlightedSectionId = null,
 	presetHint = null,
-	skipCountHydration = false
+	skipCountHydration = false,
+	initialStudyMode = false
 }) {
 	const [hydratedSections, setHydratedSections] = useState(sections);
+	const incomingCatalog = useMemo(() => slimQuestionCatalog(initialQuestions), [initialQuestions]);
+	const [catalog, setCatalog] = useState(incomingCatalog);
+	const [catalogLoading, setCatalogLoading] = useState(false);
+	const [selectedQuestionIds, setSelectedQuestionIds] = useState([]);
+	const [expandedIds, setExpandedIds] = useState([]);
+	const [studyMode, setStudyMode] = useState(!!initialStudyMode);
 
 	useEffect(() => {
 		setHydratedSections(sections);
 	}, [sections]);
+
+	useEffect(() => {
+		if (incomingCatalog.length) setCatalog(incomingCatalog);
+	}, [incomingCatalog]);
 
 	useEffect(() => {
 		if (!open || !quizId || skipCountHydration) return;
@@ -136,6 +162,32 @@ export default function SectionAttemptModal({
 		};
 	}, [open, quizId, sections, skipCountHydration]);
 
+	useEffect(() => {
+		if (!open || !quizId) return;
+		if (incomingCatalog.length) {
+			setCatalogLoading(false);
+			return;
+		}
+
+		let cancelled = false;
+		setCatalogLoading(true);
+		(async () => {
+			try {
+				const payload = await get(`/quizzes/quiz/${quizId}/?catalog=1`);
+				if (cancelled) return;
+				setCatalog(extractCatalogQuestions(payload));
+			} catch {
+				if (!cancelled) setCatalog([]);
+			} finally {
+				if (!cancelled) setCatalogLoading(false);
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [open, quizId, incomingCatalog]);
+
 	const sorted = useMemo(
 		() =>
 			[...(hydratedSections || [])].sort(
@@ -154,17 +206,22 @@ export default function SectionAttemptModal({
 
 	const [selected, setSelected] = useState(() => presetIds ?? allIds);
 	const [allSelected, setAllSelected] = useState(() => !presetIds);
-	const [questionLimit, setQuestionLimit] = useState('');
 	const presetAppliedKey = useRef('');
 
 	useEffect(() => {
 		if (!open) {
 			presetAppliedKey.current = '';
-			setQuestionLimit('');
+			setSelectedQuestionIds([]);
+			setExpandedIds([]);
 			return;
 		}
-		setQuestionLimit('');
-	}, [open]);
+		setStudyMode(!!initialStudyMode);
+		if (focusId != null) {
+			setExpandedIds((prev) =>
+				prev.some((id) => sameId(id, focusId)) ? prev : [...prev, focusId]
+			);
+		}
+	}, [open, focusId, initialStudyMode]);
 
 	// Re-apply initialSectionIds when the section list hydrates; toast+close if none match.
 	useEffect(() => {
@@ -201,13 +258,32 @@ export default function SectionAttemptModal({
 		return known === sorted.length && sorted.length > 0 ? sum : null;
 	}, [sorted]);
 
+	const activeSections = useMemo(() => {
+		if (!hasSections) return [];
+		return allSelected ? sorted : sorted.filter((section) => selected.includes(section.id));
+	}, [hasSections, allSelected, sorted, selected]);
+
+	const poolQuestions = useMemo(() => {
+		if (!catalog.length) return [];
+		if (!hasSections) return catalog;
+		if (!activeSections.length) return [];
+		const allowed = new Set(activeSections.map((section) => String(section.id)));
+		return catalog.filter((q) => q.section != null && allowed.has(String(q.section)));
+	}, [catalog, hasSections, activeSections]);
+
+	useEffect(() => {
+		if (!open || !hasSections || expandedIds.length || !activeSections.length) return;
+		const first = activeSections[0]?.id;
+		if (first != null) setExpandedIds([first]);
+	}, [open, hasSections, expandedIds.length, activeSections]);
+
 	const selectedQuestionCount = useMemo(() => {
+		if (catalog.length) return poolQuestions.length;
 		if (!hasSections) return null;
-		const active = allSelected ? sorted : sorted.filter((section) => selected.includes(section.id));
-		if (!active.length) return 0;
+		if (!activeSections.length) return 0;
 		let sum = 0;
 		let known = 0;
-		for (const section of active) {
+		for (const section of activeSections) {
 			const count = sectionQuestionCount(section);
 			if (count == null) continue;
 			sum += count;
@@ -215,11 +291,29 @@ export default function SectionAttemptModal({
 		}
 		if (known === 0) return null;
 		return sum;
-	}, [hasSections, allSelected, sorted, selected]);
+	}, [catalog.length, poolQuestions.length, hasSections, activeSections]);
+
+	const pickedInPool = useMemo(() => {
+		const allowed = new Set(poolQuestions.map((q) => String(q.id)));
+		return selectedQuestionIds.filter((id) => allowed.has(String(id)));
+	}, [selectedQuestionIds, poolQuestions]);
+
+	useEffect(() => {
+		if (!open) return;
+		const allowed = new Set(poolQuestions.map((q) => String(q.id)));
+		setSelectedQuestionIds((prev) => {
+			const next = prev.filter((id) => allowed.has(String(id)));
+			return next.length === prev.length ? prev : next;
+		});
+	}, [open, poolQuestions]);
+
+	const questionGroups = useMemo(
+		() => groupQuestionsByApiSection(poolQuestions, hasSections ? activeSections : []),
+		[poolQuestions, hasSections, activeSections]
+	);
 
 	const selectedSectionCount = allSelected ? sorted.length : selected.length;
-	const parsedLimit = parseQuestionLimit(questionLimit);
-	const hasSubsetLimit = parsedLimit != null && parsedLimit !== 'invalid';
+	const isSubset = pickedInPool.length > 0 && pickedInPool.length < poolQuestions.length;
 
 	const toggleAll = () => {
 		if (allSelected) {
@@ -236,50 +330,59 @@ export default function SectionAttemptModal({
 		setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 	};
 
+	const toggleExpanded = (id) => {
+		setExpandedIds((prev) =>
+			prev.some((item) => sameId(item, id))
+				? prev.filter((item) => !sameId(item, id))
+				: [...prev, id]
+		);
+	};
+
+	const toggleQuestion = (id) => {
+		setSelectedQuestionIds((prev) =>
+			prev.some((item) => sameId(item, id))
+				? prev.filter((item) => !sameId(item, id))
+				: [...prev, id]
+		);
+	};
+
+	const toggleSectionQuestions = (sectionQuestions) => {
+		const ids = sectionQuestions.map((q) => q.id);
+		setSelectedQuestionIds((prev) => {
+			const allOn = ids.every((id) => prev.some((item) => sameId(item, id)));
+			if (allOn) {
+				return prev.filter((item) => !ids.some((id) => sameId(item, id)));
+			}
+			const next = [...prev];
+			for (const id of ids) {
+				if (!next.some((item) => sameId(item, id))) next.push(id);
+			}
+			return next;
+		});
+	};
+
 	const canConfirm = !hasSections || allSelected || selected.length > 0;
 
 	const confirmWith = (scope) => {
-		onConfirm?.(scope);
+		onConfirm?.({ ...scope, studyMode });
 		onClose?.();
 	};
 
-	const buildScopeFromSelection = (limitRaw) => {
-		const limit = parseQuestionLimit(limitRaw);
-		if (limit === 'invalid') {
-			toast.error('Enter a positive number of questions.');
-			return null;
-		}
-		if (limit != null) {
-			if (selectedQuestionCount == null) {
-				toast.error('Question counts are still loading. Try again in a moment.');
-				return null;
-			}
-			if (selectedQuestionCount === 0) {
-				toast.error('Select at least one section with questions.');
-				return null;
-			}
-			if (limit > selectedQuestionCount) {
-				toast.error(`Only ${selectedQuestionCount} questions available in your selection.`);
-				return null;
-			}
-		}
-
+	const buildScopeFromSelection = () => {
 		const base =
 			hasSections && !allSelected && selected.length
 				? { fullQuiz: false, sectionIds: selected }
 				: { fullQuiz: true, sectionIds: [] };
 
-		if (limit != null) {
-			return { ...base, sample: limit };
-		}
-		return base;
+		if (!isSubset) return base;
+
+		const orderedIds = questionsInScopeOrder(poolQuestions, pickedInPool, sorted).map((q) => q.id);
+		return { ...base, questionIds: orderedIds, sample: orderedIds.length };
 	};
 
 	const handleConfirm = () => {
 		if (!canConfirm) return;
-		const scope = buildScopeFromSelection(questionLimit);
-		if (!scope) return;
-		confirmWith(scope);
+		confirmWith(buildScopeFromSelection());
 	};
 
 	const startRandomSection = () => {
@@ -292,17 +395,12 @@ export default function SectionAttemptModal({
 		confirmWith({ fullQuiz: true, sectionIds: [], shuffle: true });
 	};
 
-	const startScopedSubset = () => {
-		if (!canConfirm) return;
-		const scope = buildScopeFromSelection(questionLimit);
-		if (!scope?.sample) return;
-		confirmWith(scope);
-	};
-
 	const startFocusedSection = () => {
 		if (!focusId) return;
 		confirmWith({ fullQuiz: false, sectionIds: [focusId] });
 	};
+
+	const startLabel = isSubset ? `Start ${pickedInPool.length}-question subset` : 'Start attempt';
 
 	return (
 		<Modal
@@ -316,7 +414,7 @@ export default function SectionAttemptModal({
 						Cancel
 					</Button>
 					<Button disabled={!canConfirm} onClick={handleConfirm}>
-						Start attempt
+						{startLabel}
 					</Button>
 				</>
 			}
@@ -410,42 +508,193 @@ export default function SectionAttemptModal({
 							);
 						})}
 					</ul>
-
-					<div className="border-line bg-surface-2 mt-3 flex items-center justify-between gap-3 rounded-md border px-3 py-2.5">
-						<p className="text-muted text-xs font-medium tracking-wide uppercase">Selection</p>
-						<p className="text-fg text-sm tabular-nums">
-							<span className="font-medium">
-								{selectedQuestionCount != null
-									? formatQuestionCount(selectedQuestionCount)
-									: 'Questions…'}
-							</span>
-							<span className="text-muted">
-								{' '}
-								· {selectedSectionCount} section{selectedSectionCount === 1 ? '' : 's'}
-							</span>
-						</p>
-					</div>
-
-					<div className="border-line mt-3 flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-end">
-						<div className="min-w-0 flex-1">
-							<Input
-								label="Question limit"
-								type="number"
-								min={1}
-								max={selectedQuestionCount ?? undefined}
-								value={questionLimit}
-								onChange={(e) => setQuestionLimit(e.target.value)}
-								placeholder="All questions"
-							/>
-							<p className="text-muted mt-1.5 text-xs">
-								{selectedQuestionCount != null
-									? `Random subset from ${selectedQuestionCount} in selection. Subset attempts do not count toward roadmap mastery.`
-									: 'Random subset from your selection. Subset attempts do not count toward roadmap mastery.'}
-							</p>
-						</div>
-					</div>
 				</>
 			)}
+
+			<div className="border-line bg-surface-2 mt-3 flex items-center justify-between gap-3 rounded-md border px-3 py-2.5">
+				<p className="text-muted text-xs font-medium tracking-wide uppercase">Selection</p>
+				<p className="text-fg text-sm tabular-nums">
+					<span className="font-medium">
+						{isSubset
+							? `${pickedInPool.length} / ${poolQuestions.length} questions`
+							: selectedQuestionCount != null
+								? formatQuestionCount(selectedQuestionCount)
+								: catalogLoading
+									? 'Questions…'
+									: 'Questions…'}
+					</span>
+					{hasSections && (
+						<span className="text-muted">
+							{' '}
+							· {selectedSectionCount} section{selectedSectionCount === 1 ? '' : 's'}
+						</span>
+					)}
+				</p>
+			</div>
+
+			<label className="border-line bg-surface-2 mt-3 flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5">
+				<input
+					type="checkbox"
+					checked={studyMode}
+					onChange={(event) => setStudyMode(event.target.checked)}
+					className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--primary)]"
+				/>
+				<span className="min-w-0 flex-1">
+					<span className="text-fg text-sm font-medium">Study mode</span>
+					<span className="text-muted mt-0.5 block text-xs">
+						Show or hide answers on any question while you work. Scored, but does not count toward
+						roadmap mastery.
+					</span>
+				</span>
+			</label>
+
+			<QuestionPicker
+				loading={catalogLoading}
+				groups={questionGroups}
+				hasSections={hasSections}
+				pickedIds={pickedInPool}
+				expandedIds={expandedIds}
+				onToggleExpanded={toggleExpanded}
+				onToggleQuestion={toggleQuestion}
+				onToggleSectionQuestions={toggleSectionQuestions}
+				onClear={() => setSelectedQuestionIds([])}
+			/>
 		</Modal>
+	);
+}
+
+function QuestionPicker({
+	loading,
+	groups,
+	hasSections,
+	pickedIds,
+	expandedIds,
+	onToggleExpanded,
+	onToggleQuestion,
+	onToggleSectionQuestions,
+	onClear
+}) {
+	const visibleGroups = groups.filter((group) => group.questions.length);
+	if (loading && !visibleGroups.length) {
+		return <p className="text-muted mt-3 text-xs">Loading questions…</p>;
+	}
+	if (!visibleGroups.length) return null;
+
+	const pickedCount = pickedIds.length;
+
+	return (
+		<div className="border-line mt-3 rounded-md border p-3">
+			<div className="mb-2 flex items-start justify-between gap-3">
+				<div className="min-w-0">
+					<p className="text-fg text-xs font-medium tracking-wide uppercase">Questions</p>
+					<p className="text-muted mt-1 text-xs">
+						Leave unchecked to take every question in the selection. Checking some starts a subset
+						attempt that does not count toward roadmap mastery.
+					</p>
+				</div>
+				{pickedCount > 0 && (
+					<Button type="button" variant="ghost" size="sm" onClick={onClear}>
+						Clear
+					</Button>
+				)}
+			</div>
+			<ul className="space-y-2">
+				{visibleGroups.map((group, index) => {
+					const sectionId = group.section?.id ?? `flat-${index}`;
+					const expanded = !hasSections || expandedIds.some((id) => sameId(id, sectionId));
+					const selectedInGroup = group.questions.filter((q) =>
+						pickedIds.some((id) => sameId(id, q.id))
+					).length;
+					const allOn = selectedInGroup === group.questions.length && group.questions.length > 0;
+					const title = group.section?.title || 'Questions';
+					return (
+						<li key={sectionId} className="border-line rounded-md border">
+							{hasSections ? (
+								<div className="flex items-center gap-1 px-2 py-1.5">
+									<button
+										type="button"
+										className="text-fg flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1 text-left text-sm"
+										onClick={() => onToggleExpanded(sectionId)}
+										aria-expanded={expanded}
+									>
+										{expanded ? (
+											<ChevronDown size={16} className="text-muted shrink-0" />
+										) : (
+											<ChevronRight size={16} className="text-muted shrink-0" />
+										)}
+										<span className="min-w-0 flex-1 truncate font-medium">{title}</span>
+										<span className="text-muted shrink-0 text-xs tabular-nums">
+											{selectedInGroup
+												? `${selectedInGroup} / ${group.questions.length}`
+												: formatQuestionCount(group.questions.length)}
+										</span>
+									</button>
+									<Button
+										type="button"
+										variant="ghost"
+										size="sm"
+										onClick={() => onToggleSectionQuestions(group.questions)}
+									>
+										{allOn ? 'Clear' : 'Select all'}
+									</Button>
+								</div>
+							) : (
+								<div className="flex items-center justify-end px-2 py-1">
+									<Button
+										type="button"
+										variant="ghost"
+										size="sm"
+										onClick={() => onToggleSectionQuestions(group.questions)}
+									>
+										{allOn ? 'Clear' : 'Select all'}
+									</Button>
+								</div>
+							)}
+							{expanded && (
+								<ul className="border-line max-h-56 space-y-1 overflow-y-auto border-t px-2 py-2">
+									{group.questions.map((question, questionIndex) => {
+										const checked = pickedIds.some((id) => sameId(id, question.id));
+										const typeLabel = question.question_type
+											? questionTypeLabel(question.question_type)
+											: null;
+										return (
+											<li key={question.id}>
+												<label className="hover:bg-surface-2 flex cursor-pointer items-start gap-3 rounded-md px-2 py-1.5">
+													<input
+														type="checkbox"
+														checked={checked}
+														onChange={() => onToggleQuestion(question.id)}
+														className="mt-1 h-4 w-4 shrink-0 accent-[var(--primary)]"
+													/>
+													<span className="text-muted w-6 shrink-0 pt-0.5 text-xs tabular-nums">
+														{questionIndex + 1}.
+													</span>
+													{String(question.question || '').trim() ? (
+														<InlineLatexText
+															text={question.question}
+															as="span"
+															className="text-fg line-clamp-2 min-w-0 flex-1 text-sm"
+														/>
+													) : (
+														<span className="text-muted min-w-0 flex-1 text-sm italic">
+															Untitled question
+														</span>
+													)}
+													{typeLabel && (
+														<span className="text-muted shrink-0 pt-0.5 text-[10px] tracking-wide uppercase">
+															{typeLabel}
+														</span>
+													)}
+												</label>
+											</li>
+										);
+									})}
+								</ul>
+							)}
+						</li>
+					);
+				})}
+			</ul>
+		</div>
 	);
 }

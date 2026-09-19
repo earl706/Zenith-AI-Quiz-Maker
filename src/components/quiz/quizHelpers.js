@@ -1006,7 +1006,57 @@ export function answersById(answers) {
 	return map;
 }
 
-export function buildAttemptQuery({ fullQuiz, sectionIds, shuffle = false, sample = null }) {
+/** Stable unique question ids from an array or comma-separated query value. */
+export function normalizeQuestionIds(ids) {
+	if (ids == null || ids === '') return [];
+	const raw = Array.isArray(ids)
+		? ids
+		: String(ids)
+				.split(',')
+				.map((part) => part.trim());
+	const out = [];
+	const seen = new Set();
+	for (const id of raw) {
+		if (id == null || id === '') continue;
+		const n = Number.parseInt(String(id), 10);
+		if (!Number.isFinite(n) || seen.has(n)) continue;
+		seen.add(n);
+		out.push(n);
+	}
+	return out;
+}
+
+/** Compact picker rows: id, stem, section, order, type. */
+export function slimQuestionCatalog(questions) {
+	return (questions || [])
+		.filter((q) => q?.id != null)
+		.map((q) => ({
+			id: q.id,
+			question: String(q.question ?? ''),
+			section: canonicalSectionId(q.section ?? q.section_id ?? q.sectionId),
+			order: q.order ?? 0,
+			question_type: q.question_type ?? null
+		}));
+}
+
+/** Filter to picked ids and restore section / quiz order. */
+export function questionsInScopeOrder(questions, questionIds, sections = []) {
+	const ids = new Set(normalizeQuestionIds(questionIds));
+	if (!ids.size) return [];
+	return sortQuestionsBySectionOrder(
+		(questions || []).filter((q) => ids.has(q.id) || ids.has(Number(q.id))),
+		sections
+	);
+}
+
+export function buildAttemptQuery({
+	fullQuiz,
+	sectionIds,
+	shuffle = false,
+	sample = null,
+	questionIds = null,
+	studyMode = false
+}) {
 	const params = new URLSearchParams();
 	if (fullQuiz || !sectionIds?.length) {
 		params.set('full', '1');
@@ -1014,10 +1064,16 @@ export function buildAttemptQuery({ fullQuiz, sectionIds, shuffle = false, sampl
 		params.set('sections', sectionIds.join(','));
 	}
 	if (shuffle) params.set('shuffle', '1');
-	const sampleN = Number(sample);
-	if (Number.isFinite(sampleN) && sampleN > 0) {
-		params.set('sample', String(Math.floor(sampleN)));
+	const picked = normalizeQuestionIds(questionIds);
+	if (picked.length) {
+		params.set('questions', picked.join(','));
+	} else {
+		const sampleN = Number(sample);
+		if (Number.isFinite(sampleN) && sampleN > 0) {
+			params.set('sample', String(Math.floor(sampleN)));
+		}
 	}
+	if (studyMode) params.set('study', '1');
 	const qs = params.toString();
 	return qs ? `?${qs}` : '';
 }
@@ -1035,7 +1091,9 @@ export function parseAttemptScopeFromSearch(search) {
 		fullQuiz: full || sectionIds.length === 0,
 		sectionIds,
 		shuffle: params.get('shuffle') === '1' || params.get('shuffle') === 'true',
-		sample: Number.isFinite(sampleRaw) && sampleRaw > 0 ? sampleRaw : null
+		sample: Number.isFinite(sampleRaw) && sampleRaw > 0 ? sampleRaw : null,
+		questionIds: normalizeQuestionIds(params.get('questions') || ''),
+		studyMode: params.get('study') === '1' || params.get('study') === 'true'
 	};
 }
 
@@ -1103,9 +1161,12 @@ export function sampleArray(items, count) {
 
 /** Badge label for attempt scope (subset, sections, full quiz). */
 export function formatAttemptScopeLabel({ scope, sections, questionCount, questionPoolSize }) {
-	if (scope?.sample) {
-		const pool = questionPoolSize ?? questionCount ?? scope.sample;
-		const taken = Math.min(scope.sample, questionCount ?? scope.sample);
+	const pickedCount = Array.isArray(scope?.questionIds) ? scope.questionIds.length : 0;
+	const sampleCount = scope?.sample || 0;
+	if (pickedCount || sampleCount) {
+		const takenHint = pickedCount || sampleCount;
+		const pool = questionPoolSize ?? questionCount ?? takenHint;
+		const taken = Math.min(takenHint, questionCount ?? takenHint);
 		const sectionList = resolveAttemptSectionTitles(scope, sections);
 		const sectionPart = sectionList.length ? ` · Sections ${sectionList.join(', ')}` : '';
 		return `${taken} / ${pool} questions${sectionPart}`;

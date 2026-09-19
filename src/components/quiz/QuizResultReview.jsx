@@ -9,6 +9,7 @@ import { resolveQuestionImageSrc, resolveQuizImageSrc } from '../../lib/quizImag
 import CreateRoadmapFromQuizModal from '../roadmap/CreateRoadmapFromQuizModal';
 import { Badge, Button, Card, CardBody, ProgressRing } from '../ui';
 import QuestionTitle from './QuestionTitle';
+import InlineLatexText from './InlineLatexText';
 import MathRenderer from './MathRenderer';
 import QuestionChessBoard from './QuestionChessBoard';
 import {
@@ -432,17 +433,26 @@ function TeachingContent({ question }) {
 			{explanation && (
 				<div>
 					<p className="text-muted mb-1 text-[0.7rem] font-semibold uppercase">Explanation</p>
-					<p className="text-fg text-sm leading-relaxed whitespace-pre-wrap">{explanation}</p>
+					<InlineLatexText
+						text={explanation}
+						className="text-fg text-sm leading-relaxed whitespace-pre-wrap"
+					/>
 				</div>
 			)}
 			{workedSolution && (
 				<div>
 					<p className="text-muted mb-1 text-[0.7rem] font-semibold uppercase">Worked solution</p>
-					<p className="text-fg text-sm leading-relaxed whitespace-pre-wrap">{workedSolution}</p>
+					<InlineLatexText
+						text={workedSolution}
+						className="text-fg text-sm leading-relaxed whitespace-pre-wrap"
+					/>
 				</div>
 			)}
 			{citation && (
-				<p className="text-muted border-line border-t pt-2 text-xs">Source: {citation}</p>
+				<InlineLatexText
+					text={`Source: ${citation}`}
+					className="text-muted border-line border-t pt-2 text-xs"
+				/>
 			)}
 		</div>
 	);
@@ -466,16 +476,18 @@ function SequenceResult({ question, submitted, math }) {
 						return (
 							<li
 								key={`user-${item.id ?? index}`}
-								className={`rounded-md border px-2.5 py-1.5 text-sm ${
+								className={cn(
+									'flex items-start rounded-md border px-2.5',
+									math ? 'overflow-x-auto py-2.5' : 'py-1.5 text-sm',
 									item.role === 'blank'
 										? ok
 											? 'border-success/20 bg-success/10'
 											: 'border-danger/20 bg-danger/10'
 										: 'border-line bg-surface-2'
-								}`}
+								)}
 							>
 								<span className="text-muted mr-2 tabular-nums">{index + 1}.</span>
-								<AnswerText value={userText} mathematical={math} />
+								<AnswerText value={userText} mathematical={math} displayMode={math} />
 							</li>
 						);
 					})}
@@ -487,10 +499,13 @@ function SequenceResult({ question, submitted, math }) {
 					{items.map((item, index) => (
 						<li
 							key={`correct-${item.id ?? index}`}
-							className="border-line bg-surface-2 rounded-md border px-2.5 py-1.5 text-sm"
+							className={cn(
+								'border-line bg-surface-2 flex items-start rounded-md border px-2.5',
+								math ? 'overflow-x-auto py-2.5' : 'py-1.5 text-sm'
+							)}
 						>
 							<span className="text-muted mr-2 tabular-nums">{index + 1}.</span>
-							<AnswerText value={item.text} mathematical={math} />
+							<AnswerText value={item.text} mathematical={math} displayMode={math} />
 							{item.role !== 'blank' && (
 								<span className="text-muted ml-2 text-[0.65rem] uppercase">{item.role}</span>
 							)}
