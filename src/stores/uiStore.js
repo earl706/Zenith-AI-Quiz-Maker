@@ -18,11 +18,12 @@ function writeCollapsed(collapsed) {
 	}
 }
 
-/** Ephemeral UI state: sidebar (mobile + desktop collapse) and command palette. */
+/** Ephemeral UI state: sidebar (mobile + desktop collapse), palette, shortcuts. */
 export const useUIStore = create((set) => ({
 	sidebarOpen: false,
 	sidebarCollapsed: typeof window !== 'undefined' ? readCollapsed() : false,
 	paletteOpen: false,
+	shortcutsOpen: false,
 
 	toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
 	closeSidebar: () => set({ sidebarOpen: false }),
@@ -36,7 +37,18 @@ export const useUIStore = create((set) => ({
 		writeCollapsed(sidebarCollapsed);
 		set({ sidebarCollapsed });
 	},
-	openPalette: () => set({ paletteOpen: true }),
+	openPalette: () => set({ paletteOpen: true, shortcutsOpen: false }),
 	closePalette: () => set({ paletteOpen: false }),
-	togglePalette: () => set((s) => ({ paletteOpen: !s.paletteOpen }))
+	togglePalette: () =>
+		set((s) => ({
+			paletteOpen: !s.paletteOpen,
+			shortcutsOpen: s.paletteOpen ? s.shortcutsOpen : false
+		})),
+	openShortcuts: () => set({ shortcutsOpen: true, paletteOpen: false }),
+	closeShortcuts: () => set({ shortcutsOpen: false }),
+	toggleShortcuts: () =>
+		set((s) => ({
+			shortcutsOpen: !s.shortcutsOpen,
+			paletteOpen: s.shortcutsOpen ? s.paletteOpen : false
+		}))
 }));

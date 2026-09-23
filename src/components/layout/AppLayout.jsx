@@ -6,6 +6,7 @@ import { LoadingScreen } from '../ui';
 import { post } from '../../lib/api';
 import { useAuthStore } from '../../stores/authStore';
 import { CommandPalette } from './CommandPalette';
+import { KeyboardShortcutsModal } from './KeyboardShortcutsModal';
 import { Sidebar } from './Sidebar';
 import { StudyTimerEngine } from './StudyTimerEngine';
 import { Topbar } from './Topbar';
@@ -36,6 +37,7 @@ export function AppLayout() {
 			</div>
 			<StudyTimerEngine />
 			<CommandPalette />
+			<KeyboardShortcutsModal />
 			<MfaPromptModal
 				open={promptOpen && showMfaPrompt}
 				onClose={() => {

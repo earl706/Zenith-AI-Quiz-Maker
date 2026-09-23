@@ -7,7 +7,8 @@ export default function SectionQuestionNavigator({
 	groups,
 	sectionPage,
 	onSectionPageChange,
-	className
+	className,
+	headerExtra = null
 }) {
 	if (!groups?.length) return null;
 
@@ -29,7 +30,10 @@ export default function SectionQuestionNavigator({
 					<p className="text-muted text-[0.65rem] font-semibold tracking-wide uppercase">
 						Section {page + 1} of {total}
 					</p>
-					<p className="text-fg truncate text-sm font-semibold">{title}</p>
+					<div className="flex flex-wrap items-center gap-2">
+						<p className="text-fg truncate text-sm font-semibold">{title}</p>
+						{headerExtra}
+					</div>
 					<p className="text-muted text-xs">
 						{questionCount} question{questionCount === 1 ? '' : 's'}
 					</p>

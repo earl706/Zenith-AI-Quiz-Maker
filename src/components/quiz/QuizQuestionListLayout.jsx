@@ -25,7 +25,9 @@ export default function QuizQuestionListLayout({
 	listClassName = 'space-y-4',
 	renderQuestion,
 	footer = null,
-	headerExtra = null
+	headerExtra = null,
+	renderSectionHeader = null,
+	sectionNavigatorExtra = null
 }) {
 	const useAuthoringKeys = sections.some((s) => s?.clientKey);
 	const groups = useMemo(() => {
@@ -67,12 +69,32 @@ export default function QuizQuestionListLayout({
 					sectionPage={sectionPage}
 					onSectionPageChange={setSectionPage}
 					className="mb-4"
+					headerExtra={
+						typeof sectionNavigatorExtra === 'function'
+							? sectionNavigatorExtra(groups[sectionPage], sectionPage)
+							: sectionNavigatorExtra
+					}
 				/>
 			)}
 
-			<div className={listClassName}>
-				{visibleQuestions.map((question, index) => renderQuestion(question, index))}
-			</div>
+			{effectiveLayout !== QUESTION_LAYOUT_SECTION &&
+			typeof renderSectionHeader === 'function' &&
+			groups.some((g) => g.section) ? (
+				<div className="space-y-8">
+					{groups.map((group, gi) => (
+						<div key={group.section?.id ?? group.section?.clientKey ?? `group-${gi}`}>
+							{group.section ? <div className="mb-4">{renderSectionHeader(group, gi)}</div> : null}
+							<div className={listClassName}>
+								{group.questions.map((question, index) => renderQuestion(question, index))}
+							</div>
+						</div>
+					))}
+				</div>
+			) : (
+				<div className={listClassName}>
+					{visibleQuestions.map((question, index) => renderQuestion(question, index))}
+				</div>
+			)}
 
 			{footer}
 		</div>

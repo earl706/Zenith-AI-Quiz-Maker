@@ -75,10 +75,10 @@ export function CommandPalette() {
 
 	useEffect(() => {
 		const onKey = (e) => {
-			if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-				e.preventDefault();
-				togglePalette();
-			}
+			if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
+			if (e.key.toLowerCase() !== 'k') return;
+			e.preventDefault();
+			togglePalette();
 		};
 		window.addEventListener('keydown', onKey);
 		return () => window.removeEventListener('keydown', onKey);

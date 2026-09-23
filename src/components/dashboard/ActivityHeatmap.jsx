@@ -13,7 +13,7 @@ export const QUIZ_ACTIVITY_LEVEL_BG = [
 	'var(--success)'
 ];
 
-export const QUIZ_ACTIVITY_WINDOW_DAYS = 497;
+export const QUIZ_ACTIVITY_WINDOW_DAYS = 581;
 
 /** Contiguous zero-intensity days ending today (loading / missing payload). */
 export function buildEmptyQuizTimeline(windowDays = QUIZ_ACTIVITY_WINDOW_DAYS, today = new Date()) {

@@ -6,18 +6,15 @@ import { X } from 'lucide-react';
 import { cn } from '../../lib/format';
 import { Button } from './Button';
 
-export function Modal({
-	open,
-	onClose,
-	title,
-	children,
-	footer,
-	size = 'md',
-	bodyClassName
-}) {
+export function Modal({ open, onClose, title, children, footer, size = 'md', bodyClassName }) {
 	useEffect(() => {
 		if (!open) return;
-		const onKey = (e) => e.key === 'Escape' && onClose?.();
+		const onKey = (e) => {
+			if (e.key !== 'Escape') return;
+			e.preventDefault();
+			e.stopPropagation();
+			onClose?.();
+		};
 		document.addEventListener('keydown', onKey);
 		document.body.style.overflow = 'hidden';
 		return () => {
@@ -49,7 +46,7 @@ export function Modal({
 						aria-modal="true"
 						aria-label={title}
 						className={cn(
-							'relative flex w-full min-h-0 flex-col overflow-hidden',
+							'relative flex min-h-0 w-full flex-col overflow-hidden',
 							'max-h-dvh sm:max-h-[calc(100dvh-2rem)]',
 							widths[size],
 							'border-line bg-surface rounded-t-lg border shadow-xl sm:rounded-lg'

@@ -35,7 +35,9 @@ import { Button, Card, Modal, EmptyState, LoadingScreen, Pagination } from '../c
 import MergeQuizzesModal from '../components/quiz/MergeQuizzesModal';
 import { PersistedQuizSettingsModal } from '../components/quiz/QuizSettingsModal';
 import { useAttemptLauncher } from '../components/quiz/useAttemptLauncher';
-import { LIST_PAGE_SIZE, paginateClient } from '../hooks/useListControls';
+import { paginateClient } from '../hooks/useListControls';
+
+const QUIZ_LIST_PAGE_SIZE = 9;
 
 function OverlayStat({ icon: Icon, value, label }) {
 	return (
@@ -69,7 +71,10 @@ export default function QuizzesPage() {
 	});
 
 	const quizList = useMemo(() => normalizeQuizList(data), [data]);
-	const paged = useMemo(() => paginateClient(quizList, page, LIST_PAGE_SIZE), [quizList, page]);
+	const paged = useMemo(
+		() => paginateClient(quizList, page, QUIZ_LIST_PAGE_SIZE),
+		[quizList, page]
+	);
 	const selectedQuizzes = useMemo(
 		() => quizList.filter((q) => selected.has(String(q.uuid || q.quiz_id))),
 		[quizList, selected]

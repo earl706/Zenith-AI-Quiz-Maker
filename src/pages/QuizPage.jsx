@@ -21,6 +21,7 @@ import { downloadQuizAsJson } from '../lib/exportQuizJson';
 import { cn, formatDate, formatDurationSeconds, fromNow } from '../lib/format';
 import { resolveQuizImageSrc } from '../lib/quizImages';
 import { normalizeQuizList } from '../lib/resources';
+import { roadmapsApi } from '../lib/studyResources';
 import { toast } from '../stores/toastStore';
 import { PageHeader } from '../components/layout/PageHeader';
 import CreateRoadmapFromQuizModal from '../components/roadmap/CreateRoadmapFromQuizModal';
@@ -63,6 +64,10 @@ import {
 	sortQuestionsBySectionOrder
 } from '../components/quiz/quizHelpers';
 import { useAttemptLauncher } from '../components/quiz/useAttemptLauncher';
+import SectionMasteryBadge, {
+	nodeForSection,
+	pickRoadmapForQuiz
+} from '../components/quiz/SectionMasteryBadge';
 import { paginateClient } from '../hooks/useListControls';
 
 const ATTEMPTS_PAGE_SIZE = 5;
@@ -138,6 +143,21 @@ export default function QuizPage() {
 		return { ...quiz, questions };
 	}, [quiz, questions]);
 	const sections = quiz?.sections || [];
+	const { data: roadmapListData } = roadmapsApi.useList(
+		{ page_size: 100 },
+		{ staleTime: 60_000, enabled: Boolean(id) && sections.length > 0 }
+	);
+	const matchedRoadmap = useMemo(
+		() => pickRoadmapForQuiz(roadmapListData, id),
+		[roadmapListData, id]
+	);
+	const { data: roadmapDetail } = roadmapsApi.useDetail(matchedRoadmap?.id, {
+		staleTime: 60_000
+	});
+	const sectionNodes = useMemo(
+		() => (Array.isArray(roadmapDetail?.nodes) ? roadmapDetail.nodes : []),
+		[roadmapDetail]
+	);
 	const orderedQuestions = useMemo(
 		() => sortQuestionsBySectionOrder(questions, sections),
 		[questions, sections]
@@ -409,6 +429,17 @@ export default function QuizPage() {
 							sectionPage={sectionPage}
 							onSectionPageChange={setSectionPage}
 							listClassName="space-y-4"
+							sectionNavigatorExtra={(group) => (
+								<SectionMasteryBadge node={nodeForSection(sectionNodes, group?.section)} />
+							)}
+							renderSectionHeader={(group) => (
+								<div className="flex flex-wrap items-center justify-between gap-2">
+									<h3 className="text-fg min-w-0 truncate text-sm font-semibold">
+										{group.section?.title || 'Section'}
+									</h3>
+									<SectionMasteryBadge node={nodeForSection(sectionNodes, group.section)} />
+								</div>
+							)}
 							renderQuestion={(question, index) => {
 								const questionNumber =
 									(question?.id != null && questionNumberById.get(question.id)) || index + 1;
