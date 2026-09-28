@@ -1198,10 +1198,10 @@ export default function EditQuizPage() {
 																}
 															/>
 
-															{!question.sequence && !question.codeQuiz && (
+															{question.chessPuzzle && (
 																<ChessSpecEditor
 																	value={question.chessSpec}
-																	recordMode={!!question.chessPuzzle}
+																	recordMode
 																	questionType={questionTypeFromFlags(question)}
 																	onChange={(spec) =>
 																		handleInputChange(question.id, 'chessSpec', spec)

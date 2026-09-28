@@ -17,14 +17,16 @@ export function buildAttemptDraftKey(quizId, scope) {
 		? 'full'
 		: [...(scope?.sectionIds || [])].sort((a, b) => a - b).join('-') || 'none';
 	const shuffle = scope?.shuffle ? '1' : '0';
+	const reverse = scope?.reverse ? '1' : '0';
+	const mc = scope?.asMultipleChoice ? '1' : '0';
 	const sample = scope?.sample != null ? String(scope.sample) : '';
 	const picked = [...(scope?.questionIds || [])]
 		.map((id) => Number.parseInt(String(id), 10))
 		.filter((n) => Number.isFinite(n))
 		.sort((a, b) => a - b);
 	const base = picked.length
-		? `${quizId}|${sections}|${shuffle}|${sample}|q${picked.join('-')}`
-		: `${quizId}|${sections}|${shuffle}|${sample}`;
+		? `${quizId}|${sections}|${shuffle}|${reverse}|${mc}|${sample}|q${picked.join('-')}`
+		: `${quizId}|${sections}|${shuffle}|${reverse}|${mc}|${sample}`;
 	return scope?.studyMode ? `${base}|s1` : base;
 }
 
@@ -35,7 +37,9 @@ export function buildAttemptPath(quizId, scope) {
 		shuffle: !!scope?.shuffle,
 		sample: scope?.sample ?? null,
 		questionIds: scope?.questionIds ?? [],
-		studyMode: !!scope?.studyMode
+		studyMode: !!scope?.studyMode,
+		reverse: !!scope?.reverse,
+		asMultipleChoice: !!scope?.asMultipleChoice
 	})}`;
 }
 
@@ -51,7 +55,9 @@ function normalizeScope(scope) {
 		shuffle: !!scope?.shuffle,
 		sample: scope?.sample ?? null,
 		questionIds: [...(scope?.questionIds || [])],
-		studyMode: !!scope?.studyMode
+		studyMode: !!scope?.studyMode,
+		reverse: !!scope?.reverse,
+		asMultipleChoice: !!scope?.asMultipleChoice
 	};
 }
 
@@ -88,7 +94,8 @@ export function slimAttemptDraftPayload({
 					revealedIds: flashcardDraft.revealedIds || [],
 					peekedIds: flashcardDraft.peekedIds || [],
 					lockedIds: flashcardDraft.lockedIds || [],
-					secondsLeft: flashcardDraft.secondsLeft ?? null
+					secondsLeft: flashcardDraft.secondsLeft ?? null,
+					remainingById: flashcardDraft.remainingById || {}
 				}
 			: null
 	};

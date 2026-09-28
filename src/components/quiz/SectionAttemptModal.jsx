@@ -9,7 +9,9 @@ import {
 	groupQuestionsByApiSection,
 	questionTypeLabel,
 	questionsInScopeOrder,
-	slimQuestionCatalog
+	slimQuestionCatalog,
+	canConvertIdentificationPoolToMc,
+	isIdentification
 } from './quizHelpers';
 
 function normalizeInitialIds(initialSectionIds, allIds) {
@@ -90,7 +92,7 @@ const DEFAULT_PRESET_HINT =
 
 /**
  * Pre-attempt settings: sections (when present) and optional hand-picked questions.
- * onConfirm({ fullQuiz, sectionIds, shuffle?, sample?, questionIds?, studyMode? })
+ * onConfirm({ fullQuiz, sectionIds, shuffle?, sample?, questionIds?, studyMode?, reverse?, asMultipleChoice? })
  *
  * initialSectionIds — when set, opens with only those sections checked (not "All").
  * highlightedSectionId — subtle hint for the section that drove the pre-selection.
@@ -99,6 +101,9 @@ const DEFAULT_PRESET_HINT =
  * questions — optional already-loaded stems (Quiz page / retake) to skip catalog fetch.
  * skipCountHydration — skip the full-quiz summary fetch (roadmap stub sections).
  * initialStudyMode — when true, opens with Study mode checked.
+ * initialReverseOrder — when true, opens with Reverse order checked.
+ * initialAsMultipleChoice — when true, opens with Multiple choice checked if eligible.
+ * initialSample — when set, opens the random-N field to that count (clamped to the pool).
  */
 export default function SectionAttemptModal({
 	open,
@@ -112,7 +117,10 @@ export default function SectionAttemptModal({
 	highlightedSectionId = null,
 	presetHint = null,
 	skipCountHydration = false,
-	initialStudyMode = false
+	initialStudyMode = false,
+	initialReverseOrder = false,
+	initialAsMultipleChoice = false,
+	initialSample = null
 }) {
 	const [hydratedSections, setHydratedSections] = useState(sections);
 	const incomingCatalog = useMemo(() => slimQuestionCatalog(initialQuestions), [initialQuestions]);
@@ -121,6 +129,9 @@ export default function SectionAttemptModal({
 	const [selectedQuestionIds, setSelectedQuestionIds] = useState([]);
 	const [expandedIds, setExpandedIds] = useState([]);
 	const [studyMode, setStudyMode] = useState(!!initialStudyMode);
+	const [reverseOrder, setReverseOrder] = useState(!!initialReverseOrder);
+	const [asMultipleChoice, setAsMultipleChoice] = useState(false);
+	const [sampleSize, setSampleSize] = useState(null);
 
 	useEffect(() => {
 		setHydratedSections(sections);
@@ -216,12 +227,15 @@ export default function SectionAttemptModal({
 			return;
 		}
 		setStudyMode(!!initialStudyMode);
+		setReverseOrder(!!initialReverseOrder);
+		const initialN = Number(initialSample);
+		setSampleSize(Number.isFinite(initialN) && initialN > 0 ? Math.floor(initialN) : null);
 		if (focusId != null) {
 			setExpandedIds((prev) =>
 				prev.some((id) => sameId(id, focusId)) ? prev : [...prev, focusId]
 			);
 		}
-	}, [open, focusId, initialStudyMode]);
+	}, [open, focusId, initialStudyMode, initialReverseOrder, initialSample]);
 
 	// Re-apply initialSectionIds when the section list hydrates; toast+close if none match.
 	useEffect(() => {
@@ -298,6 +312,58 @@ export default function SectionAttemptModal({
 		return selectedQuestionIds.filter((id) => allowed.has(String(id)));
 	}, [selectedQuestionIds, poolQuestions]);
 
+	const isSubset = pickedInPool.length > 0 && pickedInPool.length < poolQuestions.length;
+	const poolSize = selectedQuestionCount;
+	const effectiveSample = useMemo(() => {
+		if (isSubset) return null;
+		if (poolSize == null || poolSize < 1) return null;
+		if (sampleSize == null) return null;
+		const n = Math.min(poolSize, Math.max(1, Math.floor(Number(sampleSize) || 0)));
+		if (n >= poolSize) return null;
+		return n;
+	}, [isSubset, poolSize, sampleSize]);
+	const isRandomSample = effectiveSample != null;
+
+	useEffect(() => {
+		if (!open || poolSize == null) return;
+		setSampleSize((prev) => {
+			if (prev == null) return prev;
+			const n = Math.min(poolSize, Math.max(1, Math.floor(Number(prev) || 0)));
+			return n === prev ? prev : n;
+		});
+	}, [open, poolSize]);
+
+	const mcSourceQuestions = useMemo(() => {
+		if (pickedInPool.length) {
+			const allowed = new Set(pickedInPool.map((id) => String(id)));
+			return poolQuestions.filter((q) => allowed.has(String(q.id)));
+		}
+		return poolQuestions;
+	}, [pickedInPool, poolQuestions]);
+
+	const mcAllIdentification = useMemo(
+		() =>
+			mcSourceQuestions.length > 0 &&
+			mcSourceQuestions.every((q) => isIdentification(q.question_type)),
+		[mcSourceQuestions]
+	);
+	const mcEligible = useMemo(() => {
+		if (isRandomSample && effectiveSample < 4) return false;
+		return canConvertIdentificationPoolToMc(mcSourceQuestions);
+	}, [isRandomSample, effectiveSample, mcSourceQuestions]);
+
+	useEffect(() => {
+		if (!open) {
+			setAsMultipleChoice(false);
+			return;
+		}
+		if (!mcAllIdentification || !mcEligible) {
+			setAsMultipleChoice(false);
+			return;
+		}
+		if (initialAsMultipleChoice) setAsMultipleChoice(true);
+	}, [open, mcAllIdentification, mcEligible, initialAsMultipleChoice]);
+
 	useEffect(() => {
 		if (!open) return;
 		const allowed = new Set(poolQuestions.map((q) => String(q.id)));
@@ -313,7 +379,6 @@ export default function SectionAttemptModal({
 	);
 
 	const selectedSectionCount = allSelected ? sorted.length : selected.length;
-	const isSubset = pickedInPool.length > 0 && pickedInPool.length < poolQuestions.length;
 
 	const toggleAll = () => {
 		if (allSelected) {
@@ -339,6 +404,7 @@ export default function SectionAttemptModal({
 	};
 
 	const toggleQuestion = (id) => {
+		setSampleSize(null);
 		setSelectedQuestionIds((prev) =>
 			prev.some((item) => sameId(item, id))
 				? prev.filter((item) => !sameId(item, id))
@@ -348,6 +414,7 @@ export default function SectionAttemptModal({
 
 	const toggleSectionQuestions = (sectionQuestions) => {
 		const ids = sectionQuestions.map((q) => q.id);
+		setSampleSize(null);
 		setSelectedQuestionIds((prev) => {
 			const allOn = ids.every((id) => prev.some((item) => sameId(item, id)));
 			if (allOn) {
@@ -364,7 +431,12 @@ export default function SectionAttemptModal({
 	const canConfirm = !hasSections || allSelected || selected.length > 0;
 
 	const confirmWith = (scope) => {
-		onConfirm?.({ ...scope, studyMode });
+		onConfirm?.({
+			...scope,
+			studyMode,
+			reverse: reverseOrder,
+			asMultipleChoice: mcEligible && asMultipleChoice
+		});
 		onClose?.();
 	};
 
@@ -374,7 +446,10 @@ export default function SectionAttemptModal({
 				? { fullQuiz: false, sectionIds: selected }
 				: { fullQuiz: true, sectionIds: [] };
 
-		if (!isSubset) return base;
+		if (!isSubset) {
+			if (effectiveSample) return { ...base, sample: effectiveSample };
+			return base;
+		}
 
 		const orderedIds = questionsInScopeOrder(poolQuestions, pickedInPool, sorted).map((q) => q.id);
 		return { ...base, questionIds: orderedIds, sample: orderedIds.length };
@@ -400,7 +475,11 @@ export default function SectionAttemptModal({
 		confirmWith({ fullQuiz: false, sectionIds: [focusId] });
 	};
 
-	const startLabel = isSubset ? `Start ${pickedInPool.length}-question subset` : 'Start attempt';
+	const startLabel = isSubset
+		? `Start ${pickedInPool.length}-question subset`
+		: isRandomSample
+			? `Start ${effectiveSample}-question sample`
+			: 'Start attempt';
 
 	return (
 		<Modal
@@ -517,11 +596,13 @@ export default function SectionAttemptModal({
 					<span className="font-medium">
 						{isSubset
 							? `${pickedInPool.length} / ${poolQuestions.length} questions`
-							: selectedQuestionCount != null
-								? formatQuestionCount(selectedQuestionCount)
-								: catalogLoading
-									? 'Questions…'
-									: 'Questions…'}
+							: isRandomSample
+								? `${effectiveSample} / ${poolSize} questions`
+								: selectedQuestionCount != null
+									? formatQuestionCount(selectedQuestionCount)
+									: catalogLoading
+										? 'Questions…'
+										: 'Questions…'}
 					</span>
 					{hasSections && (
 						<span className="text-muted">
@@ -530,6 +611,51 @@ export default function SectionAttemptModal({
 						</span>
 					)}
 				</p>
+			</div>
+
+			<div className="border-line bg-surface-2 mt-3 flex items-start gap-3 rounded-md border px-3 py-2.5">
+				<div className="min-w-0 flex-1">
+					<label htmlFor="attempt-sample-size" className="text-fg text-sm font-medium">
+						Questions to take
+					</label>
+					<p className="text-muted mt-0.5 text-xs">
+						{isSubset
+							? 'Clear checked questions below to take a random sample from the selection.'
+							: poolSize != null
+								? `Random sample from the selected ${hasSections ? 'sections' : 'quiz'} (${poolSize} total). Smaller than the total does not count toward roadmap mastery. Quick start buttons still take the full section or quiz.`
+								: 'Random sample from the current selection. Smaller than the total does not count toward roadmap mastery.'}
+					</p>
+				</div>
+				<div className="flex shrink-0 items-center gap-2">
+					<input
+						id="attempt-sample-size"
+						type="number"
+						min={1}
+						max={poolSize ?? undefined}
+						step={1}
+						disabled={isSubset || poolSize == null || poolSize < 1}
+						value={isSubset ? pickedInPool.length : (sampleSize ?? poolSize ?? '')}
+						onChange={(event) => {
+							const raw = event.target.value;
+							if (raw === '') {
+								setSampleSize(null);
+								return;
+							}
+							const n = Math.floor(Number(raw));
+							if (!Number.isFinite(n)) return;
+							setSelectedQuestionIds([]);
+							if (poolSize == null) {
+								setSampleSize(Math.max(1, n));
+								return;
+							}
+							setSampleSize(Math.min(poolSize, Math.max(1, n)));
+						}}
+						className="border-line bg-surface text-fg w-20 rounded-md border px-2 py-1.5 text-right text-sm tabular-nums disabled:cursor-not-allowed disabled:opacity-60"
+					/>
+					{poolSize != null && (
+						<span className="text-muted text-xs tabular-nums">of {poolSize}</span>
+					)}
+				</div>
 			</div>
 
 			<label className="border-line bg-surface-2 mt-3 flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5">
@@ -547,6 +673,50 @@ export default function SectionAttemptModal({
 					</span>
 				</span>
 			</label>
+
+			<label className="border-line bg-surface-2 mt-3 flex cursor-pointer items-start gap-3 rounded-md border px-3 py-2.5">
+				<input
+					type="checkbox"
+					checked={reverseOrder}
+					onChange={(event) => setReverseOrder(event.target.checked)}
+					className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--primary)]"
+				/>
+				<span className="min-w-0 flex-1">
+					<span className="text-fg text-sm font-medium">Reverse order</span>
+					<span className="text-muted mt-0.5 block text-xs">
+						Start from the last question. If shuffle is also on, questions are shuffled first, then
+						reversed.
+					</span>
+				</span>
+			</label>
+
+			{mcAllIdentification && (
+				<label
+					className={`border-line bg-surface-2 mt-3 flex items-start gap-3 rounded-md border px-3 py-2.5 ${
+						mcEligible ? 'cursor-pointer' : 'cursor-not-allowed opacity-60'
+					}`}
+				>
+					<input
+						type="checkbox"
+						checked={asMultipleChoice}
+						disabled={!mcEligible}
+						onChange={(event) => setAsMultipleChoice(event.target.checked)}
+						className="mt-0.5 h-4 w-4 shrink-0 accent-[var(--primary)]"
+					/>
+					<span className="min-w-0 flex-1">
+						<span className="text-fg text-sm font-medium">Multiple choice</span>
+						<span className="text-muted mt-0.5 block text-xs">
+							{mcEligible
+								? isRandomSample
+									? 'Each sampled identification question becomes 4 shuffled choices (1 correct + 3 other answers from the sample). Applied after the random draw. Scored, but does not count toward roadmap mastery.'
+									: 'Each identification question becomes 4 shuffled choices (1 correct + 3 other answers from this selection). Scored, but does not count toward roadmap mastery.'
+								: isRandomSample && effectiveSample < 4
+									? 'Need at least 4 questions in the sample to build 4-choice questions.'
+									: 'Needs at least 4 unique answers in this selection to build 4-choice questions.'}
+						</span>
+					</span>
+				</label>
+			)}
 
 			<QuestionPicker
 				loading={catalogLoading}
@@ -588,8 +758,9 @@ function QuestionPicker({
 				<div className="min-w-0">
 					<p className="text-fg text-xs font-medium tracking-wide uppercase">Questions</p>
 					<p className="text-muted mt-1 text-xs">
-						Leave unchecked to take every question in the selection. Checking some starts a subset
-						attempt that does not count toward roadmap mastery.
+						Leave unchecked to take every question in the selection, or set a random count above.
+						Checking some starts a subset attempt that does not count toward roadmap mastery (and
+						clears the random sample).
 					</p>
 				</div>
 				{pickedCount > 0 && (

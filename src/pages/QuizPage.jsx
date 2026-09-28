@@ -462,7 +462,7 @@ export default function QuizPage() {
 											<QuestionTitle
 												text={question.question}
 												mathematical={math}
-												className="text-base"
+												className="pt-5 text-base"
 											/>
 
 											{!codeQuiz && <QuestionChessBoard question={question} />}

@@ -61,6 +61,14 @@ export default function FlashcardAttempt({
 	const [secondsLeft, setSecondsLeft] = useState(() =>
 		draftState?.secondsLeft != null ? draftState.secondsLeft : null
 	);
+	const remainingByIdRef = useRef(
+		draftState?.remainingById && typeof draftState.remainingById === 'object'
+			? { ...draftState.remainingById }
+			: {}
+	);
+	const secondsLeftRef = useRef(secondsLeft);
+	secondsLeftRef.current = secondsLeft;
+	const previousQuestionIdRef = useRef(null);
 	const total = questions.length;
 	const currentQuestion = questions[index];
 	const answer = currentQuestion ? answersByIdMap.get(currentQuestion.id) : null;
@@ -119,8 +127,13 @@ export default function FlashcardAttempt({
 		setPeekedIds(new Set(draftState.peekedIds ?? []));
 		setLockedIds(new Set(draftState.lockedIds ?? []));
 		completedIdsRef.current = new Set(draftState.lockedIds ?? []);
+		remainingByIdRef.current =
+			draftState.remainingById && typeof draftState.remainingById === 'object'
+				? { ...draftState.remainingById }
+				: {};
 		pendingRestoredSecondsRef.current =
 			draftState.secondsLeft != null ? draftState.secondsLeft : null;
+		previousQuestionIdRef.current = null;
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- restore only when parent issues a new token
 	}, [draftState?.restoreToken]);
 
@@ -130,7 +143,8 @@ export default function FlashcardAttempt({
 			revealedIds: [...revealedIds],
 			peekedIds: [...peekedIds],
 			lockedIds: [...lockedIds],
-			secondsLeft
+			secondsLeft,
+			remainingById: { ...remainingByIdRef.current }
 		});
 	}, [index, revealedIds, peekedIds, lockedIds, secondsLeft, onDraftStateChange]);
 
@@ -163,16 +177,20 @@ export default function FlashcardAttempt({
 	};
 
 	const goTo = (next) => {
-		if (perQuestionTimerEnabled && next < index) return;
 		if (next === index) return;
+		if (next < 0 || next >= total) return;
 		cancelAutoAdvance();
 		timedOutRef.current = false;
 		setIndex(next);
 	};
 
 	const goPrev = () => {
-		if (perQuestionTimerEnabled) return;
-		goTo((index - 1 + total) % total);
+		if (index <= 0) {
+			if (perQuestionTimerEnabled) return;
+			goTo(total - 1);
+			return;
+		}
+		goTo(index - 1);
 	};
 
 	const advanceForward = () => {
@@ -188,11 +206,6 @@ export default function FlashcardAttempt({
 	const goNext = () => {
 		if (!currentQuestion) return;
 		if (perQuestionTimerEnabled) {
-			if (!locked) {
-				completedIdsRef.current.add(currentQuestion.id);
-				markLocked(currentQuestion.id);
-				if (hasAnswer) markRevealed(currentQuestion.id);
-			}
 			advanceForward();
 			return;
 		}
@@ -294,36 +307,67 @@ export default function FlashcardAttempt({
 	useEffect(() => {
 		if (!perQuestionTimerEnabled || !currentQuestion) {
 			setSecondsLeft(null);
+			previousQuestionIdRef.current = currentQuestion?.id ?? null;
 			return;
 		}
-		if (locked) return;
+
+		const prevId = previousQuestionIdRef.current;
+		const questionChanged = prevId !== currentQuestion.id;
+		if (questionChanged && prevId != null && secondsLeftRef.current != null) {
+			remainingByIdRef.current[prevId] = secondsLeftRef.current;
+		}
+		previousQuestionIdRef.current = currentQuestion.id;
+
 		const limit = resolveQuestionTimerSeconds(currentQuestion, perQuestionTimeSeconds);
 		questionLimitRef.current = limit;
-		timedOutRef.current = false;
+
+		if (!questionChanged && locked) return;
+
 		const restored = pendingRestoredSecondsRef.current;
 		if (restored != null) {
 			pendingRestoredSecondsRef.current = null;
-			setSecondsLeft(Math.min(limit, Math.max(0, restored)));
+			const next = Math.min(limit, Math.max(0, restored));
+			remainingByIdRef.current[currentQuestion.id] = next;
+			setSecondsLeft(next);
+			timedOutRef.current = next === 0;
 			return;
 		}
+
+		const saved = remainingByIdRef.current[currentQuestion.id];
+		if (saved != null) {
+			const next = Math.min(limit, Math.max(0, saved));
+			setSecondsLeft(next);
+			timedOutRef.current = next === 0 || locked;
+			return;
+		}
+
+		if (locked) {
+			remainingByIdRef.current[currentQuestion.id] = 0;
+			setSecondsLeft(0);
+			timedOutRef.current = true;
+			return;
+		}
+
+		timedOutRef.current = false;
+		remainingByIdRef.current[currentQuestion.id] = limit;
 		setSecondsLeft(limit);
-		// draftState object syncs every tick for persistence — only restoreToken may re-init.
 	}, [
 		perQuestionTimerEnabled,
 		currentQuestion?.id,
 		perQuestionTimeSeconds,
-		index,
 		locked,
 		draftState?.restoreToken
 	]);
 
 	useEffect(() => {
 		if (!perQuestionTimerEnabled || !currentQuestion || locked || paused) return undefined;
+		const questionId = currentQuestion.id;
 		const interval = setInterval(() => {
 			setSecondsLeft((prev) => {
 				if (prev == null) return prev;
-				if (prev <= 1) return 0;
-				return prev - 1;
+				const next = prev <= 1 ? 0 : prev - 1;
+				remainingByIdRef.current[questionId] = next;
+				return next;
 			});
 		}, 1000);
 		return () => clearInterval(interval);
@@ -331,6 +375,9 @@ export default function FlashcardAttempt({
 
 	useEffect(() => {
 		if (!perQuestionTimerEnabled || secondsLeft !== 0 || locked) return;
+		if (!currentQuestion) return;
+		const saved = remainingByIdRef.current[currentQuestion.id];
+		if (saved != null && saved > 0) return;
 		handleTimeout();
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- fire once at zero
 	}, [secondsLeft, perQuestionTimerEnabled, locked, currentQuestion?.id]);
@@ -375,22 +422,20 @@ export default function FlashcardAttempt({
 						const filled = sequenceQuestionAnswered(q, answersByIdMap.get(q.id))
 							? true
 							: String(answersByIdMap.get(q.id)?.userAnswer ?? '').trim() !== '';
-						const canJump = !perQuestionTimerEnabled || i >= index;
 						return (
 							<button
 								key={q.id ?? i}
 								type="button"
 								aria-label={`Go to question ${i + 1}`}
-								disabled={!canJump || submitting}
-								onClick={() => canJump && goTo(i)}
+								disabled={submitting}
+								onClick={() => goTo(i)}
 								className={cn(
 									'h-2 w-2 cursor-pointer rounded-full transition',
 									i === index
 										? 'bg-primary scale-125'
 										: filled
 											? 'bg-primary/45'
-											: 'bg-line hover:bg-muted/40',
-									!canJump && 'cursor-not-allowed opacity-40'
+											: 'bg-line hover:bg-muted/40'
 								)}
 							/>
 						);
@@ -403,7 +448,7 @@ export default function FlashcardAttempt({
 					variant="secondary"
 					className="flex-1"
 					onClick={goPrev}
-					disabled={submitting || perQuestionTimerEnabled}
+					disabled={submitting || (perQuestionTimerEnabled && index === 0)}
 					title="Previous (⌘[)"
 				>
 					<ChevronLeft size={16} /> Prev

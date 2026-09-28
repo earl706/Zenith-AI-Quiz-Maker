@@ -1275,7 +1275,6 @@ export default function CreateQuizPage() {
 								onSectionPageChange={setSectionPage}
 							/>
 						)}
-
 						{visibleSectionGroups.map(({ section, questions: groupQuestions }) => (
 							<div key={section?.clientKey || 'ungrouped'} className="space-y-3">
 								{section && (
@@ -1449,10 +1448,10 @@ export default function CreateQuizPage() {
 																onChange={(e) => handleQuestionImageUpload(question.id, e)}
 															/>
 
-															{!question.sequence && !question.codeQuiz && (
+															{question.chessPuzzle && (
 																<ChessSpecEditor
 																	value={question.chessSpec}
-																	recordMode={!!question.chessPuzzle}
+																	recordMode
 																	onChange={(spec) =>
 																		handleInputChange(question.id, 'chessSpec', spec)
 																	}
@@ -1719,7 +1718,6 @@ export default function CreateQuizPage() {
 								)}
 							</div>
 						))}
-
 						{authoringSections.length === 0 && !reviewing && (
 							<Button
 								variant="secondary"

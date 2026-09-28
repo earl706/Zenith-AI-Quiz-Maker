@@ -1030,13 +1030,18 @@ export function normalizeQuestionIds(ids) {
 export function slimQuestionCatalog(questions) {
 	return (questions || [])
 		.filter((q) => q?.id != null)
-		.map((q) => ({
-			id: q.id,
-			question: String(q.question ?? ''),
-			section: canonicalSectionId(q.section ?? q.section_id ?? q.sectionId),
-			order: q.order ?? 0,
-			question_type: q.question_type ?? null
-		}));
+		.map((q) => {
+			const stored = String(q.correct_answer ?? '').trim();
+			const fromChoices = stored ? stored : String(resolveCorrectAnswer(q) ?? '').trim();
+			return {
+				id: q.id,
+				question: String(q.question ?? ''),
+				section: canonicalSectionId(q.section ?? q.section_id ?? q.sectionId),
+				order: q.order ?? 0,
+				question_type: q.question_type ?? null,
+				correct_answer: fromChoices
+			};
+		});
 }
 
 /** Filter to picked ids and restore section / quiz order. */
@@ -1055,7 +1060,9 @@ export function buildAttemptQuery({
 	shuffle = false,
 	sample = null,
 	questionIds = null,
-	studyMode = false
+	studyMode = false,
+	reverse = false,
+	asMultipleChoice = false
 }) {
 	const params = new URLSearchParams();
 	if (fullQuiz || !sectionIds?.length) {
@@ -1064,6 +1071,8 @@ export function buildAttemptQuery({
 		params.set('sections', sectionIds.join(','));
 	}
 	if (shuffle) params.set('shuffle', '1');
+	if (reverse) params.set('reverse', '1');
+	if (asMultipleChoice) params.set('mc', '1');
 	const picked = normalizeQuestionIds(questionIds);
 	if (picked.length) {
 		params.set('questions', picked.join(','));
@@ -1093,7 +1102,9 @@ export function parseAttemptScopeFromSearch(search) {
 		shuffle: params.get('shuffle') === '1' || params.get('shuffle') === 'true',
 		sample: Number.isFinite(sampleRaw) && sampleRaw > 0 ? sampleRaw : null,
 		questionIds: normalizeQuestionIds(params.get('questions') || ''),
-		studyMode: params.get('study') === '1' || params.get('study') === 'true'
+		studyMode: params.get('study') === '1' || params.get('study') === 'true',
+		reverse: params.get('reverse') === '1' || params.get('reverse') === 'true',
+		asMultipleChoice: params.get('mc') === '1' || params.get('mc') === 'true'
 	};
 }
 
@@ -1111,6 +1122,74 @@ export function identificationAnswerCorpus(questions) {
 		corpus.push(answer);
 	}
 	return corpus;
+}
+
+function identificationAnswerText(question) {
+	const stored = String(question?.correct_answer ?? '').trim();
+	if (stored) return stored;
+	return String(resolveCorrectAnswer(question) ?? '').trim();
+}
+
+/** Unique identification answers in the pool (case-insensitive), original text kept. */
+export function uniqueIdentificationAnswers(questions) {
+	const seen = new Set();
+	const answers = [];
+	for (const question of questions || []) {
+		if (!isIdentification(question?.question_type)) continue;
+		const answer = identificationAnswerText(question);
+		if (!answer) continue;
+		const key = answer.toLowerCase();
+		if (seen.has(key)) continue;
+		seen.add(key);
+		answers.push(answer);
+	}
+	return answers;
+}
+
+/** True when every item is IDE/IDE-COM, each has an answer, and there are ≥4 unique answers. */
+export function canConvertIdentificationPoolToMc(questions) {
+	const list = questions || [];
+	if (!list.length) return false;
+	if (!list.every((q) => isIdentification(q?.question_type))) return false;
+	const answered = list.filter((q) => identificationAnswerText(q));
+	if (answered.length !== list.length) return false;
+	return uniqueIdentificationAnswers(list).length >= 4;
+}
+
+/**
+ * Client-only presentation: identification stems become 4-choice MC (1 correct + 3
+ * unique distractors from the pool, shuffled). Grading still uses stored ID answers.
+ */
+export function convertIdentificationQuestionsToMc(questions) {
+	const list = Array.isArray(questions) ? questions : [];
+	const pool = uniqueIdentificationAnswers(list);
+	if (pool.length < 4) return list;
+	return list.map((question) => {
+		const correct = identificationAnswerText(question);
+		if (!correct || !isIdentification(question?.question_type)) return question;
+		const correctKey = correct.toLowerCase();
+		const distractors = shuffleArray(
+			pool.filter((text) => text.toLowerCase() !== correctKey)
+		).slice(0, 3);
+		if (distractors.length < 3) return question;
+		const texts = shuffleArray([correct, ...distractors]);
+		const correctIndex = texts.findIndex((text) => text.toLowerCase() === correctKey);
+		const math = question.question_type === 'IDE-COM';
+		return {
+			...question,
+			question_type: math ? 'MUL-COM' : 'MUL',
+			identification: false,
+			correct_answer: correct,
+			correct_answer_index: correctIndex < 0 ? 0 : correctIndex,
+			choices: texts.map((text, index) => ({
+				id: `mc-${question.id}-${index}`,
+				text,
+				image: null,
+				image_url: '',
+				image_display: null
+			}))
+		};
+	});
 }
 
 /** Prefix matches ranked by length (closer), then alphabetically. Max 5. */
@@ -1163,22 +1242,31 @@ export function sampleArray(items, count) {
 export function formatAttemptScopeLabel({ scope, sections, questionCount, questionPoolSize }) {
 	const pickedCount = Array.isArray(scope?.questionIds) ? scope.questionIds.length : 0;
 	const sampleCount = scope?.sample || 0;
+	let label;
 	if (pickedCount || sampleCount) {
 		const takenHint = pickedCount || sampleCount;
 		const pool = questionPoolSize ?? questionCount ?? takenHint;
 		const taken = Math.min(takenHint, questionCount ?? takenHint);
 		const sectionList = resolveAttemptSectionTitles(scope, sections);
 		const sectionPart = sectionList.length ? ` · Sections ${sectionList.join(', ')}` : '';
-		return `${taken} / ${pool} questions${sectionPart}`;
+		label = `${taken} / ${pool} questions${sectionPart}`;
+	} else if (scope?.fullQuiz) {
+		label = scope.shuffle ? 'All sections (shuffled)' : 'All sections';
+	} else {
+		const sectionList = resolveAttemptSectionTitles(scope, sections);
+		label = sectionList.length
+			? sectionList.join(', ')
+			: `${scope?.sectionIds?.length ?? 0} section${scope?.sectionIds?.length === 1 ? '' : 's'}`;
 	}
-	if (scope?.fullQuiz) {
-		return scope.shuffle ? 'All sections (shuffled)' : 'All sections';
-	}
-	const sectionList = resolveAttemptSectionTitles(scope, sections);
-	if (sectionList.length) {
-		return sectionList.join(', ');
-	}
-	return `${scope?.sectionIds?.length ?? 0} section${scope?.sectionIds?.length === 1 ? '' : 's'}`;
+	return withAttemptPresentationLabels(label, scope);
+}
+
+function withAttemptPresentationLabels(label, scope) {
+	const extras = [];
+	if (scope?.asMultipleChoice) extras.push('multiple choice');
+	if (scope?.reverse) extras.push('reversed');
+	if (!extras.length) return label;
+	return `${label} · ${extras.join(' · ')}`;
 }
 
 function resolveAttemptSectionTitles(scope, sections) {
@@ -1203,16 +1291,26 @@ export function clampPerQuestionSeconds(value, fallback = PER_QUESTION_TIMER_DEF
 	return Math.min(PER_QUESTION_TIMER_MAX, Math.max(PER_QUESTION_TIMER_MIN, Math.round(n)));
 }
 
+function sequenceItemCount(question) {
+	const items = question?.sequence_items || question?.sequenceItems || [];
+	return Array.isArray(items) ? items.length : 0;
+}
+
 /**
  * Resolve seconds for a question: per-question override, else quiz default.
+ * Sequence questions use (effective seconds) × (sequence item count), uncapped.
  * Accepts API snake_case or authoring camelCase on the question.
  */
 export function resolveQuestionTimerSeconds(question, quizDefaultSeconds) {
 	const raw = question?.per_question_time_seconds ?? question?.perQuestionTimeSeconds ?? null;
-	if (raw == null || raw === '') {
-		return clampPerQuestionSeconds(quizDefaultSeconds);
-	}
-	return clampPerQuestionSeconds(raw);
+	const base =
+		raw == null || raw === ''
+			? clampPerQuestionSeconds(quizDefaultSeconds)
+			: clampPerQuestionSeconds(raw);
+	if (!isSequence(question?.question_type) && !question?.sequence) return base;
+	const count = sequenceItemCount(question);
+	if (count < 1) return base;
+	return base * count;
 }
 
 /** Parse optional override from import/API (empty → null). */

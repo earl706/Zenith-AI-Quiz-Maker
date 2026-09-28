@@ -43,6 +43,9 @@ function sectionsWithQuestionCounts(quiz) {
  *   skipCountHydration?: boolean  // skip summary fetch (roadmap stub sections)
  *   questions?: object[]  // optional stems for the question picker
  *   initialStudyMode?: boolean
+ *   initialReverseOrder?: boolean
+ *   initialAsMultipleChoice?: boolean
+ *   initialSample?: number
  * })
  */
 export function useAttemptLauncher() {
@@ -85,7 +88,13 @@ export function useAttemptLauncher() {
 				presetHint: options.presetHint ?? null,
 				skipCountHydration: Boolean(options.skipCountHydration),
 				questions,
-				initialStudyMode: Boolean(options.initialStudyMode)
+				initialStudyMode: Boolean(options.initialStudyMode),
+				initialReverseOrder: Boolean(options.initialReverseOrder),
+				initialAsMultipleChoice: Boolean(options.initialAsMultipleChoice),
+				initialSample:
+					Number.isFinite(Number(options.initialSample)) && Number(options.initialSample) > 0
+						? Math.floor(Number(options.initialSample))
+						: null
 			});
 		},
 		[navigate]
@@ -94,7 +103,16 @@ export function useAttemptLauncher() {
 	const closeModal = useCallback(() => setTarget(null), []);
 
 	const confirmScope = useCallback(
-		({ fullQuiz, sectionIds, shuffle, sample, questionIds, studyMode }) => {
+		({
+			fullQuiz,
+			sectionIds,
+			shuffle,
+			sample,
+			questionIds,
+			studyMode,
+			reverse,
+			asMultipleChoice
+		}) => {
 			if (!target?.id) return;
 			navigate(
 				`/quizzes/attempt/${target.id}${buildAttemptQuery({
@@ -103,7 +121,9 @@ export function useAttemptLauncher() {
 					shuffle,
 					sample,
 					questionIds,
-					studyMode
+					studyMode,
+					reverse,
+					asMultipleChoice
 				})}`,
 				{ state: attemptLaunchState() }
 			);
@@ -127,6 +147,9 @@ export function useAttemptLauncher() {
 			skipCountHydration={target.skipCountHydration}
 			questions={target.questions}
 			initialStudyMode={target.initialStudyMode}
+			initialReverseOrder={target.initialReverseOrder}
+			initialAsMultipleChoice={target.initialAsMultipleChoice}
+			initialSample={target.initialSample}
 		/>
 	) : null;
 

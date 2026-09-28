@@ -47,6 +47,8 @@ import {
 	serializeAnswersForSubmit,
 	shuffleArray,
 	sortQuestionsBySectionOrder,
+	canConvertIdentificationPoolToMc,
+	convertIdentificationQuestionsToMc,
 	ADVANCE_DELAY_CORRECT_MS,
 	ADVANCE_DELAY_WRONG_MS
 } from '../components/quiz/quizHelpers';
@@ -141,6 +143,15 @@ function orderQuestionsByIds(questions, questionIds) {
 		if (q) ordered.push(q);
 	}
 	return ordered;
+}
+
+function applyMultipleChoicePresentation(questions, scope) {
+	if (!scope?.asMultipleChoice) return questions;
+	if (!canConvertIdentificationPoolToMc(questions)) {
+		toast.error('Need at least 4 unique identification answers for multiple-choice.');
+		return questions;
+	}
+	return convertIdentificationQuestionsToMc(questions);
 }
 
 function mergeAnswersFromDraft(questions, draftAnswers) {
@@ -377,7 +388,7 @@ export default function QuizAttempt() {
 				full_quiz: scope.fullQuiz,
 				section_ids: scope.fullQuiz ? [] : scope.sectionIds,
 				...(sampleSize ? { question_sample_size: sampleSize } : {}),
-				...(scope.studyMode ? { study_mode: true } : {})
+				...(scope.studyMode || scope.asMultipleChoice ? { study_mode: true } : {})
 			});
 		} catch (err) {
 			const message = err?.response?.data?.error;
@@ -386,7 +397,15 @@ export default function QuizAttempt() {
 			}
 			// Attempt start is best-effort; scoring still uses submit payload.
 		}
-	}, [id, scope.fullQuiz, scope.sectionIds, scope.sample, scope.questionIds, scope.studyMode]);
+	}, [
+		id,
+		scope.fullQuiz,
+		scope.sectionIds,
+		scope.sample,
+		scope.questionIds,
+		scope.studyMode,
+		scope.asMultipleChoice
+	]);
 
 	const applyDraftUi = useCallback(
 		(draft, { quizData: nextQuiz, questions: nextQuestions }) => {
@@ -491,6 +510,11 @@ export default function QuizAttempt() {
 					setQuestionPoolSize(null);
 				}
 
+				if (scope.reverse) {
+					scopedQuestions = [...scopedQuestions].reverse();
+				}
+				scopedQuestions = applyMultipleChoicePresentation(scopedQuestions, scope);
+
 				setQuizData(nextQuiz);
 				setQuestions(scopedQuestions);
 				const answerRecords = buildAnswerRecords(scopedQuestions);
@@ -526,6 +550,8 @@ export default function QuizAttempt() {
 			scope.shuffle,
 			scope.sample,
 			scope.questionIds,
+			scope.reverse,
+			scope.asMultipleChoice,
 			startAttempt
 		]
 	);
@@ -642,6 +668,9 @@ export default function QuizAttempt() {
 		scope.shuffle,
 		scope.sample,
 		scope.questionIds.join(','),
+		scope.reverse,
+		scope.asMultipleChoice,
+		scope.studyMode,
 		launchKey
 	]);
 
@@ -662,7 +691,10 @@ export default function QuizAttempt() {
 				await loadQuizFresh(undefined);
 				return;
 			}
-			const ordered = orderQuestionsByIds(parsed.questions, pendingDraft.questionIds);
+			const ordered = applyMultipleChoicePresentation(
+				orderQuestionsByIds(parsed.questions, pendingDraft.questionIds),
+				scope
+			);
 			if (ordered.length === 0) {
 				toast.error('Saved attempt no longer matches this quiz.');
 				abandonAttemptDraft();
@@ -726,7 +758,7 @@ export default function QuizAttempt() {
 			const response = await api.post(`/quizzes/quiz/submit/${id}/`, {
 				answers: payload,
 				time,
-				...(scope.studyMode ? { study_mode: true } : {})
+				...(scope.studyMode || scope.asMultipleChoice ? { study_mode: true } : {})
 			});
 			setSubmittedAnswers(
 				currentAnswers.map((row) => ({
@@ -790,7 +822,10 @@ export default function QuizAttempt() {
 			highlightedSectionId:
 				!scope.fullQuiz && scope.sectionIds.length === 1 ? scope.sectionIds[0] : undefined,
 			presetHint: 'Pre-selected from your last attempt — you can change the selection below.',
-			initialStudyMode: !!scope.studyMode
+			initialStudyMode: !!scope.studyMode,
+			initialReverseOrder: !!scope.reverse,
+			initialAsMultipleChoice: !!scope.asMultipleChoice,
+			initialSample: scope.sample
 		});
 	};
 
@@ -897,17 +932,21 @@ export default function QuizAttempt() {
 				icon={Target}
 				description={
 					quizResults
-						? scope.studyMode
+						? scope.studyMode || scope.asMultipleChoice
 							? 'Practice review — this attempt did not count toward mastery'
 							: 'Review your answers'
 						: scope.studyMode
 							? 'Study mode: show or hide answers anytime. Scored, but not for mastery.'
-							: 'Answer each question, then submit'
+							: scope.asMultipleChoice
+								? 'Multiple-choice practice: scored, but not for mastery.'
+								: 'Answer each question, then submit'
 				}
 				actions={
 					<div className="flex flex-wrap gap-1.5">
 						<Badge tone="primary">{modeLabel}</Badge>
 						{scope.studyMode && <Badge tone="accent">Study</Badge>}
+						{scope.asMultipleChoice && <Badge tone="accent">Multiple choice</Badge>}
+						{scope.reverse && <Badge tone="accent">Reversed</Badge>}
 						{(quizData.sections?.length > 0 ||
 							!scope.fullQuiz ||
 							scope.sample ||
