@@ -153,6 +153,7 @@ function QuestionCard({
 						question={question}
 						value={answer?.userAnswer || ''}
 						disabled={revealed}
+						autoFocus={autoFocus && !revealed}
 						onChange={(text) => handleIdentificationAnswerChange(question.id, text)}
 					/>
 				</>

@@ -249,12 +249,12 @@ export default function FlashcardAttempt({
 
 	const revealIdentification = (committedText, answerPatch = null) => {
 		if (!currentQuestion || locked || completedIdsRef.current.has(currentQuestion.id)) return;
+		// Click handlers pass a SyntheticEvent; only a real string may replace the answer.
+		const text = typeof committedText === 'string' ? committedText : '';
 		const snapshot = {
 			...answer,
 			...(answerPatch && typeof answerPatch === 'object' ? answerPatch : {}),
-			...(committedText != null && String(committedText).trim() !== ''
-				? { userAnswer: committedText }
-				: {})
+			...(text.trim() !== '' ? { userAnswer: text } : {})
 		};
 		if (sequence) {
 			if (!sequenceQuestionAnswered(currentQuestion, snapshot)) return;
@@ -268,11 +268,10 @@ export default function FlashcardAttempt({
 		if (
 			!sequence &&
 			!chessPuzzle &&
-			committedText != null &&
-			String(committedText).trim() !== '' &&
-			String(committedText) !== String(answer?.userAnswer ?? '')
+			text.trim() !== '' &&
+			text !== String(answer?.userAnswer ?? '')
 		) {
-			onIdentificationChange?.(currentQuestion.id, committedText);
+			onIdentificationChange?.(currentQuestion.id, text);
 		}
 		markCompleted(currentQuestion.id);
 		scheduleAfterReveal(advanceDelayForAnswer(currentQuestion, snapshot));
@@ -503,6 +502,7 @@ export default function FlashcardAttempt({
 									question={currentQuestion}
 									value={answer?.userAnswer || ''}
 									disabled={revealed || locked}
+									autoFocus={!revealed && !locked}
 									onChange={(text) => onIdentificationChange?.(currentQuestion.id, text)}
 								/>
 							</>
@@ -621,7 +621,7 @@ export default function FlashcardAttempt({
 									className="w-full"
 									variant="secondary"
 									disabled={!hasAnswer || submitting}
-									onClick={revealIdentification}
+									onClick={() => revealIdentification()}
 								>
 									Check answer
 								</Button>

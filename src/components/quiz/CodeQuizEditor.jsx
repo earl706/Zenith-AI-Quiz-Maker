@@ -75,6 +75,16 @@ function languageExtension(language) {
 	}
 }
 
+/** Focus the editable code surface inside `root` and return its content node. */
+export function focusCodeEditorIn(root) {
+	const content = root?.querySelector?.('.cm-content[contenteditable="true"]');
+	if (!content) return null;
+	const view = EditorView.findFromDOM(content);
+	if (view) view.focus();
+	else content.focus({ preventScroll: true });
+	return content;
+}
+
 /** Shared CodeMirror surface for code quiz authoring and attempts. */
 export default function CodeQuizEditor({
 	value = '',
@@ -83,7 +93,8 @@ export default function CodeQuizEditor({
 	readOnly = false,
 	minHeight = '10rem',
 	placeholder = '',
-	showFormatButton = true
+	showFormatButton = true,
+	autoFocus = false
 }) {
 	const theme = useThemeStore((s) => s.theme);
 	const isDark = theme === 'dark';
@@ -96,6 +107,7 @@ export default function CodeQuizEditor({
 	}, [language, readOnly, isDark]);
 
 	const canFormat = showFormatButton && !readOnly;
+	const editorValue = typeof value === 'string' ? value : '';
 
 	return (
 		<div className="border-line bg-surface overflow-hidden rounded-md border" style={{ minHeight }}>
@@ -103,7 +115,7 @@ export default function CodeQuizEditor({
 				<div className="border-line bg-surface-2 flex items-center justify-end border-b px-2 py-1">
 					<button
 						type="button"
-						onClick={() => onChange?.(formatCodeStyle(value))}
+						onClick={() => onChange?.(formatCodeStyle(editorValue))}
 						className="text-muted hover:text-fg hover:bg-surface inline-flex cursor-pointer items-center gap-1 rounded px-2 py-1 text-xs font-medium"
 						title="Normalize spacing (same rules used when grading)"
 					>
@@ -113,7 +125,8 @@ export default function CodeQuizEditor({
 				</div>
 			)}
 			<CodeMirror
-				value={value}
+				value={editorValue}
+				autoFocus={autoFocus && !readOnly}
 				height={minHeight}
 				theme={isDark ? 'dark' : 'light'}
 				extensions={extensions}

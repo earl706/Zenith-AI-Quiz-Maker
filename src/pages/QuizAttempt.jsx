@@ -15,6 +15,7 @@ import {
 import { toast } from '../stores/toastStore';
 import { PageHeader } from '../components/layout/PageHeader';
 import { Badge, Button, LoadingScreen, Modal } from '../components/ui';
+import { focusCodeEditorIn } from '../components/quiz/CodeQuizEditor';
 import QuestionCard from '../components/quiz/QuestionCard';
 import FlashcardAttempt from '../components/quiz/FlashcardAttempt';
 import QuizResultReview from '../components/quiz/QuizResultReview';
@@ -36,6 +37,7 @@ import {
 	extractSubmitError,
 	groupQuestionsByApiSection,
 	identificationAnswerCorpus,
+	isCodeQuestion,
 	isIdentification,
 	isSequence,
 	isSequenceBlankControl,
@@ -212,7 +214,7 @@ export default function QuizAttempt() {
 	const suggestionCorpus = useMemo(() => identificationAnswerCorpus(questions), [questions]);
 	const firstIdentificationId = useMemo(() => {
 		const match = questions.find(
-			(q) => isIdentification(q.question_type) || isSequence(q.question_type)
+			(q) => isIdentification(q.question_type) || isSequence(q.question_type) || isCodeQuestion(q)
 		);
 		return match?.id ?? null;
 	}, [questions]);
@@ -266,10 +268,15 @@ export default function QuizAttempt() {
 			control = ideInput;
 			focusAttemptControl(ideInput);
 		} else {
-			control = card.querySelector(
-				'input:not([disabled]), textarea:not([disabled]), math-field:not([disabled]), button:not([disabled])'
-			);
-			focusAttemptControl(control);
+			const codeEditor = focusCodeEditorIn(card);
+			if (codeEditor) {
+				control = codeEditor;
+			} else {
+				control = card.querySelector(
+					'input:not([disabled]), textarea:not([disabled]), math-field:not([disabled]), button:not([disabled])'
+				);
+				focusAttemptControl(control);
+			}
 		}
 		lastFocusedQuestionIdRef.current = String(questionId);
 		requestAnimationFrame(() => {

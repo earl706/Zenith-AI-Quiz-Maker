@@ -8,7 +8,8 @@ export default function CodeAnswerInput({
 	value = '',
 	onChange,
 	disabled = false,
-	readOnly = false
+	readOnly = false,
+	autoFocus = false
 }) {
 	const spec = useMemo(
 		() => normalizeCodeSpec(question?.code_spec || question?.codeSpec),
@@ -28,6 +29,7 @@ export default function CodeAnswerInput({
 				}}
 				placeholder="Write your code answer…"
 				minHeight="12rem"
+				autoFocus={autoFocus && !readOnly && !disabled}
 			/>
 		</div>
 	);
