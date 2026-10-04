@@ -805,9 +805,9 @@ function CapacitySettingsModal({ open, onClose, roadmap }) {
 		>
 			<div className="space-y-3">
 				<p className="text-muted text-xs">
-					Changing hours/week, hours/day, or study days re-packs section due dates from today. If
-					the plan cannot fit, the deadline is extended automatically. Edit per-section estimates on
-					each section.
+					A new deadline spreads auto-scheduled section due dates across your study days from today
+					through that date. Hours and study days pack work from today. Pinned dates stay. If the
+					work cannot finish by the deadline, the deadline is extended.
 				</p>
 				<Input
 					label="Deadline"

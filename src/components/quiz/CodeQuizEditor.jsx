@@ -117,7 +117,7 @@ export default function CodeQuizEditor({
 						type="button"
 						onClick={() => onChange?.(formatCodeStyle(editorValue))}
 						className="text-muted hover:text-fg hover:bg-surface inline-flex cursor-pointer items-center gap-1 rounded px-2 py-1 text-xs font-medium"
-						title="Normalize spacing (same rules used when grading)"
+						title="Format spacing. Spaces you typed before brackets stay; // stays one token."
 					>
 						<AlignLeft size={12} aria-hidden />
 						Format

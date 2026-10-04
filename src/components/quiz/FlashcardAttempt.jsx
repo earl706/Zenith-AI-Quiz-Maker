@@ -472,6 +472,7 @@ export default function FlashcardAttempt({
 						exit={{ opacity: 0 }}
 						transition={FLASHCARD_FADE}
 						className="space-y-4"
+						data-attempt-question-id={currentQuestion.id}
 					>
 						{chessPuzzle ? (
 							<ChessPuzzleAnswerInput

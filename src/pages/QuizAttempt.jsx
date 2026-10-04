@@ -38,6 +38,7 @@ import {
 	groupQuestionsByApiSection,
 	identificationAnswerCorpus,
 	isCodeQuestion,
+	formatCodeStyle,
 	isIdentification,
 	isSequence,
 	isSequenceBlankControl,
@@ -240,9 +241,11 @@ export default function QuizAttempt() {
 	const focusAdvanceTimer = useRef(null);
 	const lastFocusedQuestionIdRef = useRef(null);
 	const visibleQuestionsRef = useRef(visibleQuestions);
+	const questionsRef = useRef(questions);
 	const attemptSnapshotRef = useRef(null);
 	const abandonDraftPersistRef = useRef(false);
 	visibleQuestionsRef.current = visibleQuestions;
+	questionsRef.current = questions;
 
 	const handleFlashcardDraftChange = useCallback((next) => {
 		setFlashcardDraft(next);
@@ -332,6 +335,46 @@ export default function QuizAttempt() {
 		retakeSettingsOpen,
 		resumePromptOpen
 	]);
+
+	useEffect(() => {
+		if (quizResults || retakeSettingsOpen || resumePromptOpen) return undefined;
+		const onKey = (event) => {
+			if (event.nativeEvent?.isComposing) return;
+			if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
+			if (event.code !== 'KeyS' && event.key.toLowerCase() !== 's') return;
+			event.preventDefault();
+			event.stopPropagation();
+
+			const activeCard = document.activeElement?.closest?.('[data-attempt-question-id]');
+			const questionId =
+				activeCard?.getAttribute('data-attempt-question-id') ||
+				(quizData.flashcard_quiz
+					? document
+							.querySelector('[data-attempt-question-id]')
+							?.getAttribute('data-attempt-question-id')
+					: null) ||
+				lastFocusedQuestionIdRef.current;
+			if (questionId == null || questionId === '') return;
+			const question = questionsRef.current.find((q) => String(q.id) === String(questionId));
+			if (!question || !isCodeQuestion(question)) return;
+			const card =
+				activeCard ||
+				document.querySelector(`[data-attempt-question-id="${CSS.escape(String(questionId))}"]`);
+			const editor = card?.querySelector?.('.cm-content');
+			if (!editor || editor.getAttribute('contenteditable') === 'false') return;
+
+			commitAnswers((prev) =>
+				prev.map((row) => {
+					if (String(row.id) !== String(questionId)) return row;
+					const current = typeof row.userAnswer === 'string' ? row.userAnswer : '';
+					const next = formatCodeStyle(current);
+					return next === current ? row : { ...row, userAnswer: next };
+				})
+			);
+		};
+		document.addEventListener('keydown', onKey, true);
+		return () => document.removeEventListener('keydown', onKey, true);
+	}, [quizResults, quizData.flashcard_quiz, retakeSettingsOpen, resumePromptOpen, commitAnswers]);
 
 	const handleQuestionAnswered = useCallback(
 		(questionId, fullyCorrect = false) => {

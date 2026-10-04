@@ -16,6 +16,7 @@ const OPERATORS = [
 	'!==',
 	'<<=',
 	'>>=',
+	'//=',
 	'**=',
 	'&&=',
 	'||=',
@@ -29,6 +30,9 @@ const OPERATORS = [
 	'&&',
 	'||',
 	'??',
+	'//',
+	'/*',
+	'*/',
 	'**',
 	'->',
 	'=>',
@@ -60,7 +64,7 @@ function isIdentChar(ch) {
 	return /[A-Za-z0-9_$]/.test(ch);
 }
 
-export function formatCodeLineStyle(line) {
+export function formatCodeLineStyle(line, { preserveTypedGap = true } = {}) {
 	const raw = String(line ?? '');
 	const leading = raw.length - raw.replace(/^[ \t]+/, '').length;
 	const indent = raw.slice(0, leading).replace(/\t/g, '    ');
@@ -71,6 +75,7 @@ export function formatCodeLineStyle(line) {
 	let i = 0;
 	const n = body.length;
 	let quote = null;
+	let hadGap = false;
 
 	const peekOp = (at) => {
 		for (const op of OPERATORS) {
@@ -90,6 +95,14 @@ export function formatCodeLineStyle(line) {
 		while (out.length && out[out.length - 1] === ' ') out.pop();
 	};
 
+	const keepTypedGap = () => {
+		if (preserveTypedGap && hadGap && out.length) {
+			trimTrailingSpaces();
+			out.push(' ');
+		}
+		hadGap = false;
+	};
+
 	while (i < n) {
 		const ch = body[i];
 
@@ -106,6 +119,7 @@ export function formatCodeLineStyle(line) {
 		}
 
 		if (ch === "'" || ch === '"' || ch === '`') {
+			keepTypedGap();
 			quote = ch;
 			out.push(ch);
 			i += 1;
@@ -116,10 +130,12 @@ export function formatCodeLineStyle(line) {
 			let j = i + 1;
 			while (j < n && (body[j] === ' ' || body[j] === '\t')) j += 1;
 			i = j;
+			hadGap = true;
 			continue;
 		}
 
 		if (ch === ',') {
+			hadGap = false;
 			trimTrailingSpaces();
 			out.push(',');
 			let j = i + 1;
@@ -130,6 +146,7 @@ export function formatCodeLineStyle(line) {
 		}
 
 		if (';)]}:?'.includes(ch)) {
+			hadGap = false;
 			trimTrailingSpaces();
 			out.push(ch);
 			i += 1;
@@ -137,6 +154,7 @@ export function formatCodeLineStyle(line) {
 		}
 
 		if (ch === '.') {
+			hadGap = false;
 			trimTrailingSpaces();
 			out.push('.');
 			i += 1;
@@ -144,6 +162,7 @@ export function formatCodeLineStyle(line) {
 		}
 
 		if ('([{'.includes(ch)) {
+			keepTypedGap();
 			out.push(ch);
 			i += 1;
 			continue;
@@ -151,6 +170,13 @@ export function formatCodeLineStyle(line) {
 
 		const op = peekOp(i);
 		if (op) {
+			hadGap = false;
+			if (op === '//' || op === '//=' || op === '/*' || op === '*/') {
+				trimTrailingSpaces();
+				out.push(op);
+				i += op.length;
+				continue;
+			}
 			const prev = lastNonSpace();
 			const unary =
 				(op === '!' || op === '~' || op === '+' || op === '-') &&
@@ -166,6 +192,7 @@ export function formatCodeLineStyle(line) {
 		}
 
 		if (isIdentChar(ch) || /\d/.test(ch)) {
+			hadGap = false;
 			const prev = lastNonSpace();
 			if (prev && (isIdentChar(prev) || /\d/.test(prev) || ')]}\'"'.includes(prev))) {
 				trimTrailingSpaces();
@@ -183,6 +210,7 @@ export function formatCodeLineStyle(line) {
 			continue;
 		}
 
+		hadGap = false;
 		out.push(ch);
 		i += 1;
 	}
@@ -228,7 +256,7 @@ export function normalizeCodeLines(text) {
 		if (FULL_LINE_HASH_RE.test(line) || FULL_LINE_SLASH_RE.test(line)) continue;
 		let cleaned = line.replace(TRAILING_SLASH_RE, '');
 		cleaned = cleaned.replace(TRAILING_HASH_RE, '');
-		cleaned = formatCodeLineStyle(cleaned).replace(/^[ \t]+/, '');
+		cleaned = formatCodeLineStyle(cleaned, { preserveTypedGap: false }).replace(/^[ \t]+/, '');
 		if (cleaned) lines.push(cleaned);
 	}
 	return lines;
