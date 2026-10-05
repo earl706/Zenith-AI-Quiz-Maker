@@ -26,6 +26,10 @@ function applyDuration(set, total) {
 	});
 }
 
+function remainingFromEndAt(s) {
+	return s.endAt ? Math.max(0, Math.ceil((s.endAt - Date.now()) / 1000)) : s.remainingSeconds;
+}
+
 function countsAsFocus(s) {
 	if (s.techniqueId === STUDY_TECHNIQUE_FREE) return s.freeMode !== 'rest';
 	return s.phase === 'focus';
@@ -202,14 +206,21 @@ export const useStudyTimerStore = create(
 			pause: () => {
 				const s = get();
 				if (!s.running) return;
-				const remaining = s.endAt
-					? Math.max(0, Math.ceil((s.endAt - Date.now()) / 1000))
-					: s.remainingSeconds;
 				set({
 					running: false,
 					endAt: null,
-					remainingSeconds: remaining,
+					remainingSeconds: remainingFromEndAt(s),
 					interruptions: countsAsFocus(s) ? s.interruptions + 1 : s.interruptions
+				});
+			},
+
+			freezeClock: () => {
+				const s = get();
+				if (!s.running) return;
+				set({
+					running: false,
+					endAt: null,
+					remainingSeconds: remainingFromEndAt(s)
 				});
 			},
 
@@ -337,8 +348,6 @@ export const useStudyTimerStore = create(
 			partialize: (s) => ({
 				totalSeconds: s.totalSeconds,
 				remainingSeconds: s.remainingSeconds,
-				running: s.running,
-				endAt: s.endAt,
 				startedAt: s.startedAt,
 				interruptions: s.interruptions,
 				inputHours: s.inputHours,
@@ -359,8 +368,14 @@ export const useStudyTimerStore = create(
 				delete next.attachedHabitId;
 				delete next.attachedHabitName;
 				delete next.habitDefaultApplied;
+				next.running = false;
+				next.endAt = null;
 				return next;
 			}
 		}
 	)
 );
+
+export function freezeStudyTimerClock() {
+	useStudyTimerStore.getState().freezeClock();
+}

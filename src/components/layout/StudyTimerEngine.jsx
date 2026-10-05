@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { BellOff, VolumeX } from 'lucide-react';
 
+import { isDesktopApp } from '../../lib/desktop';
 import { startStudyAlarm } from '../../lib/studyAlarm';
 import {
 	getTechnique,
@@ -8,7 +9,7 @@ import {
 	STUDY_TECHNIQUE_FREE
 } from '../../lib/studyTechniques';
 import { formatDurationSeconds } from '../../lib/format';
-import { useStudyTimerStore } from '../../stores/studyTimerStore';
+import { freezeStudyTimerClock, useStudyTimerStore } from '../../stores/studyTimerStore';
 import { toast } from '../../stores/toastStore';
 import { Button } from '../ui';
 
@@ -123,6 +124,23 @@ export function StudyTimerEngine() {
 		}, 250);
 		return () => window.clearInterval(id);
 	}, [syncTick]);
+
+	useEffect(() => {
+		const freeze = () => freezeStudyTimerClock();
+		const onVisibility = () => {
+			if (document.visibilityState === 'hidden' && isDesktopApp()) freeze();
+		};
+		window.addEventListener('pagehide', freeze);
+		window.addEventListener('beforeunload', freeze);
+		window.addEventListener('zenith-app-close', freeze);
+		document.addEventListener('visibilitychange', onVisibility);
+		return () => {
+			window.removeEventListener('pagehide', freeze);
+			window.removeEventListener('beforeunload', freeze);
+			window.removeEventListener('zenith-app-close', freeze);
+			document.removeEventListener('visibilitychange', onVisibility);
+		};
+	}, []);
 
 	const restAlarm = alarmCompletedPhase === 'rest';
 	const breakAlarm = alarmCompletedPhase === 'break';
