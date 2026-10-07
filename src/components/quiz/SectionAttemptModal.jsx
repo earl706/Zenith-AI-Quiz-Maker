@@ -844,7 +844,7 @@ function QuestionPicker({
 														<InlineLatexText
 															text={question.question}
 															as="span"
-															className="text-fg line-clamp-2 min-w-0 flex-1 text-sm"
+															className="text-fg line-clamp-2 min-w-0 flex-1 text-sm wrap-anywhere"
 														/>
 													) : (
 														<span className="text-muted min-w-0 flex-1 text-sm italic">

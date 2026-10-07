@@ -117,3 +117,10 @@ body {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
+
+/* Long unspaced strings (LaTeX, answers) wrap instead of overflowing. */
+@layer utilities {
+  .wrap-anywhere {
+    overflow-wrap: anywhere;
+  }
+}

@@ -1,30 +1,56 @@
 import { useMemo } from 'react';
 import 'katex/dist/katex.min.css';
-import Latex from 'react-latex-next';
 
-const HAS_INLINE_MATH = /\$/;
+import { cn } from '../../lib/format';
+import { hasInlineMathDelimiters, isBareLatexBlock, splitProseAndMath } from '../../lib/latexWrap';
+import MathRenderer from './MathRenderer';
+
+const SOFT_WRAP = 'max-w-full min-w-0 wrap-anywhere whitespace-pre-wrap break-words';
 
 /**
  * Prose plus author-embedded $...$ / $$...$$ as KaTeX.
- * Does not wrap undelimited LaTeX; that stays visible as source.
+ * On computational questions, undelimited LaTeX blocks also render as math.
+ * Overflow wraps at operators (math) or like a prompt textarea (prose).
  */
-export default function InlineLatexText({ text, className = '', as: Tag = 'p' }) {
+export default function InlineLatexText({
+	text,
+	className = '',
+	as: Tag = 'p',
+	mathematical = false
+}) {
 	const value = text == null ? '' : String(text);
-	const useInlineMath = useMemo(() => HAS_INLINE_MATH.test(value), [value]);
+	const useBareMath = mathematical && isBareLatexBlock(value);
+	const useInlineMath = useMemo(() => hasInlineMathDelimiters(value), [value]);
+	const parts = useMemo(
+		() => (useInlineMath && !useBareMath ? splitProseAndMath(value) : null),
+		[useInlineMath, useBareMath, value]
+	);
 
 	if (!value.trim()) return null;
 
-	if (!useInlineMath) {
-		return <Tag className={className}>{value}</Tag>;
-	}
+	const classes = cn(SOFT_WRAP, className);
 
-	try {
+	if (useBareMath) {
 		return (
-			<Tag className={className}>
-				<Latex>{value}</Latex>
+			<Tag className={classes}>
+				<MathRenderer expression={value} displayMode />
 			</Tag>
 		);
-	} catch {
-		return <Tag className={className}>{value}</Tag>;
 	}
+
+	if (!useInlineMath || !parts) {
+		return <Tag className={classes}>{value}</Tag>;
+	}
+
+	return (
+		<Tag className={classes}>
+			{parts.map((part, index) =>
+				part.type === 'math' ? (
+					<MathRenderer key={`m-${index}`} expression={part.value} displayMode={part.display} />
+				) : (
+					<span key={`t-${index}`}>{part.value}</span>
+				)
+			)}
+		</Tag>
+	);
 }

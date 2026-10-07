@@ -271,9 +271,15 @@ function AnswerText({ value, mathematical, displayMode = false, className }) {
 		return <p className={cn('text-muted text-sm italic', className)}>No answer</p>;
 	}
 	if (mathematical) {
-		return <MathRenderer expression={text} displayMode={displayMode} />;
+		return (
+			<div className={cn('max-w-full min-w-0', className)}>
+				<MathRenderer expression={text} displayMode={displayMode} />
+			</div>
+		);
 	}
-	return <p className={cn('text-sm', className)}>{text}</p>;
+	return (
+		<p className={cn('max-w-full min-w-0 text-sm break-words wrap-anywhere', className)}>{text}</p>
+	);
 }
 
 function SummaryStat({ label, value, mono = false }) {
@@ -353,17 +359,17 @@ function answerCredit(question, submitted) {
 function IdentificationResult({ submitted, correctAnswer, correct, math }) {
 	return (
 		<div className="grid gap-2 sm:grid-cols-2">
-			<div>
+			<div className="min-w-0">
 				<p className="text-muted mb-1.5 text-xs font-medium">Correct answer</p>
-				<div className="border-success/20 bg-success/10 rounded-md border p-2.5">
+				<div className="border-success/20 bg-success/10 max-w-full min-w-0 rounded-md border p-2.5">
 					<AnswerText value={correctAnswer} mathematical={math} displayMode />
 				</div>
 			</div>
-			<div>
+			<div className="min-w-0">
 				<p className="text-muted mb-1.5 text-xs font-medium">Your answer</p>
 				<div
 					className={cn(
-						'rounded-md border p-2.5',
+						'max-w-full min-w-0 rounded-md border p-2.5',
 						correct ? 'border-success/20 bg-success/10' : 'border-danger/20 bg-danger/10'
 					)}
 				>
@@ -393,7 +399,7 @@ function ChoiceResult({ choices, submitted, question, correctAnswer, math }) {
 					<li
 						key={choiceData.id ?? ci}
 						className={cn(
-							'rounded-md px-3 py-2.5 text-center text-sm font-medium',
+							'max-w-full min-w-0 rounded-md px-3 py-2.5 text-center text-sm font-medium wrap-anywhere',
 							isCorrectChoice && 'bg-success/15 text-success',
 							isWrongPick && 'bg-danger/15 text-danger',
 							!isCorrectChoice && !isWrongPick && 'bg-surface-2 text-fg'
@@ -409,7 +415,7 @@ function ChoiceResult({ choices, submitted, question, correctAnswer, math }) {
 						{math ? (
 							<MathRenderer expression={choiceData.text} displayMode={false} />
 						) : (
-							<span>{choiceData.text}</span>
+							<span className="break-words wrap-anywhere">{choiceData.text}</span>
 						)}
 					</li>
 				);
@@ -422,29 +428,32 @@ function TeachingContent({ question }) {
 	const explanation = String(question?.explanation || '').trim();
 	const workedSolution = String(question?.worked_solution || '').trim();
 	const citation = String(question?.source_citation || '').trim();
+	const math = isMathematical(question?.question_type);
 	if (!explanation && !workedSolution && !citation) return null;
 
 	return (
-		<div className="border-primary/20 bg-primary/5 space-y-3 rounded-md border p-4 text-left">
+		<div className="border-primary/20 bg-primary/5 min-w-0 space-y-3 rounded-md border p-4 text-left">
 			<p className="text-primary flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase">
 				<BookOpen size={14} aria-hidden />
 				Study notes
 			</p>
 			{explanation && (
-				<div>
+				<div className="min-w-0">
 					<p className="text-muted mb-1 text-[0.7rem] font-semibold uppercase">Explanation</p>
 					<InlineLatexText
 						text={explanation}
-						className="text-fg text-sm leading-relaxed whitespace-pre-wrap"
+						mathematical={math}
+						className="text-fg text-sm leading-relaxed"
 					/>
 				</div>
 			)}
 			{workedSolution && (
-				<div>
+				<div className="min-w-0">
 					<p className="text-muted mb-1 text-[0.7rem] font-semibold uppercase">Worked solution</p>
 					<InlineLatexText
 						text={workedSolution}
-						className="text-fg text-sm leading-relaxed whitespace-pre-wrap"
+						mathematical={math}
+						className="text-fg text-sm leading-relaxed"
 					/>
 				</div>
 			)}
@@ -463,7 +472,7 @@ function SequenceResult({ question, submitted, math }) {
 	const byId = new Map((submitted?.userSequence || []).map((row) => [row.id, row.text ?? '']));
 	return (
 		<div className="grid gap-3 sm:grid-cols-2">
-			<div>
+			<div className="min-w-0">
 				<p className="text-muted mb-1.5 text-xs font-medium">Your sequence</p>
 				<ol className="space-y-1.5">
 					{items.map((item, index) => {
@@ -477,8 +486,8 @@ function SequenceResult({ question, submitted, math }) {
 							<li
 								key={`user-${item.id ?? index}`}
 								className={cn(
-									'flex items-start rounded-md border px-2.5',
-									math ? 'overflow-x-auto py-2.5' : 'py-1.5 text-sm',
+									'flex min-w-0 items-start rounded-md border px-2.5',
+									math ? 'py-2.5' : 'py-1.5 text-sm',
 									item.role === 'blank'
 										? ok
 											? 'border-success/20 bg-success/10'
@@ -486,28 +495,34 @@ function SequenceResult({ question, submitted, math }) {
 										: 'border-line bg-surface-2'
 								)}
 							>
-								<span className="text-muted mr-2 tabular-nums">{index + 1}.</span>
-								<AnswerText value={userText} mathematical={math} displayMode={math} />
+								<span className="text-muted mr-2 shrink-0 tabular-nums">{index + 1}.</span>
+								<div className="min-w-0 flex-1">
+									<AnswerText value={userText} mathematical={math} displayMode={math} />
+								</div>
 							</li>
 						);
 					})}
 				</ol>
 			</div>
-			<div>
+			<div className="min-w-0">
 				<p className="text-muted mb-1.5 text-xs font-medium">Correct sequence</p>
 				<ol className="space-y-1.5">
 					{items.map((item, index) => (
 						<li
 							key={`correct-${item.id ?? index}`}
 							className={cn(
-								'border-line bg-surface-2 flex items-start rounded-md border px-2.5',
-								math ? 'overflow-x-auto py-2.5' : 'py-1.5 text-sm'
+								'border-line bg-surface-2 flex min-w-0 items-start rounded-md border px-2.5',
+								math ? 'py-2.5' : 'py-1.5 text-sm'
 							)}
 						>
-							<span className="text-muted mr-2 tabular-nums">{index + 1}.</span>
-							<AnswerText value={item.text} mathematical={math} displayMode={math} />
+							<span className="text-muted mr-2 shrink-0 tabular-nums">{index + 1}.</span>
+							<div className="min-w-0 flex-1">
+								<AnswerText value={item.text} mathematical={math} displayMode={math} />
+							</div>
 							{item.role !== 'blank' && (
-								<span className="text-muted ml-2 text-[0.65rem] uppercase">{item.role}</span>
+								<span className="text-muted ml-2 shrink-0 text-[0.65rem] uppercase">
+									{item.role}
+								</span>
 							)}
 						</li>
 					))}
@@ -582,7 +597,7 @@ function ResultQuestionCard({ question, submitted, index }) {
 				correct ? 'border-l-success border-success/25' : 'border-l-danger border-danger/25'
 			)}
 		>
-			<CardBody className="space-y-3 p-5">
+			<CardBody className="min-w-0 space-y-3 p-5">
 				<div className="flex items-center justify-between gap-3 pt-4">
 					<p className="text-muted text-xs font-medium tabular-nums">Q{index + 1}</p>
 					<Badge tone={correct ? 'success' : credit > 0 ? 'warning' : 'danger'}>
@@ -596,7 +611,7 @@ function ResultQuestionCard({ question, submitted, index }) {
 					</Badge>
 				</div>
 
-				<QuestionTitle text={question.question} mathematical={math} className="text-2xl" />
+				<QuestionTitle text={question.question} mathematical={math} className="min-w-0 text-2xl" />
 
 				{questionImage && (
 					<div className="flex w-full justify-center">

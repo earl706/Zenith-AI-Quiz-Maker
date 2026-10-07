@@ -462,7 +462,7 @@ export default function QuizPage() {
 											<QuestionTitle
 												text={question.question}
 												mathematical={math}
-												className="pt-5 text-base"
+												className="min-w-0 pt-5 text-base"
 											/>
 
 											{!codeQuiz && <QuestionChessBoard question={question} />}
@@ -506,8 +506,8 @@ export default function QuizPage() {
 																	className={cn(
 																		'bg-surface-2 flex flex-col items-center gap-2 rounded-md',
 																		math
-																			? 'w-full max-w-full min-w-0 px-5 py-4'
-																			: 'max-w-full min-w-30 px-4 py-2.5 sm:max-w-3xl'
+																			? 'w-full max-w-full min-w-0 px-5 py-4 wrap-anywhere'
+																			: 'max-w-full min-w-30 px-4 py-2.5 wrap-anywhere sm:max-w-3xl'
 																	)}
 																>
 																	{choiceImage && (
@@ -519,13 +519,11 @@ export default function QuizPage() {
 																	)}
 																	{choiceText &&
 																		(math ? (
-																			<div className="w-full min-w-0 overflow-x-auto py-1 text-center">
-																				<div className="inline-block min-w-min px-1">
-																					<MathRenderer expression={choiceText} displayMode />
-																				</div>
+																			<div className="w-full min-w-0 py-1 text-center">
+																				<MathRenderer expression={choiceText} displayMode />
 																			</div>
 																		) : (
-																			<span className="text-fg text-center text-sm font-medium">
+																			<span className="text-fg text-center text-sm font-medium break-words wrap-anywhere">
 																				{choiceText}
 																			</span>
 																		))}
@@ -545,7 +543,7 @@ export default function QuizPage() {
 																<span className="text-muted w-6 text-right tabular-nums">
 																	{si + 1}.
 																</span>
-																<span className="min-w-0 flex-1">
+																<span className="min-w-0 flex-1 break-words wrap-anywhere">
 																	{math ? (
 																		<MathRenderer expression={item.text} displayMode={false} />
 																	) : (

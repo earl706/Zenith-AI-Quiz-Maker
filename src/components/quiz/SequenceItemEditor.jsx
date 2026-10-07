@@ -3,12 +3,8 @@ import { Ban, ChevronDown, ChevronUp, Eye, Pencil, Plus, X } from 'lucide-react'
 import { cn } from '../../lib/format';
 import { Button } from '../ui';
 import MathFieldInput from './MathFieldInput';
-import {
-	PLAIN_IDE_TEXT_INPUT_AUTO_OFF,
-	SEQUENCE_ITEM_MAX,
-	SEQUENCE_ITEM_MIN,
-	createSequenceItemClientKey
-} from './quizHelpers';
+import WrappingTextInput from './WrappingTextInput';
+import { SEQUENCE_ITEM_MAX, SEQUENCE_ITEM_MIN, createSequenceItemClientKey } from './quizHelpers';
 
 const ROLES = [
 	{ id: 'given', label: 'Shown to student', icon: Eye },
@@ -76,11 +72,11 @@ export default function SequenceItemEditor({ question, onItemsChange, disabled =
 	return (
 		<div className="space-y-1.5">
 			{items.map((item, index) => (
-				<div className="flex items-center gap-1.5" key={item.clientKey || item.id || index}>
-					<span className="text-muted w-5 shrink-0 text-center text-xs tabular-nums">
+				<div className="flex items-start gap-1.5" key={item.clientKey || item.id || index}>
+					<span className="text-muted mt-2 w-5 shrink-0 text-center text-xs tabular-nums">
 						{index + 1}
 					</span>
-					<div className="flex shrink-0 gap-0.5">
+					<div className="mt-0.5 flex shrink-0 gap-0.5">
 						{ROLES.map(({ id, label, icon: Icon }) => {
 							const blocked = mode === 'full' && id === 'given';
 							const active = item.role === id;
@@ -114,15 +110,14 @@ export default function SequenceItemEditor({ question, onItemsChange, disabled =
 							className="min-w-0 flex-1"
 						/>
 					) : (
-						<input
-							type="text"
+						<WrappingTextInput
 							value={item.text || ''}
 							onChange={(e) => setText(index, e.target.value)}
 							placeholder={`Item ${index + 1}`}
-							{...PLAIN_IDE_TEXT_INPUT_AUTO_OFF}
-							className="border-line bg-surface text-fg focus:border-primary min-w-0 flex-1 rounded-md border px-2.5 py-1.5 text-sm focus:outline-none"
+							plainIde
 							required
 							disabled={disabled}
+							className="border-line bg-surface text-fg focus:border-primary min-w-0 flex-1 rounded-md border px-2.5 py-1.5 text-sm focus:outline-none"
 						/>
 					)}
 					{!disabled && (
@@ -130,7 +125,7 @@ export default function SequenceItemEditor({ question, onItemsChange, disabled =
 							<Button
 								variant="ghost"
 								size="icon"
-								className="h-7 w-7 shrink-0 cursor-pointer"
+								className="mt-0.5 h-7 w-7 shrink-0 cursor-pointer"
 								aria-label={`Move item ${index + 1} up`}
 								onClick={() => move(index, -1)}
 								disabled={index === 0}
@@ -140,7 +135,7 @@ export default function SequenceItemEditor({ question, onItemsChange, disabled =
 							<Button
 								variant="ghost"
 								size="icon"
-								className="h-7 w-7 shrink-0 cursor-pointer"
+								className="mt-0.5 h-7 w-7 shrink-0 cursor-pointer"
 								aria-label={`Move item ${index + 1} down`}
 								onClick={() => move(index, 1)}
 								disabled={index === items.length - 1}
@@ -150,7 +145,7 @@ export default function SequenceItemEditor({ question, onItemsChange, disabled =
 							<Button
 								variant="ghost"
 								size="icon"
-								className="h-7 w-7 shrink-0 cursor-pointer"
+								className="mt-0.5 h-7 w-7 shrink-0 cursor-pointer"
 								aria-label={`Remove item ${index + 1}`}
 								onClick={() => remove(index)}
 								disabled={items.length <= SEQUENCE_ITEM_MIN}

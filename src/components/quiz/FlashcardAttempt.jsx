@@ -562,7 +562,7 @@ export default function FlashcardAttempt({
 													disabled={locked || submitting}
 													onClick={() => handleChoiceSelect(currentQuestion.id, choiceData.text)}
 													className={cn(
-														'w-full rounded-md px-4 py-3 text-center font-semibold transition',
+														'w-full min-w-0 rounded-md px-4 py-3 text-center font-semibold wrap-anywhere transition',
 														locked || submitting ? 'cursor-not-allowed' : 'cursor-pointer',
 														selected
 															? 'bg-primary text-primary-fg ring-primary/30 ring-2 ring-offset-2 ring-offset-[var(--surface)]'
@@ -590,7 +590,9 @@ export default function FlashcardAttempt({
 																className="text-xl"
 															/>
 														) : (
-															<span className="text-xl">{choiceData.text}</span>
+															<span className="text-xl break-words wrap-anywhere">
+																{choiceData.text}
+															</span>
 														)}
 													</div>
 												</button>

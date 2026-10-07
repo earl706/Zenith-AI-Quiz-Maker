@@ -2,20 +2,16 @@ import { useMemo } from 'react';
 import 'katex/dist/katex.min.css';
 import Latex from 'react-latex-next';
 
-/** Strip outer $ / $$ so we do not double-wrap authored LaTeX. */
-function stripMathDelimiters(value) {
-	const text = String(value).trim();
-	if (text.startsWith('$$') && text.endsWith('$$') && text.length >= 4) {
-		return text.slice(2, -2).trim();
-	}
-	if (text.startsWith('$') && text.endsWith('$') && text.length >= 2) {
-		return text.slice(1, -1).trim();
-	}
-	return text;
+import { cn } from '../../lib/format';
+import { splitLatexAtOperators, stripMathDelimiters } from '../../lib/latexWrap';
+
+function LatexChunk({ latex, className = '' }) {
+	return <Latex className={className}>{`$${latex}$`}</Latex>;
 }
 
 /**
  * Renders stored LaTeX as-is. Does not rewrite author/fixture text.
+ * Long expressions wrap onto new lines at operators / juxtaposed commands.
  */
 export default function MathRenderer({
 	expression,
@@ -28,15 +24,30 @@ export default function MathRenderer({
 		return stripMathDelimiters(expression);
 	}, [expression]);
 
+	const chunks = useMemo(
+		() => (formattedExpression ? splitLatexAtOperators(formattedExpression) : []),
+		[formattedExpression]
+	);
+
 	if (!formattedExpression) {
-		return <span className={`text-muted italic ${className}`}>Empty</span>;
+		return <span className={cn('text-muted italic', className)}>Empty</span>;
 	}
 
-	try {
-		const latexString = displayMode ? `$$${formattedExpression}$$` : `$${formattedExpression}$`;
-		return <Latex className={className}>{latexString}</Latex>;
-	} catch {
-		if (errorFallback) return errorFallback;
-		return <span className={`text-danger text-sm ${className}`}>Invalid LaTeX: {expression}</span>;
-	}
+	if (!chunks.length && errorFallback) return errorFallback;
+
+	return (
+		<span
+			className={cn(
+				'inline-flex max-w-full min-w-0 flex-wrap items-baseline gap-x-1',
+				displayMode && 'w-full justify-center py-1 text-[1.15em]',
+				className
+			)}
+		>
+			{chunks.map((chunk, index) => (
+				<span key={`${index}-${chunk.slice(0, 24)}`} className="shrink-0">
+					<LatexChunk latex={chunk} />
+				</span>
+			))}
+		</span>
+	);
 }

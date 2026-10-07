@@ -8,16 +8,19 @@ import InlineLatexText from './InlineLatexText';
  */
 export default function QuestionTitle({
 	text,
-	mathematical: _mathematical = false,
+	mathematical = false,
 	className = '',
 	as: Tag = 'p'
 }) {
 	const value = text == null ? '' : String(text);
-	const classes = cn('text-fg text-center leading-snug font-semibold', className);
+	const classes = cn(
+		'text-fg max-w-full min-w-0 text-center leading-snug font-semibold wrap-anywhere',
+		className
+	);
 
 	if (!value.trim()) {
 		return <Tag className={cn(classes, 'text-muted italic')}>Empty</Tag>;
 	}
 
-	return <InlineLatexText text={value} as={Tag} className={classes} />;
+	return <InlineLatexText text={value} as={Tag} mathematical={mathematical} className={classes} />;
 }

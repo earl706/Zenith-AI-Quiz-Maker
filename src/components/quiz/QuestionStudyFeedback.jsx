@@ -15,14 +15,15 @@ import {
 import { formatUciList } from '../../lib/chessHelpers';
 import CodeAnswerInput from './CodeAnswerInput';
 
-function ContentBlock({ label, value }) {
+function ContentBlock({ label, value, mathematical = false }) {
 	if (!String(value || '').trim()) return null;
 	return (
-		<div>
+		<div className="min-w-0">
 			<p className="text-muted mb-1 text-[0.7rem] font-semibold tracking-wide uppercase">{label}</p>
 			<InlineLatexText
 				text={value}
-				className="text-fg text-sm leading-relaxed whitespace-pre-wrap"
+				mathematical={mathematical}
+				className="text-fg text-sm leading-relaxed"
 			/>
 		</div>
 	);
@@ -38,8 +39,16 @@ function StudyNotes({ question, bordered = false }) {
 				<BookOpen size={14} aria-hidden />
 				Study notes
 			</p>
-			<ContentBlock label="Explanation" value={question.explanation} />
-			<ContentBlock label="Worked solution" value={question.worked_solution} />
+			<ContentBlock
+				label="Explanation"
+				value={question.explanation}
+				mathematical={isMathematical(question?.question_type)}
+			/>
+			<ContentBlock
+				label="Worked solution"
+				value={question.worked_solution}
+				mathematical={isMathematical(question?.question_type)}
+			/>
 			{question.source_citation && (
 				<InlineLatexText
 					text={`Source: ${question.source_citation}`}
@@ -63,14 +72,16 @@ function SequenceSolution({ question }) {
 				{items.map((item, index) => (
 					<li
 						key={item.id ?? index}
-						className="border-line bg-surface flex items-start rounded-md border px-2.5 py-1.5 text-sm"
+						className="border-line bg-surface flex min-w-0 items-start rounded-md border px-2.5 py-1.5 text-sm"
 					>
-						<span className="text-muted mr-2 tabular-nums">{index + 1}.</span>
-						{math ? (
-							<MathRenderer expression={item.text} displayMode={false} />
-						) : (
-							<span className="text-fg">{item.text}</span>
-						)}
+						<span className="text-muted mr-2 shrink-0 tabular-nums">{index + 1}.</span>
+						<span className="min-w-0 flex-1 wrap-anywhere">
+							{math ? (
+								<MathRenderer expression={item.text} displayMode={false} />
+							) : (
+								<span className="text-fg break-words wrap-anywhere">{item.text}</span>
+							)}
+						</span>
 						{item.role !== 'blank' && (
 							<span className="text-muted ml-2 text-[0.65rem] uppercase">{item.role}</span>
 						)}
@@ -84,14 +95,14 @@ function SequenceSolution({ question }) {
 function CorrectAnswerBlock({ value, math }) {
 	if (!String(value || '').trim()) return null;
 	return (
-		<div>
+		<div className="min-w-0">
 			<p className="text-muted mb-1 text-[0.7rem] font-semibold tracking-wide uppercase">
 				Correct answer
 			</p>
 			{math ? (
 				<MathRenderer expression={value} displayMode />
 			) : (
-				<p className="text-fg text-sm font-medium">{value}</p>
+				<p className="text-fg text-sm font-medium break-words wrap-anywhere">{value}</p>
 			)}
 		</div>
 	);

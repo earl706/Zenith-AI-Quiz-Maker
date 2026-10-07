@@ -2,8 +2,9 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 import MathFieldInput from './MathFieldInput';
 import QuestionTitle from './QuestionTitle';
+import WrappingTextInput from './WrappingTextInput';
 import { resolveQuestionImageSrc } from '../../lib/quizImages';
-import { PLAIN_IDE_TEXT_INPUT_AUTO_OFF, rankPrefixSuggestions } from './quizHelpers';
+import { rankPrefixSuggestions } from './quizHelpers';
 
 const MAX_SUGGESTIONS = 5;
 
@@ -115,10 +116,9 @@ export default function IdentificationAnswerInput({
 					className="w-full"
 				/>
 			) : (
-				<div className="relative w-full">
-					<input
-						ref={inputRef}
-						type="text"
+				<div className="relative w-full min-w-0">
+					<WrappingTextInput
+						inputRef={inputRef}
 						name={`ide-answer-${answer?.id ?? 'x'}`}
 						value={value}
 						onChange={(event) => {
@@ -133,12 +133,12 @@ export default function IdentificationAnswerInput({
 						autoFocus={autoFocus}
 						disabled={disabled}
 						placeholder="Enter your answer"
+						plainIde
 						role="combobox"
 						aria-expanded={showList}
 						aria-controls={showList ? listId : undefined}
 						aria-autocomplete={suggestionsEnabled ? 'list' : 'none'}
 						aria-activedescendant={showList ? `${listId}-option-${activeIndex}` : undefined}
-						{...PLAIN_IDE_TEXT_INPUT_AUTO_OFF}
 						className="border-line bg-surface-2 text-fg focus:border-primary w-full cursor-text rounded-md border px-3 py-2 text-xl font-medium transition focus:outline-none"
 					/>
 					{showList && (

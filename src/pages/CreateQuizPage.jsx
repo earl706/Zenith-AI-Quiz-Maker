@@ -35,6 +35,7 @@ import {
 } from '../components/ui';
 import MathInput from '../components/quiz/MathInput';
 import SequenceItemEditor from '../components/quiz/SequenceItemEditor';
+import WrappingTextInput from '../components/quiz/WrappingTextInput';
 import ChessSpecEditor from '../components/quiz/ChessSpecEditor';
 import CodeSpecEditor from '../components/quiz/CodeSpecEditor';
 import {
@@ -54,7 +55,6 @@ import {
 	PER_QUESTION_TIMER_DEFAULT,
 	clampPerQuestionSeconds,
 	parseOptionalTimerSeconds,
-	PLAIN_IDE_TEXT_INPUT_AUTO_OFF,
 	flagsFromQuestionType,
 	authoringSequenceFields,
 	authoringChessFields,
@@ -1407,7 +1407,7 @@ export default function CreateQuizPage() {
 													{question._priorTitle && question._reviewKind === 'modified' && (
 														<p className="text-muted text-[0.65rem]">Was: {question._priorTitle}</p>
 													)}
-													<Input
+													<WrappingTextInput
 														value={question.title}
 														onChange={(e) =>
 															handleInputChange(question.id, 'title', e.target.value)
@@ -1417,8 +1417,11 @@ export default function CreateQuizPage() {
 																? 'Question text (use {{1}}, {{2}} for items)'
 																: 'Question text'
 														}
-														className={cn('py-1.5', isRemoved && 'line-through')}
 														disabled={reviewing}
+														className={cn(
+															'border-line bg-surface text-fg focus:border-primary w-full rounded-md border px-3 py-1.5 text-sm focus:outline-none',
+															isRemoved && 'line-through'
+														)}
 													/>
 
 													{!isRemoved && (
@@ -1539,12 +1542,12 @@ export default function CreateQuizPage() {
 																		removeChoice={removeChoice}
 																	/>
 																) : question.identification ? (
-																	<div className="flex items-center gap-2">
+																	<div className="flex items-start gap-2">
 																		<button
 																			type="button"
 																			aria-label="Mark as correct"
 																			className={cn(
-																				'flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 transition',
+																				'mt-2 flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 transition',
 																				question.correctAnswerIndex === 0
 																					? 'border-primary bg-primary'
 																					: 'border-line bg-surface'
@@ -1557,28 +1560,27 @@ export default function CreateQuizPage() {
 																				<Check size={10} className="text-primary-fg" />
 																			)}
 																		</button>
-																		<input
-																			type="text"
+																		<WrappingTextInput
 																			name={`ide-correct-${question.id}`}
 																			value={question.choices[0]}
 																			onChange={(e) =>
 																				handleChoicesChange(question.id, 0, e.target.value)
 																			}
 																			placeholder="Answer"
-																			{...PLAIN_IDE_TEXT_INPUT_AUTO_OFF}
-																			className="border-line bg-surface text-fg focus:border-primary flex-1 rounded-md border px-2.5 py-1.5 text-sm focus:outline-none"
+																			plainIde
 																			required
 																			disabled={reviewing}
+																			className="border-line bg-surface text-fg focus:border-primary flex-1 rounded-md border px-2.5 py-1.5 text-sm focus:outline-none"
 																		/>
 																	</div>
 																) : (
 																	question.choices.map((choice, ci) => (
-																		<div className="flex items-center gap-1.5" key={ci}>
+																		<div className="flex items-start gap-1.5" key={ci}>
 																			<button
 																				type="button"
 																				aria-label={`Mark choice ${ci + 1} correct`}
 																				className={cn(
-																					'flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 transition',
+																					'mt-2 flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 transition',
 																					question.correctAnswerIndex === ci
 																						? 'border-primary bg-primary'
 																						: 'border-line bg-surface'
@@ -1592,16 +1594,15 @@ export default function CreateQuizPage() {
 																					<Check size={10} className="text-primary-fg" />
 																				)}
 																			</button>
-																			<input
-																				type="text"
+																			<WrappingTextInput
 																				value={choice}
 																				onChange={(e) =>
 																					handleChoicesChange(question.id, ci, e.target.value)
 																				}
 																				placeholder={`Choice ${ci + 1}`}
-																				className="border-line bg-surface text-fg focus:border-primary min-w-0 flex-1 rounded-md border px-2.5 py-1.5 text-sm focus:outline-none"
 																				required
 																				disabled={reviewing}
+																				className="border-line bg-surface text-fg focus:border-primary min-w-0 flex-1 rounded-md border px-2.5 py-1.5 text-sm focus:outline-none"
 																			/>
 																			{question.showChoiceImages && (
 																				<ChoiceImageControl
@@ -1621,7 +1622,7 @@ export default function CreateQuizPage() {
 																				<Button
 																					variant="ghost"
 																					size="icon"
-																					className="h-7 w-7 shrink-0 cursor-pointer"
+																					className="mt-0.5 h-7 w-7 shrink-0 cursor-pointer"
 																					aria-label={`Remove choice ${ci + 1}`}
 																					onClick={() => removeChoice(question.id, ci)}
 																				>
@@ -1684,8 +1685,9 @@ export default function CreateQuizPage() {
 																		}
 																		disabled={reviewing}
 																	/>
-																	<Input
+																	<Textarea
 																		label="Source citation"
+																		rows={2}
 																		value={question.sourceCitation || ''}
 																		onChange={(e) =>
 																			handleInputChange(

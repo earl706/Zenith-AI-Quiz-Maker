@@ -3,7 +3,7 @@ import { useId } from 'react';
 import { cn } from '../../lib/format';
 
 const baseControl =
-	'w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-fg ' +
+	'w-full min-w-0 max-w-full rounded-md border border-line bg-surface px-3 py-2 text-sm text-fg ' +
 	'placeholder:text-muted focus:border-primary focus:outline-none ' +
 	'focus-visible:ring-2 focus-visible:ring-[var(--ring)] transition-colors';
 
@@ -41,7 +41,12 @@ export function Textarea({ label, error, className, id, rows = 4, ...props }) {
 			<textarea
 				id={fieldId}
 				rows={rows}
-				className={cn(baseControl, 'resize-y', error && 'border-danger', className)}
+				className={cn(
+					baseControl,
+					'resize-y break-words wrap-anywhere whitespace-pre-wrap',
+					error && 'border-danger',
+					className
+				)}
 				{...props}
 			/>
 			{error && <p className="text-danger text-xs">{error}</p>}

@@ -62,7 +62,7 @@ const SEQ_TYPES = new Set([
 /**
  * Disable OS/browser autocorrect, spellcheck, and form autocomplete on plain
  * IDE text fields. Does not affect in-app answer_suggestions_enabled UI.
- * Spread onto <input type="text"> (not IDE-COM / MathLive).
+ * Spread onto plain IDE <input> / <textarea> (not IDE-COM / MathLive).
  */
 export const PLAIN_IDE_TEXT_INPUT_AUTO_OFF = {
 	autoComplete: 'off',

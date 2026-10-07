@@ -223,7 +223,7 @@ function QuestionCard({
 										setPeeked(true);
 										notifyAnswered(nextAnswer);
 									}}
-									className={`w-full cursor-pointer rounded-md p-3 text-center font-semibold transition ${
+									className={`w-full min-w-0 cursor-pointer rounded-md p-3 text-center font-semibold wrap-anywhere transition ${
 										answer.userAnswer === choiceText
 											? 'bg-primary text-primary-fg'
 											: showKey &&
@@ -252,7 +252,7 @@ function QuestionCard({
 												className="text-xl"
 											/>
 										) : (
-											<span className="text-xl">{choiceText}</span>
+											<span className="text-xl break-words wrap-anywhere">{choiceText}</span>
 										)}
 									</div>
 								</button>

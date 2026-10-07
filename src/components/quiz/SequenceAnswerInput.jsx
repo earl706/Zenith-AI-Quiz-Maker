@@ -4,9 +4,9 @@ import { cn } from '../../lib/format';
 import MathFieldInput, { tryFocusMathField } from './MathFieldInput';
 import MathRenderer from './MathRenderer';
 import QuestionTitle from './QuestionTitle';
+import WrappingTextInput from './WrappingTextInput';
 import { resolveQuestionImageSrc } from '../../lib/quizImages';
 import {
-	PLAIN_IDE_TEXT_INPUT_AUTO_OFF,
 	interpolateSequenceStem,
 	isMathematical,
 	isSequenceBlankControl,
@@ -177,9 +177,8 @@ export default function SequenceAnswerInput({
 											disabled={blankDisabled}
 										/>
 									) : (
-										<input
-											type="text"
-											ref={(el) => setBlankRef(item.id, el)}
+										<WrappingTextInput
+											inputRef={(el) => setBlankRef(item.id, el)}
 											value={userText}
 											onChange={(e) => setBlank(item.id, e.target.value)}
 											onKeyDown={(e) => handleKeyDown(e, item.id)}
@@ -187,7 +186,7 @@ export default function SequenceAnswerInput({
 											aria-label={`Sequence blank ${index + 1}`}
 											autoFocus={autoFocus && index === firstBlankItemIndex && !blankChecked}
 											disabled={blankDisabled}
-											{...PLAIN_IDE_TEXT_INPUT_AUTO_OFF}
+											plainIde
 											className={cn(
 												'bg-surface-2 text-fg w-full rounded-md border px-3 py-2 text-xl focus:outline-none disabled:cursor-not-allowed',
 												blankCueClass(blankChecked, blankCorrect),
@@ -198,7 +197,7 @@ export default function SequenceAnswerInput({
 								) : (
 									<div
 										className={cn(
-											'rounded-md border px-3 py-2 text-xl',
+											'max-w-full min-w-0 rounded-md border px-3 py-2 text-xl wrap-anywhere',
 											item.role === 'distractor'
 												? 'border-line bg-surface-2 text-muted'
 												: 'border-line bg-surface-2 text-fg'
@@ -207,7 +206,7 @@ export default function SequenceAnswerInput({
 										{math ? (
 											<MathRenderer expression={item.text} displayMode={false} />
 										) : (
-											<span>{item.text}</span>
+											<span className="break-words wrap-anywhere">{item.text}</span>
 										)}
 									</div>
 								)}

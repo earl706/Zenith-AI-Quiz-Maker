@@ -11,14 +11,14 @@ export default function MathInput({
 	removeChoice
 }) {
 	const renderRow = (index, { showRemove }) => (
-		<div className="flex items-center gap-1.5" key={index}>
+		<div className="flex items-start gap-1.5" key={index}>
 			<button
 				type="button"
 				aria-label={
 					question.identification ? 'Mark answer correct' : `Mark choice ${index + 1} correct`
 				}
 				className={cn(
-					'flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 transition',
+					'mt-2 flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded-full border-2 transition',
 					question.correctAnswerIndex === index
 						? 'border-primary bg-primary'
 						: 'border-line bg-surface'
@@ -40,7 +40,7 @@ export default function MathInput({
 				<Button
 					variant="ghost"
 					size="icon"
-					className="h-7 w-7 shrink-0 cursor-pointer"
+					className="mt-0.5 h-7 w-7 shrink-0 cursor-pointer"
 					aria-label={`Remove choice ${index + 1}`}
 					onClick={() => removeChoice(question.id, index)}
 				>
