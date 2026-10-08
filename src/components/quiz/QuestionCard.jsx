@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 
+import { cn } from '../../lib/format';
 import { answersEqual } from '../../lib/mathAnswersEqual';
 import ChessPuzzleAnswerInput from './ChessPuzzleAnswerInput';
 import CodeAnswerInput from './CodeAnswerInput';
@@ -72,6 +73,7 @@ function QuestionCard({
 	const sequence = isSequence(question.question_type);
 	const chessPuzzle = isChessPuzzleQuestion(question);
 	const codeQuiz = isCodeQuestion(question);
+	const math = isMathematical(question.question_type);
 	const displayItems = useMemo(() => {
 		const items = question.sequence_items || [];
 		if (!sequence) return items;
@@ -223,19 +225,23 @@ function QuestionCard({
 										setPeeked(true);
 										notifyAnswered(nextAnswer);
 									}}
-									className={`w-full min-w-0 cursor-pointer rounded-md p-3 text-center font-semibold wrap-anywhere transition ${
+									className={cn(
+										'w-full min-w-0 cursor-pointer rounded-md p-3 font-semibold transition',
+										math ? 'text-left' : 'text-center wrap-anywhere',
 										answer.userAnswer === choiceText
 											? 'bg-primary text-primary-fg'
 											: showKey &&
 												  answersEqual(choiceText, keyAnswer, {
-														mathematical: isMathematical(question.question_type),
+														mathematical: math,
 														questionType: question.question_type
 												  })
 												? 'border-success/40 bg-success/10 text-fg ring-success/30 ring-1'
 												: 'bg-surface-2 text-fg hover:bg-primary/10'
-									}`}
+									)}
 								>
-									<div className="flex flex-col items-center gap-2">
+									<div
+										className={cn('flex flex-col gap-2', math ? 'items-stretch' : 'items-center')}
+									>
 										{choiceImage && (
 											<img
 												src={choiceImage}
@@ -243,9 +249,7 @@ function QuestionCard({
 												className="h-auto max-h-[120px] w-full max-w-[12rem] object-contain"
 											/>
 										)}
-										{question.question_type === 'COM' ||
-										question.question_type === 'IDE-COM' ||
-										question.question_type === 'MUL-COM' ? (
+										{math ? (
 											<MathRenderer
 												expression={choiceText}
 												displayMode={false}

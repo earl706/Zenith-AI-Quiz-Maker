@@ -399,7 +399,8 @@ function ChoiceResult({ choices, submitted, question, correctAnswer, math }) {
 					<li
 						key={choiceData.id ?? ci}
 						className={cn(
-							'max-w-full min-w-0 rounded-md px-3 py-2.5 text-center text-sm font-medium wrap-anywhere',
+							'max-w-full min-w-0 rounded-md px-3 py-2.5 text-sm font-medium',
+							math ? 'text-left' : 'text-center wrap-anywhere',
 							isCorrectChoice && 'bg-success/15 text-success',
 							isWrongPick && 'bg-danger/15 text-danger',
 							!isCorrectChoice && !isWrongPick && 'bg-surface-2 text-fg'
@@ -496,8 +497,8 @@ function SequenceResult({ question, submitted, math }) {
 								)}
 							>
 								<span className="text-muted mr-2 shrink-0 tabular-nums">{index + 1}.</span>
-								<div className="min-w-0 flex-1">
-									<AnswerText value={userText} mathematical={math} displayMode={math} />
+								<div className="min-w-0 flex-1 overflow-x-hidden">
+									<AnswerText value={userText} mathematical={math} />
 								</div>
 							</li>
 						);
@@ -516,8 +517,8 @@ function SequenceResult({ question, submitted, math }) {
 							)}
 						>
 							<span className="text-muted mr-2 shrink-0 tabular-nums">{index + 1}.</span>
-							<div className="min-w-0 flex-1">
-								<AnswerText value={item.text} mathematical={math} displayMode={math} />
+							<div className="min-w-0 flex-1 overflow-x-hidden">
+								<AnswerText value={item.text} mathematical={math} />
 							</div>
 							{item.role !== 'blank' && (
 								<span className="text-muted ml-2 shrink-0 text-[0.65rem] uppercase">

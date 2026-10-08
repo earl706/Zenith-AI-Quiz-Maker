@@ -43,6 +43,8 @@ const OP_CMDS = [
 const LATEX_CMD = /\\[a-zA-Z]+/;
 const LATEX_SCRIPT = /[_^](\{|\w)/;
 const HAS_INLINE_MATH = /\$/;
+const DISPLAY_ENV =
+	/\\begin\{(?:(?:p|b|B|v|V)?matrix\*?|array|smallmatrix|aligned|gathered|cases)\}/;
 
 function isOpCommand(name) {
 	return OP_CMDS.includes(name);
@@ -65,11 +67,12 @@ function consumeLeftRight(source, start, cmd) {
 /**
  * Split authored LaTeX at top-level binary/relational operators and at
  * juxtaposition of `\command` after `}` / `)`. Grouping `{...}`, `(...)`,
- * `[...]`, and `\left...\right` stay intact.
+ * `[...]`, `\left...\right`, and `\begin...\end` (matrix/array bodies) stay intact.
  */
 export function splitLatexAtOperators(latex) {
 	const source = String(latex ?? '');
 	if (!source.trim()) return [];
+	if (DISPLAY_ENV.test(source)) return [source.trim()];
 
 	const chunks = [];
 	let current = '';
@@ -77,9 +80,10 @@ export function splitLatexAtOperators(latex) {
 	let parens = 0;
 	let brackets = 0;
 	let fences = 0;
+	let environments = 0;
 	let i = 0;
 
-	const depth = () => braces + parens + brackets + fences;
+	const depth = () => braces + parens + brackets + fences + environments;
 	const flush = () => {
 		if (current.trim()) chunks.push(current.trim());
 		current = '';
@@ -109,6 +113,18 @@ export function splitLatexAtOperators(latex) {
 
 			const command = source.slice(i).match(/^\\([a-zA-Z]+|.)/);
 			if (command) {
+				if (command[1] === 'begin') {
+					environments += 1;
+					current += command[0];
+					i += command[0].length;
+					continue;
+				}
+				if (command[1] === 'end') {
+					environments = Math.max(0, environments - 1);
+					current += command[0];
+					i += command[0].length;
+					continue;
+				}
 				if (depth() === 0 && isOpCommand(command[1])) {
 					flush();
 					current = command[0];
@@ -188,6 +204,11 @@ export function splitLatexAtOperators(latex) {
 
 	flush();
 	return chunks.length ? chunks : [source.trim()];
+}
+
+/** True when KaTeX should use display math (matrices, arrays, aligned). */
+export function needsDisplayMath(latex) {
+	return DISPLAY_ENV.test(String(latex ?? ''));
 }
 
 /** Strip outer $ / $$ so callers do not double-wrap authored LaTeX. */

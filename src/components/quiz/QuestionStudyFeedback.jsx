@@ -75,7 +75,7 @@ function SequenceSolution({ question }) {
 						className="border-line bg-surface flex min-w-0 items-start rounded-md border px-2.5 py-1.5 text-sm"
 					>
 						<span className="text-muted mr-2 shrink-0 tabular-nums">{index + 1}.</span>
-						<span className="min-w-0 flex-1 wrap-anywhere">
+						<span className={cn('min-w-0 flex-1', !math && 'wrap-anywhere')}>
 							{math ? (
 								<MathRenderer expression={item.text} displayMode={false} />
 							) : (

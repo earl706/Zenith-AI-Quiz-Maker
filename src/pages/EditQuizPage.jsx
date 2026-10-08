@@ -1166,7 +1166,7 @@ export default function EditQuizPage() {
 														}
 														disabled={reviewing}
 														className={cn(
-															'border-line bg-surface text-fg focus:border-primary rounded-md border px-3 py-1.5 text-sm focus:outline-none',
+															'border-line bg-surface text-fg focus:border-primary w-full rounded-md border px-3 py-1.5 text-sm focus:outline-none',
 															isRemoved && 'line-through'
 														)}
 													/>

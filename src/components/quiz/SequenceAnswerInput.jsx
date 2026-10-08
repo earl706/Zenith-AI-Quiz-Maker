@@ -197,7 +197,8 @@ export default function SequenceAnswerInput({
 								) : (
 									<div
 										className={cn(
-											'max-w-full min-w-0 rounded-md border px-3 py-2 text-xl wrap-anywhere',
+											'max-w-full min-w-0 rounded-md border px-3 py-2 text-xl',
+											!math && 'wrap-anywhere',
 											item.role === 'distractor'
 												? 'border-line bg-surface-2 text-muted'
 												: 'border-line bg-surface-2 text-fg'

@@ -10,7 +10,7 @@ const SOFT_WRAP = 'max-w-full min-w-0 wrap-anywhere whitespace-pre-wrap break-wo
 /**
  * Prose plus author-embedded $...$ / $$...$$ as KaTeX.
  * On computational questions, undelimited LaTeX blocks also render as math.
- * Overflow wraps at operators (math) or like a prompt textarea (prose).
+ * Prose wraps; math fragments stay one line (MathRenderer scrolls if needed).
  */
 export default function InlineLatexText({
 	text,
@@ -32,7 +32,7 @@ export default function InlineLatexText({
 
 	if (useBareMath) {
 		return (
-			<Tag className={classes}>
+			<Tag className={cn('max-w-full min-w-0', className)}>
 				<MathRenderer expression={value} displayMode />
 			</Tag>
 		);

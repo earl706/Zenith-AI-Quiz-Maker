@@ -504,22 +504,22 @@ export default function QuizPage() {
 																<div
 																	key={choiceId ?? ci}
 																	className={cn(
-																		'bg-surface-2 flex flex-col items-center gap-2 rounded-md',
+																		'bg-surface-2 flex flex-col gap-2 rounded-md',
 																		math
-																			? 'w-full max-w-full min-w-0 px-5 py-4 wrap-anywhere'
-																			: 'max-w-full min-w-30 px-4 py-2.5 wrap-anywhere sm:max-w-3xl'
+																			? 'w-full max-w-full min-w-0 items-stretch px-5 py-4'
+																			: 'max-w-full min-w-30 items-center px-4 py-2.5 wrap-anywhere sm:max-w-3xl'
 																	)}
 																>
 																	{choiceImage && (
 																		<img
 																			src={resolveQuizImageSrc(choiceImage) || choiceImage}
 																			alt=""
-																			className="max-h-20 rounded-md object-cover"
+																			className="mx-auto max-h-20 rounded-md object-cover"
 																		/>
 																	)}
 																	{choiceText &&
 																		(math ? (
-																			<div className="w-full min-w-0 py-1 text-center">
+																			<div className="w-full min-w-0 py-1 text-left">
 																				<MathRenderer expression={choiceText} displayMode />
 																			</div>
 																		) : (
@@ -543,7 +543,12 @@ export default function QuizPage() {
 																<span className="text-muted w-6 text-right tabular-nums">
 																	{si + 1}.
 																</span>
-																<span className="min-w-0 flex-1 break-words wrap-anywhere">
+																<span
+																	className={cn(
+																		'min-w-0 flex-1',
+																		!math && 'break-words wrap-anywhere'
+																	)}
+																>
 																	{math ? (
 																		<MathRenderer expression={item.text} displayMode={false} />
 																	) : (

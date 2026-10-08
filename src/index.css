@@ -123,4 +123,11 @@ body {
   .wrap-anywhere {
     overflow-wrap: anywhere;
   }
+
+  /* Horizontal-only math scroll. overflow-x:auto otherwise forces overflow-y
+     to auto (vertical bars on integrals/fractions). */
+  .math-h-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
 }
