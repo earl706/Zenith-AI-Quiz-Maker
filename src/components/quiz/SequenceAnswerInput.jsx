@@ -109,7 +109,8 @@ export default function SequenceAnswerInput({
 		requestAnimationFrame(() => scrollAttemptElementToCenter(el));
 	};
 
-	/** Enter: lock+cue this blank, then next blank (center) or parent onEnter. */
+	/** Plain Enter: lock+cue this blank, then next blank (center) or parent onEnter.
+	 *  Option/Alt+Enter is a MathLive matrix row chord and must not commit. */
 	const commitBlankAndAdvance = (fromItemId) => {
 		markChecked(fromItemId);
 		const idx = blankIds.indexOf(fromItemId);
@@ -128,7 +129,13 @@ export default function SequenceAnswerInput({
 
 	const handleKeyDown = (event, itemId) => {
 		if (event.nativeEvent?.isComposing) return;
-		if (event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
+		if (
+			event.key === 'Enter' &&
+			!event.shiftKey &&
+			!event.altKey &&
+			!event.metaKey &&
+			!event.ctrlKey
+		) {
 			event.preventDefault();
 			commitBlankAndAdvance(itemId);
 		}

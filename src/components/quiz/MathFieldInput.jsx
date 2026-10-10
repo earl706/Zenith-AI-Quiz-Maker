@@ -14,6 +14,39 @@ function isMathFieldFocused(mf) {
 	return false;
 }
 
+function isEnterKey(event) {
+	return event.key === 'Enter' || event.code === 'Enter' || event.code === 'NumpadEnter';
+}
+
+function isTabKey(event) {
+	return event.key === 'Tab' || event.code === 'Tab';
+}
+
+/** Option/Alt+Enter and Option/Alt+Tab grow a MathLive matrix (Shift = insert before). */
+function isAltMatrixChord(event) {
+	return (
+		event.altKey &&
+		!event.metaKey &&
+		!event.ctrlKey &&
+		!event.isComposing &&
+		(isEnterKey(event) || isTabKey(event))
+	);
+}
+
+function applyAltMatrixChord(mf, event) {
+	if (!mf || mf.disabled || typeof mf.executeCommand !== 'function') return false;
+	if (mf.mode && mf.mode !== 'math') return false;
+	if (isEnterKey(event)) {
+		mf.executeCommand(event.shiftKey ? 'addRowBefore' : 'addRowAfter');
+		return true;
+	}
+	if (isTabKey(event)) {
+		mf.executeCommand(event.shiftKey ? 'addColumnBefore' : 'addColumnAfter');
+		return true;
+	}
+	return false;
+}
+
 function tryFocusMathField(mf, { preventScroll = false } = {}) {
 	if (!mf || mf.disabled) return false;
 	try {
@@ -145,10 +178,19 @@ export default function MathFieldInput({
 			onChangeRef.current?.(latex);
 		};
 
+		const handleKeyDownCapture = (event) => {
+			if (!isAltMatrixChord(event)) return;
+			if (mf.mode && mf.mode !== 'math') return;
+			event.preventDefault();
+			event.stopPropagation();
+			applyAltMatrixChord(mf, event);
+		};
+
 		const handleKeyDown = (event) => {
 			if (
-				event.key !== 'Enter' ||
+				!isEnterKey(event) ||
 				event.shiftKey ||
+				event.altKey ||
 				event.metaKey ||
 				event.ctrlKey ||
 				event.isComposing
@@ -161,6 +203,7 @@ export default function MathFieldInput({
 		};
 
 		mf.addEventListener('input', handleInput);
+		mf.addEventListener('keydown', handleKeyDownCapture, true);
 		mf.addEventListener('keydown', handleKeyDown);
 
 		let cancelAutoFocus = null;
@@ -171,6 +214,7 @@ export default function MathFieldInput({
 		return () => {
 			cancelAutoFocus?.();
 			mf.removeEventListener('input', handleInput);
+			mf.removeEventListener('keydown', handleKeyDownCapture, true);
 			mf.removeEventListener('keydown', handleKeyDown);
 		};
 		// eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only field setup
