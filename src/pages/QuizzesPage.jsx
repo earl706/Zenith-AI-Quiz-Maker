@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 
 import { get, del } from '../lib/api';
-import { cn, formatDate } from '../lib/format';
+import { formatDate } from '../lib/format';
 import { resolveQuizImageSrc } from '../lib/quizImages';
 import {
 	invalidateQuizQueries,
@@ -31,26 +31,13 @@ import { toast } from '../stores/toastStore';
 import { PageHeader } from '../components/layout/PageHeader';
 import CreateRoadmapFromQuizModal from '../components/roadmap/CreateRoadmapFromQuizModal';
 import RoadmapActivityStrip from '../components/roadmap/RoadmapActivityStrip';
-import { Button, Card, Modal, EmptyState, LoadingScreen, Pagination } from '../components/ui';
+import { Button, CoverCard, Modal, EmptyState, LoadingScreen, Pagination } from '../components/ui';
 import MergeQuizzesModal from '../components/quiz/MergeQuizzesModal';
 import { PersistedQuizSettingsModal } from '../components/quiz/QuizSettingsModal';
 import { useAttemptLauncher } from '../components/quiz/useAttemptLauncher';
 import { paginateClient } from '../hooks/useListControls';
 
 const QUIZ_LIST_PAGE_SIZE = 9;
-
-function OverlayStat({ icon: Icon, value, label }) {
-	return (
-		<span
-			title={label}
-			aria-label={label}
-			className="inline-flex items-center gap-0.5 rounded-md bg-black/50 px-1.5 py-0.5 text-[10px] font-medium text-white tabular-nums backdrop-blur-sm"
-		>
-			<Icon size={12} strokeWidth={2} aria-hidden />
-			{value != null ? <span>{value}</span> : null}
-		</span>
-	);
-}
 
 export default function QuizzesPage() {
 	const navigate = useNavigate();
@@ -173,169 +160,75 @@ export default function QuizzesPage() {
 							const modeLabel = isFlashcard ? 'Flashcard' : 'List';
 
 							return (
-								<Card
+								<CoverCard
 									key={id}
-									className={cn(
-										'group flex flex-col overflow-hidden transition hover:shadow-md',
-										quiz.tag_color && 'border-r-[3px]',
-										selectMode && isSelected && 'ring-primary/40 ring-2'
-									)}
-									style={quiz.tag_color ? { borderRightColor: quiz.tag_color } : undefined}
-								>
-									<div
-										role="link"
-										tabIndex={0}
-										className="relative h-40 cursor-pointer outline-none"
-										onClick={() => navigate(`/quizzes/${id}`)}
-										onKeyDown={(e) => {
-											if (e.key === 'Enter' || e.key === ' ') {
-												e.preventDefault();
-												navigate(`/quizzes/${id}`);
-											}
-										}}
-										aria-label={`Open ${quiz.quiz_title || 'quiz'}`}
-									>
-										{imageSrc ? (
-											<img
-												src={imageSrc}
-												alt=""
-												className="absolute inset-0 h-full w-full object-cover"
-											/>
-										) : (
-											<div
-												className="bg-surface-2 text-muted absolute inset-0 flex items-center justify-center"
-												aria-hidden
-											>
-												<BookOpen size={28} strokeWidth={1.5} />
-											</div>
-										)}
-										<div className="pointer-events-none absolute inset-0 bg-linear-to-t from-black/75 via-black/35 to-black/45" />
-
-										{selectMode && (
-											<label
-												className="absolute top-2 left-2 z-20 flex h-7 w-7 cursor-pointer items-center justify-center rounded-md bg-black/50 backdrop-blur-sm"
-												onClick={(e) => e.stopPropagation()}
-												onKeyDown={(e) => e.stopPropagation()}
-											>
-												<input
-													type="checkbox"
-													checked={isSelected}
-													onChange={() => toggleSelected(id)}
-													className="accent-primary"
-													aria-label={isSelected ? 'Deselect quiz' : 'Select quiz'}
-												/>
-											</label>
-										)}
-
-										<div
-											className={cn(
-												'absolute top-2 z-10 min-w-0 text-white',
-												selectMode ? 'right-2 left-11' : 'inset-x-2'
-											)}
-										>
-											<h3 className="truncate text-sm font-semibold drop-shadow-sm">
-												{quiz.quiz_title}
-											</h3>
-											<p className="text-[10px] text-white/80 drop-shadow-sm">
-												{formatDate(quiz.created_at || quiz.date_created)}
-											</p>
-											<div className="mt-1.5 flex flex-wrap gap-1">
-												<OverlayStat
-													icon={CircleHelp}
-													value={qCount}
-													label={`${qCount} question${qCount === 1 ? '' : 's'}`}
-												/>
-												{sCount > 0 && (
-													<OverlayStat
-														icon={Layers}
-														value={sCount}
-														label={`${sCount} section${sCount === 1 ? '' : 's'}`}
-													/>
-												)}
-												<OverlayStat icon={ModeIcon} label={modeLabel} />
-											</div>
-										</div>
-
-										<div
-											className={cn(
-												'absolute bottom-2 left-2 z-10 flex items-center gap-0.5 rounded-md bg-black/45 p-0.5 backdrop-blur-sm transition-opacity',
-												'opacity-0 group-focus-within:opacity-100 group-hover:opacity-100'
-											)}
-											onClick={(e) => e.stopPropagation()}
-											onKeyDown={(e) => e.stopPropagation()}
-										>
-											<Button
-												variant="ghost"
-												size="icon"
-												className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
-												onClick={() => navigate(`/quizzes/${id}`)}
-												title="View"
-												aria-label="View"
-											>
-												<Eye size={14} />
-											</Button>
-											<Button
-												variant="ghost"
-												size="icon"
-												className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
-												onClick={() => setSettingsQuiz(quiz)}
-												title="Quiz settings"
-												aria-label="Quiz settings"
-											>
-												<SlidersHorizontal size={14} />
-											</Button>
-											{sCount > 0 && (
-												<Button
-													variant="ghost"
-													size="icon"
-													className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
-													onClick={() => setRoadmapQuiz(quiz)}
-													title="Create roadmap"
-													aria-label="Create roadmap"
-												>
-													<Map size={14} />
-												</Button>
-											)}
-											<Button
-												variant="ghost"
-												size="icon"
-												className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
-												onClick={() => navigate(`/quizzes/edit/${id}`)}
-												title="Edit"
-												aria-label="Edit"
-											>
-												<Pencil size={14} />
-											</Button>
-											<Button
-												variant="ghost"
-												size="icon"
-												className="text-danger h-8 w-8 hover:bg-white/15"
-												onClick={() => setDeleteTarget(id)}
-												title="Delete"
-												aria-label="Delete"
-											>
-												<Trash2 size={14} />
-											</Button>
-										</div>
-
-										<Button
-											size="icon"
-											className="absolute right-2 bottom-2 z-10 h-9 w-9 shadow-md"
-											onClick={(e) => {
-												e.stopPropagation();
-												launchAttempt(quiz);
-											}}
-											title="Attempt"
-											aria-label="Attempt quiz"
-										>
-											<Play size={16} />
-										</Button>
-									</div>
-
-									<div className="p-1">
+									title={quiz.quiz_title}
+									subtitle={formatDate(quiz.created_at || quiz.date_created)}
+									imageSrc={imageSrc}
+									fallbackIcon={BookOpen}
+									accentColor={quiz.tag_color || undefined}
+									selected={selectMode && isSelected}
+									onOpen={() => navigate(`/quizzes/${id}`)}
+									openLabel={`Open ${quiz.quiz_title || 'quiz'}`}
+									stats={[
+										{
+											icon: CircleHelp,
+											value: qCount,
+											label: `${qCount} question${qCount === 1 ? '' : 's'}`
+										},
+										sCount > 0
+											? {
+													icon: Layers,
+													value: sCount,
+													label: `${sCount} section${sCount === 1 ? '' : 's'}`
+												}
+											: null,
+										{ icon: ModeIcon, label: modeLabel }
+									]}
+									select={
+										selectMode
+											? {
+													checked: isSelected,
+													onChange: () => toggleSelected(id),
+													label: isSelected ? 'Deselect quiz' : 'Select quiz'
+												}
+											: undefined
+									}
+									actions={[
+										{ icon: Eye, label: 'View', onClick: () => navigate(`/quizzes/${id}`) },
+										{
+											icon: SlidersHorizontal,
+											label: 'Quiz settings',
+											onClick: () => setSettingsQuiz(quiz)
+										},
+										sCount > 0
+											? {
+													icon: Map,
+													label: 'Create roadmap',
+													onClick: () => setRoadmapQuiz(quiz)
+												}
+											: null,
+										{
+											icon: Pencil,
+											label: 'Edit',
+											onClick: () => navigate(`/quizzes/edit/${id}`)
+										},
+										{
+											icon: Trash2,
+											label: 'Delete',
+											onClick: () => setDeleteTarget(id),
+											tone: 'danger'
+										}
+									]}
+									primaryAction={{
+										icon: Play,
+										label: 'Attempt quiz',
+										onClick: () => launchAttempt(quiz)
+									}}
+									footer={
 										<RoadmapActivityStrip activity={quiz.activity} compact showHeader={false} />
-									</div>
-								</Card>
+									}
+								/>
 							);
 						})}
 					</div>
