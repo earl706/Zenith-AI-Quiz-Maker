@@ -9,6 +9,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useThemeStore } from '../stores/themeStore';
 import { MfaDisableSection, MfaSetupModal } from '../components/auth/MfaModals';
 import { PageHeader } from '../components/layout/PageHeader';
+import { ImageToDataSettingsPanel } from '../components/imageToData/ImageToDataSettingsPanel';
 import { Avatar, Badge, Button, Card, CardBody, CardHeader, Input } from '../components/ui';
 
 export default function SettingsPage() {
@@ -247,6 +248,10 @@ export default function SettingsPage() {
 						</Button>
 					</CardBody>
 				</Card>
+
+				<div className="lg:col-span-2">
+					<ImageToDataSettingsPanel />
+				</div>
 
 				<NotificationPrefsCard />
 			</div>

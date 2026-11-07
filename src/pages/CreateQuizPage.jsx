@@ -9,18 +9,37 @@ import {
 	Copy,
 	Import,
 	ListChecks,
+	ListOrdered,
 	SlidersHorizontal,
 	Sparkles,
 	FileUp,
 	WandSparkles,
-	LayoutTemplate
+	LayoutTemplate,
+	ScanLine,
+	Minimize2,
+	Maximize2,
+	CircleDot,
+	LayoutList,
+	Scale,
+	Type
 } from 'lucide-react';
 
 import { api } from '../lib/api';
 import { cn } from '../lib/format';
 import { resolveQuizImageSrc } from '../lib/quizImages';
 import { invalidateQuizQueries } from '../lib/resources';
+import {
+	QUIZ_IMAGE_QUESTION_BUDGET_OPTIONS,
+	QUIZ_IMAGE_SCAN_FIELDS,
+	QUIZ_IMAGE_SCAN_JSON_SCHEMA,
+	QUIZ_IMAGE_TYPE_MIX_OPTIONS,
+	buildQuizImageScanPrompt,
+	mergeQuizImageDrafts,
+	normalizeQuizImageRecords,
+	validateQuizImageDraft
+} from '../lib/quizImageToData';
 import { toast } from '../stores/toastStore';
+import { ImageToDataPipeline } from '../components/imageToData/ImageToDataPipeline';
 import { PageHeader } from '../components/layout/PageHeader';
 import {
 	Badge,
@@ -89,13 +108,59 @@ import { useQuizJsonDraft } from '../components/quiz/useQuizJsonDraft';
 const QuizJsonEditor = lazy(() => import('../components/quiz/QuizJsonEditor'));
 
 const colors = QUIZ_TAG_COLORS;
-const AI_TYPE_MIX_OPTIONS = [
-	{ value: 'mostly_mc', label: 'Mostly MC' },
-	{ value: 'balanced', label: 'Balanced' },
-	{ value: 'mostly_identification', label: 'Mostly ID' },
-	{ value: 'with_sequence', label: 'With sequence' },
-	{ value: 'mostly_sequence', label: 'Mostly sequence' }
-];
+const AI_TYPE_MIX_OPTIONS = QUIZ_IMAGE_TYPE_MIX_OPTIONS;
+
+const IMAGE_BUDGET_ICONS = {
+	minimum: Minimize2,
+	default: CircleDot,
+	maximum: Maximize2
+};
+
+const IMAGE_BUDGET_SHORT_LABELS = {
+	minimum: 'Min',
+	default: 'Default',
+	maximum: 'Max'
+};
+
+const IMAGE_MIX_ICONS = {
+	all_mc: LayoutList,
+	mostly_mc: ListChecks,
+	balanced: Scale,
+	mostly_identification: Type,
+	all_id: Type,
+	with_sequence: ListOrdered,
+	mostly_sequence: ListOrdered
+};
+
+const IMAGE_MIX_SHORT_LABELS = {
+	all_mc: 'All MC',
+	mostly_mc: 'MC',
+	balanced: 'Bal',
+	mostly_identification: 'ID',
+	all_id: 'All ID',
+	with_sequence: '+Seq',
+	mostly_sequence: 'Seq'
+};
+
+function ImageScanIconChoice({ selected, icon: Icon, label, ariaLabel, onClick }) {
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			aria-label={ariaLabel || label}
+			aria-pressed={selected}
+			title={ariaLabel || label}
+			className={cn(
+				'inline-flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-md px-1 py-1 transition-colors duration-150',
+				'focus-visible:outline-primary focus-visible:outline-2 focus-visible:outline-offset-2',
+				selected ? 'text-primary' : 'text-muted hover:text-fg'
+			)}
+		>
+			<Icon size={16} aria-hidden />
+			<span className="text-xxs max-w-full truncate font-medium tracking-wide">{label}</span>
+		</button>
+	);
+}
 
 /** Mirror backend auto heuristic for timeout/preview (chars ≈ words*5). */
 function estimateAutoQuestionCount(topic, referenceMarkdown) {
@@ -189,6 +254,9 @@ export default function CreateQuizPage() {
 	const [imagePreview, setImagePreview] = useState(null);
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [aiOpen, setAiOpen] = useState(false);
+	const [imageScanOpen, setImageScanOpen] = useState(false);
+	const [imageTypeMix, setImageTypeMix] = useState('balanced');
+	const [imageQuestionBudget, setImageQuestionBudget] = useState('default');
 	const [reviseOpen, setReviseOpen] = useState(false);
 	const [jsonView, setJsonView] = useState(false);
 	const [templatesOpen, setTemplatesOpen] = useState(false);
@@ -213,7 +281,8 @@ export default function CreateQuizPage() {
 		onCommit: ({ questions: nextQuestions, sections: nextSections }) => {
 			setQuestions(nextQuestions);
 			setSections(nextSections);
-		}
+		},
+		onQuizTitle: setQuizTitle
 	});
 
 	const reviewing = aiProposal.isReviewing;
@@ -1128,6 +1197,63 @@ export default function CreateQuizPage() {
 		}
 	};
 
+	const handleImageScanCommit = async (draftPayloads) => {
+		const quizData = mergeQuizImageDrafts(draftPayloads);
+		const count = quizData.questions?.length || 0;
+		if (!count) {
+			throw new Error('No questions found in scanned images.');
+		}
+		const started = aiProposal.runGenerateAsProposal(quizData, {
+			instructionText: `Image → quiz (${count} question${count === 1 ? '' : 's'})`
+		});
+		if (started) {
+			toast.success(
+				`Scanned ${count} question${count === 1 ? '' : 's'} — review to accept (replaces current draft).`
+			);
+		}
+	};
+
+	const imageScanControls = (
+		<div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
+			<div className="min-w-0 flex-1 space-y-1.5">
+				<p className="text-fg text-xs font-medium">Questions</p>
+				<div className="flex gap-1.5" role="group" aria-label="Question budget">
+					{QUIZ_IMAGE_QUESTION_BUDGET_OPTIONS.map(({ value, label }) => {
+						const Icon = IMAGE_BUDGET_ICONS[value] || CircleDot;
+						return (
+							<ImageScanIconChoice
+								key={value}
+								icon={Icon}
+								label={IMAGE_BUDGET_SHORT_LABELS[value] || label}
+								ariaLabel={label}
+								selected={imageQuestionBudget === value}
+								onClick={() => setImageQuestionBudget(value)}
+							/>
+						);
+					})}
+				</div>
+			</div>
+			<div className="min-w-0 flex-[1.6] space-y-1.5">
+				<p className="text-fg text-xs font-medium">Mix</p>
+				<div className="flex gap-1.5" role="group" aria-label="Question mix">
+					{QUIZ_IMAGE_TYPE_MIX_OPTIONS.map(({ value, label }) => {
+						const Icon = IMAGE_MIX_ICONS[value] || ListChecks;
+						return (
+							<ImageScanIconChoice
+								key={value}
+								icon={Icon}
+								label={IMAGE_MIX_SHORT_LABELS[value] || label}
+								ariaLabel={label}
+								selected={imageTypeMix === value}
+								onClick={() => setImageTypeMix(value)}
+							/>
+						);
+					})}
+				</div>
+			</div>
+		</div>
+	);
+
 	return (
 		<div className={cn('pb-20', reviewing ? 'lg:pb-24' : 'lg:pb-0')}>
 			<PageHeader
@@ -1169,6 +1295,17 @@ export default function CreateQuizPage() {
 							onClick={() => setSettingsOpen(true)}
 						>
 							<SlidersHorizontal size={16} />
+						</Button>
+						<Button
+							variant="ghost"
+							size="icon"
+							className="cursor-pointer"
+							aria-label="Image to quiz"
+							title="Image to quiz"
+							disabled={reviewing || aiProposal.isLoading}
+							onClick={() => setImageScanOpen(true)}
+						>
+							<ScanLine size={16} />
 						</Button>
 						<Button
 							variant="ghost"
@@ -1760,6 +1897,23 @@ export default function CreateQuizPage() {
 				loading={aiProposal.isLoading}
 				initialModel={ollamaModel}
 				onSubmit={(instruction, model) => aiProposal.runRevise(instruction, model)}
+			/>
+
+			<ImageToDataPipeline
+				open={imageScanOpen}
+				onClose={() => setImageScanOpen(false)}
+				title="Image to quiz"
+				emptyTitle="Image to quiz"
+				emptyDescription="Photograph worksheets, slides, or notes. Crop optional, then review extracted questions."
+				prompt={buildQuizImageScanPrompt(imageTypeMix, imageQuestionBudget)}
+				jsonSchema={QUIZ_IMAGE_SCAN_JSON_SCHEMA}
+				recordsPath="questions"
+				fields={QUIZ_IMAGE_SCAN_FIELDS}
+				normalizeRecordsFn={(data) => normalizeQuizImageRecords(data)}
+				validateDraft={validateQuizImageDraft}
+				commitLabel="Apply to draft"
+				controls={imageScanControls}
+				onCommit={handleImageScanCommit}
 			/>
 
 			<QuizSettingsModal
